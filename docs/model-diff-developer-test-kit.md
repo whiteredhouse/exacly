@@ -16,7 +16,7 @@ This is a directional pilot with 3–5 participants. Treat results as evidence f
 
 ## Design
 
-Use two real changes, A and B, from the same codebase. Both must be agent-made and have enough behavior or structure to explain, while remaining understandable in about five minutes. Keep the user-visible change and complexity reasonably similar. Use the same task prompt for both views of a change.
+Use two real changes, A and B, from the same codebase. Both must be agent-made and large enough that reading the diff alone is real work: each should touch at least three components or change a call path between them. Small changes are a poor test, because a code diff already handles them well and a tie would say nothing. Keep the user-visible change and complexity reasonably similar. Use the same task prompt and the same agent summary for both views of a change, so the only difference between the views is the diff itself.
 
 Each participant sees both views, but on different changes: one code diff and one model-level diff. This avoids asking them to explain the same change twice. Counterbalance which change and view each person sees:
 
@@ -40,7 +40,7 @@ For each candidate, record:
 - Whether the change has tests or observable behavior that can confirm its effects.
 - A brief explanation of why its size and difficulty are comparable to the other candidate.
 
-Prefer changes with a small number of affected components, one main behavior path, and at least one meaningful consequence or edge case. Avoid pure formatting, dependency bumps, broad refactors, and changes where the model view would merely restate a self-explanatory one-line diff.
+Prefer changes that touch at least three components, or that add, remove or reroute a call between components, and that have at least one meaningful consequence or edge case. Avoid pure formatting, dependency bumps, mechanical renames across the codebase, and changes small enough to read in a couple of minutes. Record the agent's own summary of the change (its PR description or final message) for each candidate; a change without one can still be used, but note it.
 
 ## Preparing paired stimuli
 
@@ -51,19 +51,30 @@ Make one stimulus sheet per change, then produce two views from it.
 - Change ID: A or B
 - User goal: [one sentence]
 - Starting context: [two or three sentences about the system, identical in both views]
+- Agent summary: [the agent's own PR description or final message, verbatim, identical in both views; write "none" if the agent left none]
 - Task prompt: “In your own words, explain what changed, how the behavior or structure now works, and one consequence, edge case, or risk you would check.”
 
 **Code-diff view**
 
 - Include the relevant unified diff and only the minimum surrounding code needed to read it.
-- Hide commit message, PR description, agent transcript, review comments, and any generated summary.
+- Show the agent summary from the shared header, because reviewers normally read a diff alongside it. Hide human review comments, the agent transcript, and any other generated summary.
 - Do not add annotations or explanations unavailable in the source diff.
 
 **Model-level-diff view**
 
-- Show the same change as before/after model facts: affected components or interfaces, dependency changes, and the changed interaction or state flow where applicable.
-- Use a diagram plus a short legend if useful. Keep the view to one page.
-- Do not add facts, rationale, or warnings that a careful reader could not infer from the changed code and shared context. Do not include source code excerpts.
+- Show the agent summary from the shared header, the same as in the code-diff view.
+- Build the view by the fixed recipe below, not by hand-picking what matters. The test is meant to measure what an automatic tool could show, not a summary written by someone who already understands the change.
+- Do not include source code excerpts, rationale, or warnings.
+
+**Fixed recipe for the model-level diff**
+
+Apply every step to both changes in the same way, and record any judgement call in the facilitator copy.
+
+1. **Components.** Treat each top-level package or module under the source root as a component. Do not merge, rename or regroup components to make the picture clearer.
+2. **Structure diff.** Draw a component diagram of the components the change touches plus their direct neighbours, built from import statements before and after the change. Mark added components and dependencies in one style, removed ones in another, and leave unchanged ones plain.
+3. **Interface diff.** For each touched component, list public classes and functions whose signature was added, removed or changed, as before/after signatures. Leave out private names (leading underscore) and bodies.
+4. **Behaviour diff.** Run the tests that exercise the change, before and after, and record the calls between components. Draw one sequence diagram for the main path, showing only calls that cross a component boundary, with added and removed calls marked. If the tests do not reach the changed code, write "no traced behaviour" rather than drawing one from reading the code.
+5. **Layout.** Use the same order every time: structure, then interfaces, then behaviour. Keep it to one page and use the same legend for both changes.
 - Link each changed model element to the relevant file or symbol in the facilitator copy, but hide those links from participants during timed explanation.
 
 **Facilitator answer key**
@@ -124,7 +135,7 @@ Faithfulness reviewer and date:
 ### Each task
 
 1. Show only the assigned participant-facing stimulus and read the task prompt verbatim.
-2. Start the timer when the stimulus is visible. Stop it when the participant says they are ready to submit a summary, or at five minutes.
+2. Start the timer when the stimulus is visible. Stop it when the participant says they are ready to submit a summary, or at ten minutes.
 3. Capture their explanation as close to verbatim as practical. Do not correct, teach, or ask leading questions.
 4. If they stop early, ask only: “Anything else you would want to check before approving this change?” Stop the timer after the answer.
 5. After both tasks, ask the neutral comparison questions below.
@@ -146,31 +157,33 @@ Score each task from 0–4 using its answer key. Give one point for each correct
 3. Explains the important interaction, data movement, or state transition correctly.
 4. Identifies a supported consequence, edge case, or risk (or proposes a relevant check).
 
-Do not award a point for a guess contradicted by the code. Leave an item blank if the participant did not address it. Record an incorrect or unsupported claim in notes; do not subtract points in this small pilot. If a response is ambiguous, mark it for a second scorer rather than interpreting it generously.
+Do not award a point for a guess contradicted by the code. Leave an item blank if the participant did not address it.
+
+Separately, count **wrong claims**: each statement about the change that the code, tests or answer key contradict. Keep this count beside the 0–4 score rather than subtracting it, and note each wrong claim and whether it came from the view (for example, a diagram that suggested a call that does not happen). A view that raises confidence while adding wrong claims is a bad result, not a neutral one. If a response is ambiguous, mark it for a second scorer rather than interpreting it generously.
 
 ## Session score sheet
 
 Copy one row per task and one summary row per participant. Keep participant names out of the analysis sheet; use P1–P5.
 
-| Participant | Change | View | Order | Time (seconds) | Main change (0/1) | Elements (0/1) | Flow (0/1) | Consequence/check (0/1) | Total /4 | Misunderstandings or notes |
-| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| P1 | A | Code / Model | 1 / 2 |  |  |  |  |  |  |  |
+| Participant | Change | View | Order | Time (seconds) | Main change (0/1) | Elements (0/1) | Flow (0/1) | Consequence/check (0/1) | Total /4 | Wrong claims | Misunderstandings or notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| P1 | A | Code / Model | 1 / 2 |  |  |  |  |  |  |  |  |
 
-| Participant | Code score /4 | Model score /4 | Code time | Model time | Preferred first view | Main comment |
-| --- | ---: | ---: | ---: | ---: | --- | --- |
-| P1 |  |  |  |  |  |  |
+| Participant | Code score /4 | Model score /4 | Code wrong claims | Model wrong claims | Code time | Model time | Preferred first view | Main comment |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| P1 |  |  |  |  |  |  |  |  |
 
-After sessions, report the raw participant-level results, median score and time by view, and the number of participants who preferred each view. With this sample, emphasize consistency and concrete errors; do not present percentages as population estimates or claim statistical significance. Note any stimulus imbalance, presentation-order effects, or answer-key disagreement.
+After sessions, report the raw participant-level results, median score, wrong claims and time by view, and the number of participants who preferred each view. With this sample, emphasize consistency and concrete errors; do not present percentages as population estimates or claim statistical significance. Note any stimulus imbalance, presentation-order effects, or answer-key disagreement.
 
 ## Decision note
 
-Before recruiting, write down what would count as a useful signal. Suggested pilot threshold: continue to a broader test if the model view improves the accuracy score for at least two of the first three participants, or produces a clear recurring reduction in a costly misunderstanding, without substantially increasing completion time. Treat preference alone as weak evidence. Adjust the threshold before seeing results if the team has a different decision in mind.
+Before recruiting, write down what would count as a useful signal. Suggested pilot threshold: continue to a broader test if the model view improves the accuracy score for at least two of the first three participants, or produces a clear recurring reduction in a costly misunderstanding, without adding wrong claims or substantially increasing completion time. Treat preference alone as weak evidence. Adjust the threshold before seeing results if the team has a different decision in mind.
 
 ## Inputs still needed to run
 
-- Two comparable, verified agent-made changes from a Python codebase.
+- Two comparable, verified agent-made changes from a Python codebase, each touching at least three components or a call path, with tests that exercise the change.
 - A facilitator to prepare and check the paired views and answer keys.
-- Three to five developers who can spend about 15 minutes each.
+- Three to five developers who can spend about 30 minutes each.
 - A decision threshold agreed before the first session.
 
 No participant outreach has been sent.
