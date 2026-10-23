@@ -391,6 +391,16 @@ cases:
     waived:
       - { rule: "7.1", record: OUT-001 }
 
+  - description: An exception applies to a finding on a namespace-qualified relationship source
+    base: active
+    patch:
+      - { op: add, path: /relationships/-, value: { source: "invoicing:APP-001", type: depends_on, target: INF-999 } }
+      - { op: add, path: /exceptions, value: [{ rule: "11.unresolved", record: APP-001, reason: Server being registered, owner: platform-team, expires_at: "2027-06-30" }] }
+    result: conforms with exceptions
+    findings: []
+    waived:
+      - { rule: "11.unresolved", record: APP-001 }
+
   - description: An exception close to expiry still applies, with a warning
     base: active
     patch:

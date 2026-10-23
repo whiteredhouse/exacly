@@ -194,7 +194,8 @@ class Graph:
                 if local is not None and local not in self.records
             ]
             for ref in missing:
-                report.add(ERROR, "11.unresolved", rel["source"], f"{label}: {ref} is not a record in this model")
+                message = f"{label}: {ref} is not a record in this model"
+                report.add(ERROR, "11.unresolved", source or rel["source"], message)
             key = (source or rel["source"], rel["type"], target or rel["target"])
             if key in seen:
                 report.add(ERROR, "11.duplicate-edge", key[0], f"duplicate relationship {label}")
@@ -245,7 +246,7 @@ def check_structure(g: Graph, doc: Doc, report: Report) -> None:
         for item in items:
             local = g.local(item[field])
             if local is not None and local not in g.records:
-                report.add(ERROR, "11.unresolved", item[field], f"{field} {item[field]} is not a record in this model")
+                report.add(ERROR, "11.unresolved", local, f"{field} {item[field]} is not a record in this model")
     for rel in sorted(SAME_TYPE):
         for cycle in cycles(g, rel):
             report.add(ERROR, "11.cycle", cycle[0], f"{rel} cycle: {' -> '.join([*cycle, cycle[0]])}")
