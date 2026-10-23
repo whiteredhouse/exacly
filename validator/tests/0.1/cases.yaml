@@ -16,10 +16,10 @@ date: "2026-10-23"
 
 bases:
   proposed:
-    from: ../../spec/examples/0.1/invoice-reminders.yaml
+    from: ../../../spec/examples/0.1/invoice-reminders.yaml
     patch: []
   active:
-    from: ../../spec/examples/0.1/invoice-reminders.yaml
+    from: ../../../spec/examples/0.1/invoice-reminders.yaml
     patch:
       - { op: replace, path: /state, value: current }
       - { op: remove, path: /base_revision }

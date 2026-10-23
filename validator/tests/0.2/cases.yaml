@@ -1,0 +1,427 @@
+# Test cases for the validator on 0.2 config and state documents.
+#
+# A base is a set of named documents. Each case applies a JSON Patch (RFC 6902)
+# to that set, so the first path segment names the document: /billing/records/3
+# is the fourth record in billing. The validator then reads the set as one
+# model, given the config `revision` (the suite's unless the case gives one),
+# and must report on `date` exactly the findings listed: severity, rule,
+# record, and the document when a finding names one.
+#
+# Documents: model (the model boundary), billing (records and relationships),
+# and, in the active base, production (state for the production context).
+# billing record indexes: 0 OUT-001, 1 CAP-001, 2 PROC-001, 3 REQ-001,
+# 4 INFO-001, 5 APP-001, 6 INF-001, 7 INF-002, 8 INF-003, 9 MEAS-001.
+# billing relationship indexes: 0 CAP contributes_to OUT, 1 PROC uses_capability
+# CAP, 2 REQ supports PROC, 3 PROC uses APP, 4 APP implements REQ, 5 APP reads
+# INFO, 6 APP writes INFO, 7 APP depends_on INF-001, 8 APP depends_on INF-002,
+# 9 APP depends_on INF-003, 10 INF-003 stores INFO (system_of_record),
+# 11 MEAS evaluates OUT.
+
+date: "2026-10-23"
+revision: 9f2c41e
+
+bases:
+  proposed:
+    documents:
+      model: ../../../spec/examples/0.2/invoice-reminders/model.yaml
+      billing: ../../../spec/examples/0.2/invoice-reminders/billing.yaml
+    patch: []
+  active:
+    documents:
+      model: ../../../spec/examples/0.2/invoice-reminders/model.yaml
+      billing: ../../../spec/examples/0.2/invoice-reminders/billing.yaml
+    patch:
+      - { op: replace, path: /billing/records/0/lifecycle, value: active }
+      - { op: replace, path: /billing/records/1/lifecycle, value: active }
+      - { op: replace, path: /billing/records/2/lifecycle, value: active }
+      - { op: replace, path: /billing/records/3/lifecycle, value: active }
+      - { op: replace, path: /billing/records/4/lifecycle, value: active }
+      - { op: replace, path: /billing/records/5/lifecycle, value: active }
+      - { op: replace, path: /billing/records/6/lifecycle, value: active }
+      - { op: replace, path: /billing/records/7/lifecycle, value: active }
+      - { op: replace, path: /billing/records/8/lifecycle, value: active }
+      - { op: replace, path: /billing/records/9/lifecycle, value: active }
+      - { op: replace, path: /billing/records/0/last_reviewed_at, value: "2026-10-01" }
+      - { op: replace, path: /billing/records/1/last_reviewed_at, value: "2026-10-01" }
+      - { op: replace, path: /billing/records/2/last_reviewed_at, value: "2026-10-01" }
+      - { op: replace, path: /billing/records/3/last_reviewed_at, value: "2026-10-01" }
+      - { op: replace, path: /billing/records/4/last_reviewed_at, value: "2026-10-01" }
+      - { op: replace, path: /billing/records/5/last_reviewed_at, value: "2026-10-01" }
+      - { op: replace, path: /billing/records/6/last_reviewed_at, value: "2026-10-01" }
+      - { op: replace, path: /billing/records/7/last_reviewed_at, value: "2026-10-01" }
+      - { op: replace, path: /billing/records/8/last_reviewed_at, value: "2026-10-01" }
+      - { op: replace, path: /billing/records/9/last_reviewed_at, value: "2026-10-01" }
+      - op: add
+        path: /production
+        value:
+          exacly: "0.2.0"
+          namespace: invoicing
+          context: production
+          config_revision: 9f2c41e
+          serial: 3
+          lineage: 6c1e0f3a-2b7d-4e8a-9c21-7d4e5f6a8b90
+          written_at: "2026-10-23T09:00:00Z"
+          records:
+            REQ-001:
+              assessments:
+                - dimension: delivery
+                  state: released
+                  context: production
+                  at: "2026-10-20"
+                  evidence:
+                    - { locator: deploys/1.4, kind: deployment, claim: Reminder service 1.4 deployed, observed_at: "2026-10-20", applies_to: production }
+                - dimension: verification
+                  state: passed
+                  context: 9f2c41e
+                  at: "2026-10-20"
+                  evidence:
+                    - { locator: ci/runs/9, kind: test, claim: Reminder tests pass, observed_at: "2026-10-20", applies_to: 9f2c41e }
+
+cases:
+  - description: The worked example, all proposed and without state, conforms
+    base: proposed
+    patch: []
+    result: conforms
+    findings: []
+
+  - description: The worked example, all active, with released and verified state, conforms
+    base: active
+    patch: []
+    result: conforms
+    findings: []
+
+  - description: A config document that fails its schema reports the error with the document and skips graph checks
+    base: active
+    patch:
+      - { op: add, path: /billing/records/3/evidence/-, value: { locator: ci/runs/9, kind: test, claim: Tests pass, observed_at: "2026-10-20", applies_to: 9f2c41e } }
+    result: does not conform
+    findings:
+      - { severity: error, rule: schema, record: null, document: billing }
+
+  - description: A state document that fails its schema reports the error with the document
+    base: active
+    patch:
+      - { op: replace, path: /production/records/REQ-001/assessments/1/state, value: failed }
+    result: does not conform
+    findings:
+      - { severity: error, rule: schema, record: null, document: production }
+
+  - description: Config documents must agree on the specification version
+    base: active
+    patch:
+      - { op: replace, path: /billing/exacly, value: "0.2.1" }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.version-mismatch", record: null, document: billing }
+
+  - description: State must declare the same specification version as config
+    base: active
+    patch:
+      - { op: replace, path: /production/exacly, value: "0.2.1" }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.version-mismatch", record: null, document: production }
+
+  - description: Only one config document may declare the model boundary
+    base: active
+    patch:
+      - { op: copy, from: /model/model, path: /billing/model }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.model-boundary", record: null, document: billing }
+      - { severity: error, rule: "11.model-boundary", record: null, document: model }
+
+  - description: One config document must declare the model boundary
+    base: active
+    patch:
+      - { op: remove, path: /model/model }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.model-boundary", record: null }
+
+  - description: IDs must be unique across config documents
+    base: active
+    patch:
+      - { op: add, path: /model/records, value: [{ id: CAP-001, type: Capability, name: Copy, description: A copy., owner: billing-team, lifecycle: proposed, evidence: [], last_reviewed_at: null }] }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.duplicate-id", record: CAP-001 }
+
+  - description: Findings about a record name the config document it is in
+    base: active
+    patch:
+      - { op: remove, path: /billing/relationships/11 }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "7.1", record: OUT-001, document: billing }
+
+  - description: Only Infrastructure stores Information
+    base: active
+    patch:
+      - { op: add, path: /billing/relationships/-, value: { source: APP-001, type: stores, target: INFO-001, role: cache } }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.endpoint", record: APP-001 }
+
+  - description: "7.9: active Information with no system of record"
+    base: active
+    patch:
+      - { op: remove, path: /billing/relationships/10 }
+    result: conforms
+    findings:
+      - { severity: warning, rule: "7.9", record: INFO-001 }
+
+  - description: "7.9: a replica is not a system of record"
+    base: active
+    patch:
+      - { op: replace, path: /billing/relationships/10/role, value: replica }
+    result: conforms
+    findings:
+      - { severity: warning, rule: "7.9", record: INFO-001 }
+
+  - description: "7.9: two systems of record"
+    base: active
+    patch:
+      - { op: add, path: /billing/relationships/-, value: { source: INF-002, type: stores, target: INFO-001, role: system_of_record } }
+    result: conforms
+    findings:
+      - { severity: warning, rule: "7.9", record: INFO-001 }
+
+  - description: "7.9: a proposed record's gap is a warning too"
+    base: proposed
+    patch:
+      - { op: remove, path: /billing/relationships/10 }
+    result: conforms
+    findings:
+      - { severity: warning, rule: "7.9", record: INFO-001 }
+
+  - description: State may not observe a record the config does not contain
+    base: active
+    patch:
+      - { op: add, path: /production/records/REQ-002, value: { assessments: [] } }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.unresolved", record: REQ-002, document: production }
+
+  - description: State may name a record with the model's own namespace
+    base: active
+    patch:
+      - { op: move, from: /production/records/REQ-001, path: /production/records/invoicing:REQ-001 }
+    result: conforms
+    findings: []
+
+  - description: State may observe a relationship the config contains, by source, type and target
+    base: active
+    patch:
+      - op: add
+        path: /production/relationships
+        value:
+          - source: APP-001
+            type: depends_on
+            target: INF-002
+            evidence: [{ locator: traces/reminders/2026-10-22, kind: runtime_observation, claim: Reminder runs publish to the queue, observed_at: "2026-10-22", applies_to: production }]
+    result: conforms
+    findings: []
+
+  - description: State may not observe a relationship the config does not contain
+    base: active
+    patch:
+      - op: add
+        path: /production/relationships
+        value:
+          - source: APP-001
+            type: depends_on
+            target: INF-003
+            evidence: [{ locator: traces/a, kind: runtime_observation, claim: Seen, observed_at: "2026-10-22", applies_to: production }]
+          - source: APP-001
+            type: reads
+            target: INF-002
+            evidence: [{ locator: traces/b, kind: runtime_observation, claim: Seen, observed_at: "2026-10-22", applies_to: production }]
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.unresolved", record: APP-001, document: production }
+
+  - description: State names a relationship by its ID
+    base: active
+    patch:
+      - { op: add, path: /billing/relationships/8/id, value: REL-QUEUE }
+      - op: add
+        path: /production/relationships
+        value:
+          - id: REL-QUEUE
+            evidence: [{ locator: traces/a, kind: runtime_observation, claim: Seen, observed_at: "2026-10-22", applies_to: production }]
+          - id: REL-NONE
+            evidence: [{ locator: traces/b, kind: runtime_observation, claim: Seen, observed_at: "2026-10-22", applies_to: production }]
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.unresolved", record: REL-NONE, document: production }
+
+  - description: Pending work must be for a record the config contains
+    base: active
+    patch:
+      - { op: add, path: /production/pending, value: [{ record: REQ-001, task: issues/87, opened_at: "2026-10-22T14:00:00Z" }, { record: REQ-002, task: issues/88, opened_at: "2026-10-22T14:00:00Z" }] }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.unresolved", record: REQ-002, document: production }
+
+  - description: State for another model is reported and not read
+    base: active
+    patch:
+      - { op: replace, path: /production/namespace, value: payments }
+      - { op: add, path: /production/records/PAY-001, value: { assessments: [] } }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.state-namespace", record: null, document: production }
+
+  - description: Two state documents for the same context
+    base: active
+    patch:
+      - { op: copy, from: /production, path: /production-copy }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.state-context", record: null, document: production-copy }
+
+  - description: State computed against a different config revision is a warning
+    base: active
+    revision: 3a7d0c2
+    patch: []
+    result: conforms
+    findings:
+      - { severity: warning, rule: "11.state-revision", record: null, document: production }
+
+  - description: A short config revision in state matches the full revision
+    base: active
+    revision: 9f2c41e5b0d6a1c37e8f2b4a90d1c6e7f3a2b8c4
+    patch: []
+    result: conforms
+    findings: []
+
+  - description: "7.8: claims are read from state; verified needs a supported release"
+    base: active
+    patch:
+      - { op: remove, path: /production/records/REQ-001/assessments/0 }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "7.8", record: REQ-001 }
+
+  - description: "7.8: claims in different state documents are combined"
+    base: active
+    patch:
+      - op: add
+        path: /ci
+        value:
+          exacly: "0.2.0"
+          namespace: invoicing
+          context: ci
+          config_revision: 9f2c41e
+          serial: 1
+          lineage: 0d2b7c4e-1a6f-4f3e-8b5d-2c9e0a7f1b36
+          written_at: "2026-10-23T09:00:00Z"
+          records: { REQ-001: { assessments: [] } }
+      - { op: move, from: /production/records/REQ-001/assessments/1, path: /ci/records/REQ-001/assessments/- }
+    result: conforms
+    findings: []
+
+  - description: "7.8: a review decision may back a verification in state"
+    base: active
+    patch:
+      - { op: replace, path: /production/records/REQ-001/assessments/1/evidence/0/kind, value: decision }
+    result: conforms
+    findings: []
+
+  - description: "7.8: expired evidence no longer supports its claim"
+    base: active
+    patch:
+      - { op: add, path: /production/records/REQ-001/assessments/0/evidence/0/expires_at, value: "2026-10-21" }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "7.8", record: REQ-001 }
+      - { severity: error, rule: "7.8", record: REQ-001 }
+      - { severity: warning, rule: "11.evidence-expired", record: REQ-001, document: production }
+
+  - description: Evidence that expires today still applies
+    base: active
+    patch:
+      - { op: add, path: /production/records/REQ-001/assessments/0/evidence/0/expires_at, value: "2026-10-23" }
+    result: conforms
+    findings: []
+
+  - description: Expired observed evidence on a record or relationship is a warning
+    base: active
+    patch:
+      - { op: add, path: /production/records/APP-001, value: { evidence: [{ locator: deploys/1.3, kind: deployment, claim: Deployed, observed_at: "2026-09-01", applies_to: production, expires_at: "2026-10-01" }] } }
+      - op: add
+        path: /production/relationships
+        value:
+          - source: APP-001
+            type: depends_on
+            target: INF-002
+            evidence: [{ locator: traces/a, kind: runtime_observation, claim: Seen, observed_at: "2026-09-01", applies_to: production, expires_at: "2026-10-01" }]
+    result: conforms
+    findings:
+      - { severity: warning, rule: "11.evidence-expired", record: APP-001, document: production }
+      - { severity: warning, rule: "11.evidence-expired", record: APP-001, document: production }
+
+  - description: Expired authored evidence in config is a warning
+    base: active
+    patch:
+      - { op: add, path: /billing/records/0/evidence/-, value: { locator: research/interviews, kind: research, claim: Freelancers wait too long, observed_at: "2026-01-10", applies_to: 2026-Q1, expires_at: "2026-07-01" } }
+    result: conforms
+    findings:
+      - { severity: warning, rule: "11.evidence-expired", record: OUT-001, document: billing }
+
+  - description: An exception in config waives a claim error from state
+    base: active
+    patch:
+      - { op: remove, path: /production/records/REQ-001/assessments/0 }
+      - { op: add, path: /billing/exceptions, value: [{ rule: "7.8", record: REQ-001, reason: Deployment records are being migrated, owner: billing-team, expires_at: "2027-03-01" }] }
+    result: conforms with exceptions
+    findings: []
+    waived:
+      - { rule: "7.8", record: REQ-001 }
+
+  - description: A named revision is compared exactly, not as an abbreviation
+    base: active
+    revision: release-10
+    patch:
+      - { op: replace, path: /production/config_revision, value: release-1 }
+    result: conforms
+    findings:
+      - { severity: warning, rule: "11.state-revision", record: null, document: production }
+
+  - description: Claim findings name the state document the claim is in
+    base: active
+    patch:
+      - { op: replace, path: /production/records/REQ-001/assessments/0/evidence/0/kind, value: test }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "7.8", record: REQ-001, document: production }
+      - { severity: error, rule: "7.8", record: REQ-001, document: production }
+
+  - description: Relationship and exception findings name the config document they are in
+    base: active
+    patch:
+      - op: add
+        path: /links
+        value:
+          exacly: "0.2.0"
+          relationships:
+            - { source: APP-001, type: stores, target: INFO-001, role: cache }
+            - { source: CAP-001, type: contributes_to, target: OUT-001 }
+          exceptions:
+            - { rule: "7.1", record: OUT-001, reason: Measure not chosen yet, owner: billing-team, expires_at: "2027-03-01" }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.endpoint", record: APP-001, document: links }
+      - { severity: error, rule: "11.duplicate-edge", record: CAP-001, document: links }
+      - { severity: warning, rule: "11.exception-unused", record: OUT-001, document: links }
+
+  - description: With one config document beside state, config findings still name it
+    base: active
+    patch:
+      - { op: copy, from: /model/model, path: /billing/model }
+      - { op: remove, path: /model }
+      - { op: add, path: /billing/relationships/-, value: { source: APP-001, type: stores, target: INFO-001, role: cache } }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.endpoint", record: APP-001, document: billing }
