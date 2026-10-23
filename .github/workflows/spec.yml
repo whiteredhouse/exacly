@@ -1,0 +1,20 @@
+name: Spec
+
+on:
+  pull_request:
+    paths: ["spec/**", ".github/workflows/spec.yml"]
+  push:
+    branches: [main]
+    paths: ["spec/**", ".github/workflows/spec.yml"]
+
+jobs:
+  schema:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r spec/tests/requirements.txt
+      - name: Validate schema, examples and broken variants
+        run: python -m unittest discover -s spec/tests -v
