@@ -38,6 +38,7 @@ packages = ["validator/src/exacly_validate"]
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+extend-exclude = ["prototypes"]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF"]
