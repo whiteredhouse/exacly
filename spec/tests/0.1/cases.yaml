@@ -1,0 +1,272 @@
+# Test cases for the Exacly 0.1 product-map schema.
+#
+# Each case applies a JSON Patch (RFC 6902) to the base document and states
+# whether the result is valid. An invalid case lists the errors a validator
+# must report: `at` is the JSON Pointer of the failing location in the
+# document, `keyword` the JSON Schema keyword that fails, and `property`
+# (for required and additionalProperties) the property named. Any validator,
+# in any language, can run these cases.
+#
+# Record indexes in the base: 0 OUT-001, 1 CAP-001, 2 PROC-001, 3 REQ-001,
+# 4 INFO-001, 5 APP-001, 6 INF-001, 7 INF-002, 8 MEAS-001.
+
+base: ../../examples/0.1/invoice-reminders.yaml
+
+cases:
+  # Document
+
+  - description: The base document is valid
+    patch: []
+    valid: true
+
+  - description: A different spec version is rejected
+    patch:
+      - { op: replace, path: /exacly, value: "0.2.0" }
+    valid: false
+    errors:
+      - { at: /exacly, keyword: pattern }
+
+  - description: A proposed change needs a base revision
+    patch:
+      - { op: remove, path: /base_revision }
+    valid: false
+    errors:
+      - { at: "", keyword: required, property: base_revision }
+
+  - description: A current baseline needs no base revision
+    patch:
+      - { op: replace, path: /state, value: current }
+      - { op: remove, path: /base_revision }
+    valid: true
+
+  - description: Unknown top-level fields are rejected
+    patch:
+      - { op: add, path: /owner, value: billing-team }
+    valid: false
+    errors:
+      - { at: "", keyword: additionalProperties, property: owner }
+
+  - description: Extension fields are allowed on the document and on records
+    patch:
+      - { op: add, path: /x-generated-by, value: tool }
+      - { op: add, path: /records/5/x-team, value: billing }
+    valid: true
+
+  - description: A blank model namespace is rejected
+    patch:
+      - { op: replace, path: /model/namespace, value: " " }
+    valid: false
+    errors:
+      - { at: /model/namespace, keyword: pattern }
+
+  # Common record fields
+
+  - description: Every record needs last_reviewed_at, even if null
+    patch:
+      - { op: remove, path: /records/5/last_reviewed_at }
+    valid: false
+    errors:
+      - { at: /records/5, keyword: required, property: last_reviewed_at }
+
+  - description: last_reviewed_at must be an ISO 8601 date
+    patch:
+      - { op: replace, path: /records/5/last_reviewed_at, value: yesterday }
+    valid: false
+    errors:
+      - { at: /records/5/last_reviewed_at, keyword: anyOf }
+
+  - description: Unknown record fields are rejected
+    patch:
+      - { op: add, path: /records/5/foo, value: bar }
+    valid: false
+    errors:
+      - { at: /records/5, keyword: additionalProperties, property: foo }
+
+  - description: A blank record name is rejected
+    patch:
+      - { op: replace, path: /records/5/name, value: "  " }
+    valid: false
+    errors:
+      - { at: /records/5/name, keyword: pattern }
+
+  - description: Unknown record types are rejected
+    patch:
+      - { op: replace, path: /records/5/type, value: Service }
+    valid: false
+    errors:
+      - { at: /records/5/type, keyword: anyOf }
+
+  - description: Extension record types are allowed
+    patch:
+      - { op: replace, path: /records/5/type, value: "ops:Runbook" }
+    valid: true
+
+  - description: Evidence kinds come from section 8
+    patch:
+      - op: add
+        path: /records/5/evidence/-
+        value: { locator: tickets/42, kind: ticket, claim: Built, observed_at: "2026-10-01", applies_to: r1 }
+    valid: false
+    errors:
+      - { at: /records/5/evidence/0/kind, keyword: enum }
+
+  # Type-specific content of active records
+
+  - description: Every record may be active once its content is complete
+    patch:
+      - { op: replace, path: /records/0/lifecycle, value: active }
+      - { op: replace, path: /records/1/lifecycle, value: active }
+      - { op: replace, path: /records/2/lifecycle, value: active }
+      - { op: replace, path: /records/3/lifecycle, value: active }
+      - { op: replace, path: /records/4/lifecycle, value: active }
+      - { op: replace, path: /records/5/lifecycle, value: active }
+      - { op: replace, path: /records/6/lifecycle, value: active }
+      - { op: replace, path: /records/7/lifecycle, value: active }
+      - { op: replace, path: /records/8/lifecycle, value: active }
+    valid: true
+
+  - description: A proposed requirement may be incomplete
+    patch:
+      - { op: remove, path: /records/3/acceptance_criteria }
+    valid: true
+
+  - description: An active requirement needs acceptance criteria
+    patch:
+      - { op: replace, path: /records/3/lifecycle, value: active }
+      - { op: remove, path: /records/3/acceptance_criteria }
+    valid: false
+    errors:
+      - { at: /records/3, keyword: required, property: acceptance_criteria }
+
+  - description: An active requirement's content must not be empty
+    patch:
+      - { op: replace, path: /records/3/lifecycle, value: active }
+      - { op: replace, path: /records/3/statement, value: "" }
+      - { op: replace, path: /records/3/acceptance_criteria, value: [""] }
+      - { op: replace, path: /records/3/verification_method, value: "" }
+    valid: false
+    errors:
+      - { at: /records/3/statement, keyword: pattern }
+      - { at: /records/3/acceptance_criteria/0, keyword: pattern }
+      - { at: /records/3/verification_method, keyword: pattern }
+
+  - description: An active process needs at least one actor
+    patch:
+      - { op: replace, path: /records/2/lifecycle, value: active }
+      - { op: replace, path: /records/2/actors, value: [] }
+    valid: false
+    errors:
+      - { at: /records/2/actors, keyword: minItems }
+
+  - description: An active information record needs at least one identifier
+    patch:
+      - { op: replace, path: /records/4/lifecycle, value: active }
+      - { op: replace, path: /records/4/identifiers, value: [] }
+    valid: false
+    errors:
+      - { at: /records/4/identifiers, keyword: minItems }
+
+  - description: An active application needs an implementation reference
+    patch:
+      - { op: replace, path: /records/5/lifecycle, value: active }
+      - { op: remove, path: /records/5/implementation_ref }
+    valid: false
+    errors:
+      - { at: /records/5, keyword: required, property: implementation_ref }
+
+  - description: An unknown baseline needs an owner and a collection action
+    patch:
+      - { op: replace, path: /records/8/baseline, value: unknown }
+    valid: false
+    errors:
+      - { at: /records/8, keyword: required, property: baseline_owner }
+      - { at: /records/8, keyword: required, property: baseline_action }
+
+  - description: An unknown baseline's owner and action must not be blank
+    patch:
+      - { op: replace, path: /records/8/baseline, value: unknown }
+      - { op: add, path: /records/8/baseline_owner, value: "" }
+      - { op: add, path: /records/8/baseline_action, value: "" }
+    valid: false
+    errors:
+      - { at: /records/8/baseline_owner, keyword: pattern }
+      - { at: /records/8/baseline_action, keyword: pattern }
+
+  - description: An unknown baseline with an owner and action is valid
+    patch:
+      - { op: replace, path: /records/8/baseline, value: unknown }
+      - { op: add, path: /records/8/baseline_owner, value: analytics }
+      - { op: add, path: /records/8/baseline_action, value: Run the cohort query }
+    valid: true
+
+  # Relationships
+
+  - description: Unknown relationship types are rejected
+    patch:
+      - { op: add, path: /relationships/-, value: { source: APP-001, type: calls, target: INF-001 } }
+    valid: false
+    errors:
+      - { at: /relationships/10/type, keyword: anyOf }
+
+  # Assessments
+
+  - description: An assessment state must belong to its dimension
+    patch:
+      - op: add
+        path: /assessments
+        value:
+          - subject: REQ-001
+            dimension: verification
+            state: healthy
+            context: release 1
+            at: "2026-Q4"
+            evidence:
+              - { locator: ci/run/1, kind: test, claim: Tests pass, observed_at: "2026-10-01", applies_to: release 1 }
+    valid: false
+    errors:
+      - { at: /assessments/0/state, keyword: enum }
+
+  - description: A healthy operation assessment needs evidence
+    patch:
+      - { op: add, path: /assessments, value: [{ subject: APP-001, dimension: operation, state: healthy, context: production, at: "2026-10-01", evidence: [] }] }
+    valid: false
+    errors:
+      - { at: /assessments/0/evidence, keyword: minItems }
+
+  - description: A target-met outcome evaluation needs evidence
+    patch:
+      - { op: add, path: /assessments, value: [{ subject: OUT-001, dimension: outcome_evaluation, state: target_met, context: 2026 cohort, at: "2026-Q4", evidence: [] }] }
+    valid: false
+    errors:
+      - { at: /assessments/0/evidence, keyword: minItems }
+
+  - description: A passed verification needs evidence
+    patch:
+      - { op: add, path: /assessments, value: [{ subject: REQ-001, dimension: verification, state: passed, context: release 1, at: "2026-10-01", evidence: [] }] }
+    valid: false
+    errors:
+      - { at: /assessments/0/evidence, keyword: minItems }
+
+  - description: Unknown, not-checked and not-evaluated assessments need no evidence
+    patch:
+      - op: add
+        path: /assessments
+        value:
+          - { subject: APP-001, dimension: operation, state: unknown, context: production, at: "2026-10-01", evidence: [] }
+          - { subject: REQ-001, dimension: verification, state: not_checked, context: release 1, at: "2026-10-01", evidence: [] }
+          - { subject: OUT-001, dimension: outcome_evaluation, state: not_evaluated, context: 2026 cohort, at: "2026-Q4", evidence: [] }
+    valid: true
+
+  - description: A target-met outcome evaluation with evidence is valid
+    patch:
+      - op: add
+        path: /assessments
+        value:
+          - subject: OUT-001
+            dimension: outcome_evaluation
+            state: target_met
+            context: 2026 cohort
+            at: "2026-Q4"
+            evidence:
+              - { locator: reports/q4.csv, kind: measurement, claim: Median payment time was 13 days, observed_at: "2026-12-31", applies_to: "2026-Q4" }
+    valid: true
