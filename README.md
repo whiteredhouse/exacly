@@ -27,7 +27,6 @@ Exacly borrows the plan and apply loop from infrastructure as code, and the spec
 | --- | --- |
 | [`spec/`](spec/README.md) | Specification versions, JSON Schemas, worked examples and data-driven test cases |
 | [`validator/`](validator/README.md) | `exacly-validate`, the Python validator |
-| [`prototypes/`](prototypes/) | Experiments, such as a structure-only model diff between commits |
 | [`docs/`](docs/) | Research and pilot notes |
 
 ## Quick start
