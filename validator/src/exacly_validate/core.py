@@ -687,7 +687,7 @@ def validate_documents(documents: Mapping[str, Any], date: dt.date, revision: st
             check_expiry(r["evidence"], r["id"], name, report)
         for rel in doc.get("relationships", []):
             check_expiry(rel.get("evidence", []), rel["source"], name, report)
-    g = Graph(merged, report, sources if len(configs) > 1 else None)
+    g = Graph(merged, report, sources)
     check_structure(g, merged, report, ENDPOINTS_0_2)
     assessments = check_states(g, states, revision, report)
     check_traceability(g, assessments, report)
@@ -695,6 +695,6 @@ def validate_documents(documents: Mapping[str, Any], date: dt.date, revision: st
     check_hygiene(g, merged, report)
     apply_exceptions(g, merged, report)
     for f in report.findings:
-        if f.document is None and f.record in origin and len(configs) > 1:
+        if f.document is None and f.record in origin:
             f.document = origin[f.record]
     return report

@@ -43,7 +43,7 @@ It exits 0 when the model conforms, with or without exceptions, and 1 when it do
    - Exceptions that are expired, expiring within 30 days, or match no finding.
    - Evidence past its `expires_at` date, in config or state (`11.evidence-expired`). Evidence still applies on the day it expires.
 
-In 0.2, a finding names the document that holds what it is about when there is more than one: the state document for a claim or an observation, the config document for a relationship or an exception, and otherwise the config document that defines the record.
+In 0.2, every finding about a document's content names that document: the state document for a claim or an observation, the config document for a relationship or an exception, and otherwise the config document that defines the record.
 
 An exception names the rule code from the report, such as `7.1` or `7.retired-target`, and the record, with or without the model's own namespace. A valid exception waives that error, and the report then says "conforms with exceptions". An expired exception waives nothing.
 

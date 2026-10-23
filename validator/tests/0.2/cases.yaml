@@ -415,3 +415,13 @@ cases:
       - { severity: error, rule: "11.endpoint", record: APP-001, document: links }
       - { severity: error, rule: "11.duplicate-edge", record: CAP-001, document: links }
       - { severity: warning, rule: "11.exception-unused", record: OUT-001, document: links }
+
+  - description: With one config document beside state, config findings still name it
+    base: active
+    patch:
+      - { op: copy, from: /model/model, path: /billing/model }
+      - { op: remove, path: /model }
+      - { op: add, path: /billing/relationships/-, value: { source: APP-001, type: stores, target: INFO-001, role: cache } }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.endpoint", record: APP-001, document: billing }
