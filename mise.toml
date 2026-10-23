@@ -1,0 +1,36 @@
+# Tools and tasks for working on this repository. Run `mise run check` before pushing; CI runs the same.
+
+[tools]
+python = "3.12"
+uv = "0.11.32"
+
+[tasks.sync]
+description = "Install the validator and development tools into .venv from uv.lock"
+run = "uv sync --locked"
+
+[tasks.test]
+description = "Run the schema and validator test cases"
+depends = ["sync"]
+run = [
+    "uv run --locked python -m unittest discover -s spec/tests",
+    "uv run --locked python -m unittest discover -s validator/tests",
+]
+
+[tasks.lint]
+description = "Check style and formatting with Ruff"
+depends = ["sync"]
+run = ["uv run --locked ruff check", "uv run --locked ruff format --check"]
+
+[tasks.typecheck]
+description = "Type-check with mypy"
+depends = ["sync"]
+run = "uv run --locked mypy"
+
+[tasks.examples]
+description = "Validate every example product map"
+depends = ["sync"]
+run = 'for f in spec/examples/*/*.yaml; do uv run --locked exacly-validate "$f" || exit 1; done'
+
+[tasks.check]
+description = "Everything CI runs"
+depends = ["test", "lint", "typecheck", "examples"]

@@ -80,8 +80,10 @@ class Snapshot:
         prefix = self.package + "."
         found: set[str] = set()
         for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom) and node.module and (
-                node.module == self.package or node.module.startswith(prefix)
+            if (
+                isinstance(node, ast.ImportFrom)
+                and node.module
+                and (node.module == self.package or node.module.startswith(prefix))
             ):
                 base = node.module.removeprefix(self.package).lstrip(".")
                 for alias in node.names:
@@ -194,9 +196,7 @@ def mermaid(report: dict) -> str:
     added = [tuple(e) for e in report["domain_edges_added"]]
     removed = [tuple(e) for e in report["domain_edges_removed"]]
     nodes = touched | {d for edge in added + removed for d in edge}
-    unchanged = [
-        tuple(e) for e in report["domain_edges_unchanged"] if e[0] in nodes and e[1] in nodes and e[0] != e[1]
-    ]
+    unchanged = [tuple(e) for e in report["domain_edges_unchanged"] if e[0] in nodes and e[1] in nodes and e[0] != e[1]]
     ids = {name: f"n{i}" for i, name in enumerate(sorted(nodes))}
     modules: dict[str, list[str]] = {name: [] for name in nodes}
     for path, info in report["files"].items():

@@ -3,10 +3,12 @@
 Validates a product map against the [Exacly Specification](../spec/README.md) and prints the validation report that section 11 describes.
 
 ```sh
-pip install -r validator/requirements.txt
-python validator/exacly_validate.py docs/exacly/product-map.yaml
-python validator/exacly_validate.py docs/exacly/product-map.yaml --json --date 2026-10-23
+uv tool install "exacly-validate @ git+https://github.com/whiteredhouse/exacly"
+exacly-validate docs/exacly/product-map.yaml
+exacly-validate docs/exacly/product-map.yaml --json --date 2026-10-23
 ```
+
+`pip install` works the same way. The package carries the spec's schemas, so it runs anywhere. In Python, `exacly_validate.validate(doc, date)` returns the report without changing `doc`.
 
 It exits 0 when the map conforms, with or without exceptions, and 1 when it does not.
 
@@ -44,6 +46,17 @@ These need information the map does not carry, or a person's judgement.
 
 `tests/cases.yaml` holds the cases as data. Each is a JSON Patch to the spec's worked example, with the exact findings and result the report must give.
 
-```sh
-python -m unittest discover -s validator/tests
-```
+## Development
+
+The repository uses [mise](https://mise.jdx.dev/) for its tools (Python and uv) and tasks. `mise run check` is what CI runs.
+
+| Task | What it does |
+|---|---|
+| `mise run sync` | Installs the validator and development tools into `.venv` from `uv.lock` |
+| `mise run test` | Runs the schema and validator test cases |
+| `mise run lint` | Checks style and formatting with Ruff |
+| `mise run typecheck` | Type-checks with mypy in strict mode |
+| `mise run examples` | Validates every example in `spec/examples/` |
+| `mise run check` | All of the above |
+
+To try a map against your working copy, run `uv run exacly-validate path/to/map.yaml`.

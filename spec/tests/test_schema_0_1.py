@@ -2,12 +2,14 @@
 with an $id matching its path, every example validates, and every case in
 0.1/cases.yaml gives the stated result and reports the stated errors.
 
-Run from the repository root: python -m unittest discover -s spec/tests
+Run with `mise run test`, or from the repository root: uv run python -m unittest discover -s spec/tests
 """
 
 import json
 import unittest
+from collections.abc import Iterable
 from pathlib import Path
+from typing import Any, ClassVar
 
 import jsonpatch
 import jsonschema
@@ -25,11 +27,11 @@ def latest_schema_path() -> Path:
     return sorted(SCHEMA_DIR.glob("*.json"))[-1]
 
 
-def pointer(path) -> str:
+def pointer(path: Iterable[str | int]) -> str:
     return "".join("/" + str(part).replace("~", "~0").replace("/", "~1") for part in path)
 
 
-def matches(error: jsonschema.ValidationError, expected: dict) -> bool:
+def matches(error: jsonschema.ValidationError, expected: dict[str, Any]) -> bool:
     if pointer(error.absolute_path) != expected["at"] or error.validator != expected["keyword"]:
         return False
     prop = expected.get("property")
@@ -37,6 +39,8 @@ def matches(error: jsonschema.ValidationError, expected: dict) -> bool:
 
 
 class SchemaTest(unittest.TestCase):
+    validator: ClassVar[jsonschema.Draft202012Validator]
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.validator = jsonschema.Draft202012Validator(
