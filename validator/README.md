@@ -1,6 +1,6 @@
 # Exacly validator
 
-Validates a product map against the [Exacly Specification](../spec/README.md) and prints the validation report that section 11 describes.
+Validates a 0.1 product map against the [Exacly Specification](../spec/README.md) and prints the validation report that section 11 describes. Support for 0.2 config and state documents comes next.
 
 ```sh
 uv tool install "exacly-validate @ git+https://github.com/whiteredhouse/exacly"

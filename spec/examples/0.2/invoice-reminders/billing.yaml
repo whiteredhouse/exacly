@@ -1,0 +1,166 @@
+# The section 12 worked example as Exacly 0.2 config: records and relationships.
+# Fictional: names, figures and references are illustrative only.
+# Fields section 12 leaves open (scope, descriptions, interfaces, bindings) are
+# filled with illustrative values so the config is complete.
+exacly: "0.2.0"
+
+records:
+  - id: OUT-001
+    type: Outcome
+    name: Faster invoice payment
+    description: Help freelancers receive payment sooner.
+    owner: billing-team
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: null
+    beneficiary: Freelancers
+    success_criterion: Median payment time of 14 days
+    evaluation_period: First complete quarter after rollout
+
+  - id: CAP-001
+    type: Capability
+    name: Collect payments
+    description: Obtain and reconcile payment for issued invoices.
+    owner: billing-team
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: null
+    scope: From invoice issue to reconciled payment; excludes refunds.
+
+  - id: PROC-001
+    type: Process
+    name: Collect an invoice payment
+    description: How an issued invoice becomes a reconciled payment.
+    owner: billing-team
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: null
+    perspective: business
+    actors: [Freelancer, Customer, Payment provider]
+    trigger: Invoice issued
+    steps:
+      - Freelancer issues invoice
+      - Customer is reminded
+      - Customer pays
+      - Provider confirms payment
+    completion: Payment reconciled
+    exceptions:
+      - Payment-provider failure
+      - Unreachable customer contact (manual follow-up)
+
+  - id: REQ-001
+    type: Requirement
+    name: Remind before due date
+    description: A reminder ahead of the due date for unpaid invoices.
+    owner: billing-team
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: null
+    statement: >-
+      Send one reminder three days before the due date if the invoice remains
+      unpaid and the customer can receive email.
+    acceptance_criteria:
+      - An eligible unpaid invoice receives one reminder on the date three calendar days before its due date, using the product's declared billing timezone.
+      - An invoice already paid when processing begins receives no reminder.
+      - Reprocessing the same invoice for the same due date does not create a duplicate reminder request.
+      - Missing email contact produces a recorded skip reason available to the billing team.
+      - A transient delivery failure is recorded and retried under a separately documented retry policy.
+    verification_method: Eligibility tests, idempotency tests, and an integration test with a controlled email provider.
+    observe:
+      tests: { workflow: ci.yml, path: tests/reminders }
+
+  - id: INFO-001
+    type: Information
+    name: Invoice
+    description: An invoice issued to a customer.
+    owner: billing-team
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: null
+    definition: A request for payment issued by a freelancer to a customer.
+    identifiers: [invoice ID, customer contact, due date, payment status, reminder history]
+    steward: billing-team
+
+  - id: APP-001
+    type: Application
+    name: Reminder service
+    description: Sends payment reminders.
+    owner: billing-team
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: null
+    responsibility: Select eligible invoices and request email delivery.
+    interfaces: [Daily reminder run]
+    implementation_ref: { locator: reminder-service design, planned: true }
+    observe:
+      deployments: { service: reminder-service, environments: [production] }
+
+  - id: INF-001
+    type: Infrastructure
+    name: Scheduler
+    description: Starts daily reminder processing.
+    owner: billing-team
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: null
+    kind: Scheduler
+    purpose: Initiate daily reminder processing.
+    operational_ref: { locator: scheduler configuration, planned: true }
+
+  - id: INF-002
+    type: Infrastructure
+    name: Message queue
+    description: Buffers reminder work.
+    owner: billing-team
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: null
+    kind: Message queue
+    purpose: Buffer reminder work.
+    operational_ref: { locator: reminder queue configuration, planned: true }
+
+  - id: INF-003
+    type: Infrastructure
+    name: Billing database
+    description: Holds invoices and reminder history.
+    owner: billing-team
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: null
+    kind: Relational database
+    purpose: Hold invoices and reminder history.
+    operational_ref: { locator: billing database configuration, planned: true }
+
+  - id: MEAS-001
+    type: Measure
+    name: Median payment time
+    description: How quickly invoices are paid.
+    owner: billing-team
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: null
+    calculation: >-
+      Median elapsed days between invoice issue and settlement for invoices
+      issued in a fixed cohort, measured after 90 days of observation.
+    unit: days
+    population: Invoices issued in the cohort
+    source: Billing analytics query
+    cadence: Quarterly
+    baseline: 20
+    target: 14
+    observe:
+      measurement: { query: billing-analytics/median-payment-time.sql }
+
+relationships:
+  - { source: CAP-001, type: contributes_to, target: OUT-001 }
+  - { source: PROC-001, type: uses_capability, target: CAP-001 }
+  - { source: REQ-001, type: supports, target: PROC-001 }
+  - { source: PROC-001, type: uses, target: APP-001 }
+  - { source: APP-001, type: implements, target: REQ-001 }
+  - { source: APP-001, type: reads, target: INFO-001 }
+  - { source: APP-001, type: writes, target: INFO-001 }
+  - { source: APP-001, type: depends_on, target: INF-001, conditions: Only for starting a processing run. }
+  - { source: APP-001, type: depends_on, target: INF-002, conditions: Asynchronous; only for handing off and retrying reminder work. }
+  - { source: APP-001, type: depends_on, target: INF-003 }
+  - { source: INF-003, type: stores, target: INFO-001, role: system_of_record }
+  - { source: MEAS-001, type: evaluates, target: OUT-001 }

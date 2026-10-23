@@ -1,0 +1,211 @@
+# Test cases for the Exacly 0.2 config and state schemas.
+#
+# Each suite names a schema (config or state) and a base document. Each case
+# applies a JSON Patch (RFC 6902) to the base and states whether the result is
+# valid. An invalid case lists the errors a validator must report: `at` is the
+# JSON Pointer of the failing location, `keyword` the JSON Schema keyword that
+# fails, and `property` (for required and additionalProperties) the property
+# named. Any validator, in any language, can run these cases.
+#
+# Record indexes in the config base: 0 OUT-001, 1 CAP-001, 2 PROC-001,
+# 3 REQ-001, 4 INFO-001, 5 APP-001, 6 INF-001, 7 INF-002, 8 INF-003, 9 MEAS-001.
+
+suites:
+  - schema: config
+    base: ../../examples/0.2/invoice-reminders/billing.yaml
+    cases:
+      - description: The base document is valid
+        patch: []
+        valid: true
+
+      - description: A 0.1 version is rejected
+        patch:
+          - { op: replace, path: /exacly, value: "0.1.0" }
+        valid: false
+        errors:
+          - { at: /exacly, keyword: pattern }
+
+      - description: Config carries no model state or revision
+        patch:
+          - { op: add, path: /state, value: proposed }
+          - { op: add, path: /base_revision, value: initial }
+        valid: false
+        errors:
+          - { at: "", keyword: additionalProperties, property: state }
+          - { at: "", keyword: additionalProperties, property: base_revision }
+
+      - description: Assessments belong in state, not config
+        patch:
+          - { op: add, path: /assessments, value: [] }
+        valid: false
+        errors:
+          - { at: "", keyword: additionalProperties, property: assessments }
+
+      - description: A record may carry research or decision evidence
+        patch:
+          - op: add
+            path: /records/0/evidence/-
+            value: { locator: research/interviews-2026-09, kind: research, claim: Freelancers wait weeks for payment, observed_at: "2026-09-15", applies_to: 2026 interviews }
+        valid: true
+
+      - description: Observed evidence belongs in state, not on a record
+        patch:
+          - op: add
+            path: /records/5/evidence/-
+            value: { locator: deploys/1.4, kind: deployment, claim: Deployed, observed_at: "2026-10-20", applies_to: production }
+        valid: false
+        errors:
+          - { at: /records/5/evidence/0/kind, keyword: enum }
+
+      - description: Bindings use known source kinds or extensions
+        patch:
+          - { op: add, path: /records/5/observe/runtime, value: { dashboard: reminders } }
+          - { op: add, path: /records/5/observe/ops:pager, value: { service: reminders } }
+        valid: true
+
+      - description: An unknown binding source is rejected
+        patch:
+          - { op: add, path: /records/5/observe/logs, value: { index: reminders } }
+        valid: false
+        errors:
+          - { at: /records/5/observe, keyword: additionalProperties, property: logs }
+
+      - description: An empty binding is rejected
+        patch:
+          - { op: replace, path: /records/5/observe/deployments, value: {} }
+        valid: false
+        errors:
+          - { at: /records/5/observe/deployments, keyword: minProperties }
+
+      - description: A record may be observe-only
+        patch:
+          - { op: add, path: /records/7/observe_only, value: true }
+        valid: true
+
+      - description: A stores relationship needs a role
+        patch:
+          - { op: remove, path: /relationships/10/role }
+        valid: false
+        errors:
+          - { at: /relationships/10, keyword: required, property: role }
+
+      - description: A stores role comes from section 6
+        patch:
+          - { op: replace, path: /relationships/10/role, value: primary }
+        valid: false
+        errors:
+          - { at: /relationships/10/role, keyword: enum }
+
+      - description: Evidence may carry a digest and an expiry
+        patch:
+          - op: add
+            path: /records/0/evidence/-
+            value: { locator: decisions/12, kind: decision, claim: Target agreed, observed_at: "2026-10-01", applies_to: "2026", digest: "sha256:9b2e", expires_at: "2027-10-01" }
+        valid: true
+
+  - schema: config
+    base: ../../examples/0.2/invoice-reminders/model.yaml
+    cases:
+      - description: The model document is valid
+        patch: []
+        valid: true
+
+      - description: The model boundary is still complete
+        patch:
+          - { op: remove, path: /model/owner }
+        valid: false
+        errors:
+          - { at: /model, keyword: required, property: owner }
+
+  - schema: state
+    base: state.json
+    cases:
+      - description: The base state is valid
+        patch: []
+        valid: true
+
+      - description: State needs a serial and a lineage
+        patch:
+          - { op: remove, path: /serial }
+          - { op: remove, path: /lineage }
+        valid: false
+        errors:
+          - { at: "", keyword: required, property: serial }
+          - { at: "", keyword: required, property: lineage }
+
+      - description: State records are keyed by record ID and hold only assessments
+        patch:
+          - { op: add, path: /records/APP-001/lifecycle, value: active }
+        valid: false
+        errors:
+          - { at: /records/APP-001, keyword: additionalProperties, property: lifecycle }
+
+      - description: A review decision may back a verification
+        patch:
+          - op: replace
+            path: /records/REQ-001/assessments/1/evidence
+            value: [{ locator: reviews/42, kind: decision, claim: Acceptance criteria reviewed and accepted, observed_at: "2026-10-20", applies_to: 9f2c41e }]
+        valid: true
+
+      - description: Evidence outside an assessment must be observed, not a decision
+        patch:
+          - op: add
+            path: /records/APP-001/evidence
+            value: [{ locator: decisions/12, kind: decision, claim: Approved, observed_at: "2026-10-01", applies_to: production }]
+        valid: false
+        errors:
+          - { at: /records/APP-001/evidence/0/kind, keyword: enum }
+
+      - description: A released assessment needs evidence
+        patch:
+          - { op: replace, path: /records/REQ-001/assessments/0/evidence, value: [] }
+        valid: false
+        errors:
+          - { at: /records/REQ-001/assessments/0/evidence, keyword: minItems }
+
+      - description: An assessment state must belong to its dimension
+        patch:
+          - { op: replace, path: /records/REQ-001/assessments/1/state, value: released }
+        valid: false
+        errors:
+          - { at: /records/REQ-001/assessments/1/state, keyword: enum }
+
+      - description: An assessment that is not positive says why
+        patch:
+          - { op: remove, path: /records/APP-001/assessments/0/reason }
+        valid: false
+        errors:
+          - { at: /records/APP-001/assessments/0, keyword: required, property: reason }
+
+      - description: A record may carry observed evidence that supports no assessment
+        patch:
+          - op: add
+            path: /records/APP-001/evidence
+            value: [{ locator: commits/9f2c41e, kind: implementation, claim: Scheduler code merged, observed_at: "2026-10-19", applies_to: 9f2c41e }]
+        valid: true
+
+      - description: A relationship may be identified by its id
+        patch:
+          - { op: add, path: /relationships/-, value: { id: REL-7, evidence: [{ locator: traces/x, kind: runtime_observation, claim: Called, observed_at: "2026-10-22", applies_to: production }] } }
+        valid: true
+
+      - description: A relationship observation needs an identity
+        patch:
+          - { op: remove, path: /relationships/0/target }
+        valid: false
+        errors:
+          - { at: /relationships/0, keyword: anyOf }
+
+      - description: A relationship observation needs evidence
+        patch:
+          - { op: replace, path: /relationships/0/evidence, value: [] }
+        valid: false
+        errors:
+          - { at: /relationships/0/evidence, keyword: minItems }
+
+      - description: Pending work names its record, task and when it was opened
+        patch:
+          - { op: remove, path: /pending/0/task }
+        valid: false
+        errors:
+          - { at: /pending/0, keyword: required, property: task }
