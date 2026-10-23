@@ -2,22 +2,25 @@ name: Spec
 
 on:
   pull_request:
-    paths: ["spec/**", ".github/workflows/spec.yml"]
+    paths: &paths
+      - "spec/**"
+      - "validator/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "mise.toml"
+      - ".github/workflows/spec.yml"
   push:
     branches: [main]
-    paths: ["spec/**", ".github/workflows/spec.yml"]
+    paths: *paths
 
 permissions:
   contents: read
 
 jobs:
-  schema:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.12"
-      - run: pip install -r spec/tests/requirements.txt
-      - name: Validate schema, examples and test cases
-        run: python -m unittest discover -s spec/tests -v
+      - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
+      - name: Test, lint, type-check and validate the examples
+        run: mise run check

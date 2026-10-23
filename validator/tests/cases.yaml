@@ -1,0 +1,440 @@
+# Test cases for the validator.
+#
+# Each case starts from one of the bases, applies a JSON Patch (RFC 6902),
+# and states the report the validator must give on `date`: its result, every
+# unwaived finding (severity, rule, record), and every finding an exception
+# waived. Findings must match exactly, so an extra finding fails the case.
+#
+# Record indexes: 0 OUT-001, 1 CAP-001, 2 PROC-001, 3 REQ-001, 4 INFO-001,
+# 5 APP-001, 6 INF-001, 7 INF-002, 8 MEAS-001.
+# Relationship indexes: 0 CAP contributes_to OUT, 1 PROC uses_capability CAP,
+# 2 REQ supports PROC, 3 PROC uses APP, 4 APP implements REQ, 5 APP reads INFO,
+# 6 APP writes INFO, 7 APP depends_on INF-001, 8 APP depends_on INF-002,
+# 9 MEAS evaluates OUT.
+
+date: "2026-10-23"
+
+bases:
+  proposed:
+    from: ../../spec/examples/0.1/invoice-reminders.yaml
+    patch: []
+  active:
+    from: ../../spec/examples/0.1/invoice-reminders.yaml
+    patch:
+      - { op: replace, path: /state, value: current }
+      - { op: remove, path: /base_revision }
+      - { op: add, path: /revision, value: r1 }
+      - { op: replace, path: /records/0/lifecycle, value: active }
+      - { op: replace, path: /records/1/lifecycle, value: active }
+      - { op: replace, path: /records/2/lifecycle, value: active }
+      - { op: replace, path: /records/3/lifecycle, value: active }
+      - { op: replace, path: /records/4/lifecycle, value: active }
+      - { op: replace, path: /records/5/lifecycle, value: active }
+      - { op: replace, path: /records/6/lifecycle, value: active }
+      - { op: replace, path: /records/7/lifecycle, value: active }
+      - { op: replace, path: /records/8/lifecycle, value: active }
+      - { op: replace, path: /records/0/last_reviewed_at, value: "2026-10-01" }
+      - { op: replace, path: /records/1/last_reviewed_at, value: "2026-10-01" }
+      - { op: replace, path: /records/2/last_reviewed_at, value: "2026-10-01" }
+      - { op: replace, path: /records/3/last_reviewed_at, value: "2026-10-01" }
+      - { op: replace, path: /records/4/last_reviewed_at, value: "2026-10-01" }
+      - { op: replace, path: /records/5/last_reviewed_at, value: "2026-10-01" }
+      - { op: replace, path: /records/6/last_reviewed_at, value: "2026-10-01" }
+      - { op: replace, path: /records/7/last_reviewed_at, value: "2026-10-01" }
+      - { op: replace, path: /records/8/last_reviewed_at, value: "2026-10-01" }
+
+records:
+  APP-002: &app2
+    id: APP-002
+    type: Application
+    name: Email gateway
+    description: Sends email on behalf of other services.
+    owner: platform-team
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-01"
+    responsibility: Deliver outbound email.
+    interfaces: [Send email]
+    implementation_ref: { locator: email-gateway }
+  CAP-002: &cap2
+    id: CAP-002
+    type: Capability
+    name: Chase late payments
+    description: Follow up invoices that stay unpaid.
+    owner: billing-team
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-01"
+    scope: Unpaid invoices past their due date.
+
+cases:
+  # Baselines
+
+  - description: The worked example, all proposed, conforms
+    base: proposed
+    patch: []
+    result: conforms
+    findings: []
+
+  - description: The worked example, all active and reviewed, conforms
+    base: active
+    patch: []
+    result: conforms
+    findings: []
+
+  - description: A document that fails the schema reports schema errors and skips graph checks
+    base: active
+    patch:
+      - { op: replace, path: /records/5/name, value: " " }
+    result: does not conform
+    findings:
+      - { severity: error, rule: schema, record: null }
+
+  # Section 7 traceability
+
+  - description: "7.1: an active Outcome needs a Measure"
+    base: active
+    patch:
+      - { op: remove, path: /relationships/9 }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "7.1", record: OUT-001 }
+
+  - description: "7.1: a proposed record's gap is a warning"
+    base: proposed
+    patch:
+      - { op: remove, path: /relationships/9 }
+    result: conforms
+    findings:
+      - { severity: warning, rule: "7.1", record: OUT-001 }
+
+  - description: "7.2: an active Capability must contribute to an Outcome, which also cuts the Requirement's path"
+    base: active
+    patch:
+      - { op: remove, path: /relationships/0 }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "7.2", record: CAP-001 }
+      - { severity: error, rule: "7.4", record: REQ-001 }
+
+  - description: "7.3: an active Process must use a Capability"
+    base: active
+    patch:
+      - { op: remove, path: /relationships/1 }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "7.3", record: PROC-001 }
+      - { severity: error, rule: "7.4", record: REQ-001 }
+
+  - description: "7.4: an active Requirement needs a supports relationship"
+    base: active
+    patch:
+      - { op: remove, path: /relationships/2 }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "7.4", record: REQ-001 }
+
+  - description: "7.5 and 7.6: an unjustified Application leaves its infrastructure unjustified"
+    base: active
+    patch:
+      - { op: remove, path: /relationships/4 }
+      - { op: remove, path: /relationships/3 }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "7.5", record: APP-001 }
+      - { severity: error, rule: "7.6", record: INF-001 }
+      - { severity: error, rule: "7.6", record: INF-002 }
+
+  - description: "7.5: a shared Application is justified by a justified Application depending on it"
+    base: active
+    patch:
+      - { op: add, path: /records/-, value: *app2 }
+      - { op: add, path: /relationships/-, value: { source: APP-001, type: depends_on, target: APP-002 } }
+    result: conforms
+    findings: []
+
+  - description: "7.5: an Application nothing justifies"
+    base: active
+    patch:
+      - { op: add, path: /records/-, value: *app2 }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "7.5", record: APP-002 }
+
+  - description: "7.6: Infrastructure may instead implement a justified Requirement"
+    base: active
+    patch:
+      - { op: remove, path: /relationships/7 }
+      - { op: add, path: /relationships/-, value: { source: INF-001, type: implements, target: REQ-001 } }
+    result: conforms
+    findings: []
+
+  - description: "7.7: active Information needs an Application that reads or writes it"
+    base: active
+    patch:
+      - { op: remove, path: /relationships/6 }
+      - { op: remove, path: /relationships/5 }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "7.7", record: INFO-001 }
+
+  - description: "7.8: a delivered Requirement with an implementer and implementation evidence"
+    base: active
+    patch:
+      - op: add
+        path: /assessments
+        value:
+          - { subject: REQ-001, dimension: delivery, state: released, context: production, at: "2026-10-20", evidence: [{ locator: releases/1.4, kind: deployment, claim: Reminders deployed, observed_at: "2026-10-20", applies_to: production }] }
+    result: conforms
+    findings: []
+
+  - description: "7.8: a delivered Requirement with nothing implementing it"
+    base: active
+    patch:
+      - { op: remove, path: /relationships/4 }
+      - op: add
+        path: /assessments
+        value:
+          - { subject: REQ-001, dimension: delivery, state: released, context: production, at: "2026-10-20", evidence: [{ locator: releases/1.4, kind: deployment, claim: Reminders deployed, observed_at: "2026-10-20", applies_to: production }] }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "7.8", record: REQ-001 }
+
+  - description: "7.8: a verified Requirement also needs delivery evidence"
+    base: active
+    patch:
+      - op: add
+        path: /assessments
+        value:
+          - { subject: REQ-001, dimension: verification, state: passed, context: r1, at: "2026-10-20", evidence: [{ locator: ci/runs/9, kind: test, claim: Reminder tests pass, observed_at: "2026-10-20", applies_to: r1 }] }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "7.8", record: REQ-001 }
+
+  - description: "7.8: a delivered and verified Requirement with both kinds of evidence"
+    base: active
+    patch:
+      - op: add
+        path: /assessments
+        value:
+          - { subject: REQ-001, dimension: delivery, state: released, context: production, at: "2026-10-20", evidence: [{ locator: releases/1.4, kind: deployment, claim: Reminders deployed, observed_at: "2026-10-20", applies_to: production }] }
+          - { subject: REQ-001, dimension: verification, state: passed, context: r1, at: "2026-10-20", evidence: [{ locator: ci/runs/9, kind: test, claim: Reminder tests pass, observed_at: "2026-10-20", applies_to: r1 }] }
+    result: conforms
+    findings: []
+
+  - description: "7.8: evidence for one release does not support a claim about another"
+    base: active
+    patch:
+      - op: add
+        path: /assessments
+        value:
+          - { subject: REQ-001, dimension: delivery, state: released, context: r1, at: "2026-10-20", evidence: [{ locator: releases/1.4, kind: deployment, claim: Reminders deployed, observed_at: "2026-10-20", applies_to: r1 }] }
+          - { subject: REQ-001, dimension: delivery, state: released, context: r2, at: "2026-10-22", evidence: [{ locator: adr/7, kind: decision, claim: Release approved, observed_at: "2026-10-22", applies_to: r2 }] }
+          - { subject: REQ-001, dimension: verification, state: passed, context: r1, at: "2026-10-20", evidence: [{ locator: ci/runs/9, kind: test, claim: Reminder tests pass, observed_at: "2026-10-20", applies_to: r1 }] }
+          - { subject: REQ-001, dimension: verification, state: passed, context: r2, at: "2026-10-22", evidence: [{ locator: releases/1.5, kind: deployment, claim: Reminders deployed, observed_at: "2026-10-22", applies_to: r2 }] }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "7.8", record: REQ-001 }
+      - { severity: error, rule: "7.8", record: REQ-001 }
+
+  - description: "7.8: evidence must apply to the assessment's context"
+    base: active
+    patch:
+      - op: add
+        path: /assessments
+        value:
+          - { subject: REQ-001, dimension: delivery, state: released, context: r2, at: "2026-10-22", evidence: [{ locator: releases/1.4, kind: deployment, claim: Reminders deployed, observed_at: "2026-10-20", applies_to: r1 }] }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "7.8", record: REQ-001 }
+
+  - description: An active relationship to a retired record is an error
+    base: active
+    patch:
+      - { op: replace, path: /records/7/lifecycle, value: retired }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "7.retired-target", record: APP-001 }
+
+  # Section 11 structural errors
+
+  - description: Duplicate record IDs
+    base: active
+    patch:
+      - { op: add, path: /records/-, value: { id: CAP-001, type: Capability, name: Copy, description: A copy., owner: billing-team, lifecycle: proposed, evidence: [], last_reviewed_at: null } }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.duplicate-id", record: CAP-001 }
+
+  - description: A relationship to a record that does not exist
+    base: active
+    patch:
+      - { op: add, path: /relationships/-, value: { source: APP-001, type: depends_on, target: INF-999 } }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.unresolved", record: APP-001 }
+
+  - description: A reference to another model's record is not resolved locally
+    base: active
+    patch:
+      - { op: add, path: /relationships/-, value: { source: APP-001, type: depends_on, target: "platform:INF-042" } }
+    result: conforms
+    findings: []
+
+  - description: A namespace-qualified reference to a local record resolves, and duplicates are caught
+    base: active
+    patch:
+      - { op: add, path: /relationships/-, value: { source: "invoicing:CAP-001", type: contributes_to, target: "invoicing:OUT-001" } }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.duplicate-edge", record: CAP-001 }
+
+  - description: A relationship between types section 6 does not allow
+    base: active
+    patch:
+      - { op: add, path: /relationships/-, value: { source: MEAS-001, type: supports, target: OUT-001 } }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.endpoint", record: MEAS-001 }
+
+  - description: contains must link records of the same type
+    base: active
+    patch:
+      - { op: add, path: /relationships/-, value: { source: CAP-001, type: contains, target: PROC-001 } }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.endpoint", record: CAP-001 }
+
+  - description: A containment cycle
+    base: active
+    patch:
+      - { op: add, path: /records/-, value: *cap2 }
+      - { op: add, path: /relationships/-, value: { source: CAP-002, type: contributes_to, target: OUT-001 } }
+      - { op: add, path: /relationships/-, value: { source: CAP-001, type: contains, target: CAP-002 } }
+      - { op: add, path: /relationships/-, value: { source: CAP-002, type: contains, target: CAP-001 } }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.cycle", record: CAP-001 }
+
+  - description: A map with no model still gets a report
+    base: active
+    patch:
+      - { op: replace, path: /model, value: null }
+    result: does not conform
+    findings:
+      - { severity: error, rule: schema, record: null }
+
+  # Section 11 warnings
+
+  - description: A dependency cycle is a warning for review
+    base: active
+    patch:
+      - { op: add, path: /relationships/-, value: { source: INF-001, type: depends_on, target: INF-002 } }
+      - { op: add, path: /relationships/-, value: { source: INF-002, type: depends_on, target: INF-001 } }
+    result: conforms
+    findings:
+      - { severity: warning, rule: "11.dependency-cycle", record: INF-001 }
+
+  - description: A record that depends on itself is a cycle for review
+    base: active
+    patch:
+      - { op: add, path: /relationships/-, value: { source: APP-001, type: depends_on, target: APP-001 } }
+    result: conforms
+    findings:
+      - { severity: warning, rule: "11.dependency-cycle", record: APP-001 }
+
+  - description: An active record never reviewed
+    base: active
+    patch:
+      - { op: replace, path: /records/5/last_reviewed_at, value: null }
+    result: conforms
+    findings:
+      - { severity: warning, rule: "11.review-overdue", record: APP-001 }
+
+  - description: An active record reviewed longer ago than the interval
+    base: active
+    patch:
+      - { op: replace, path: /records/5/last_reviewed_at, value: "2026-01-15" }
+    result: conforms
+    findings:
+      - { severity: warning, rule: "11.review-overdue", record: APP-001 }
+
+  - description: An unknown baseline is a warning
+    base: active
+    patch:
+      - { op: replace, path: /records/8/baseline, value: unknown }
+      - { op: add, path: /records/8/baseline_owner, value: analytics }
+      - { op: add, path: /records/8/baseline_action, value: Run the cohort query }
+    result: conforms
+    findings:
+      - { severity: warning, rule: "11.unknown-baseline", record: MEAS-001 }
+
+  # Exceptions
+
+  - description: A valid exception waives the error it names
+    base: active
+    patch:
+      - { op: remove, path: /relationships/9 }
+      - { op: add, path: /exceptions, value: [{ rule: "7.1", record: OUT-001, reason: Measure being defined, owner: billing-team, expires_at: "2027-06-30" }] }
+    result: conforms with exceptions
+    findings: []
+    waived:
+      - { rule: "7.1", record: OUT-001 }
+
+  - description: An exception may name the record with the model's own namespace
+    base: active
+    patch:
+      - { op: remove, path: /relationships/9 }
+      - { op: add, path: /exceptions, value: [{ rule: "7.1", record: "invoicing:OUT-001", reason: Measure being defined, owner: billing-team, expires_at: "2027-06-30" }] }
+    result: conforms with exceptions
+    findings: []
+    waived:
+      - { rule: "7.1", record: OUT-001 }
+
+  - description: An exception applies to a finding on a namespace-qualified relationship source
+    base: active
+    patch:
+      - { op: add, path: /relationships/-, value: { source: "invoicing:APP-001", type: depends_on, target: INF-999 } }
+      - { op: add, path: /exceptions, value: [{ rule: "11.unresolved", record: APP-001, reason: Server being registered, owner: platform-team, expires_at: "2027-06-30" }] }
+    result: conforms with exceptions
+    findings: []
+    waived:
+      - { rule: "11.unresolved", record: APP-001 }
+
+  - description: An exception close to expiry still applies, with a warning
+    base: active
+    patch:
+      - { op: remove, path: /relationships/9 }
+      - { op: add, path: /exceptions, value: [{ rule: "7.1", record: OUT-001, reason: Measure being defined, owner: billing-team, expires_at: "2026-11-10" }] }
+    result: conforms with exceptions
+    findings:
+      - { severity: warning, rule: "11.exception-expiring", record: OUT-001 }
+    waived:
+      - { rule: "7.1", record: OUT-001 }
+
+  - description: An expired exception no longer waives the error
+    base: active
+    patch:
+      - { op: remove, path: /relationships/9 }
+      - { op: add, path: /exceptions, value: [{ rule: "7.1", record: OUT-001, reason: Measure being defined, owner: billing-team, expires_at: "2026-09-30" }] }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "7.1", record: OUT-001 }
+      - { severity: warning, rule: "11.exception-expired", record: OUT-001 }
+
+  - description: An exception that matches no finding is reported
+    base: active
+    patch:
+      - { op: add, path: /exceptions, value: [{ rule: "7.2", record: CAP-001, reason: Old waiver, owner: billing-team, expires_at: "2027-06-30" }] }
+    result: conforms
+    findings:
+      - { severity: warning, rule: "11.exception-unused", record: CAP-001 }
+
+  - description: An exception naming a record that does not exist
+    base: active
+    patch:
+      - { op: add, path: /exceptions, value: [{ rule: "7.2", record: CAP-404, reason: Typo, owner: billing-team, expires_at: "2027-06-30" }] }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.unresolved", record: CAP-404 }
+      - { severity: warning, rule: "11.exception-unused", record: CAP-404 }
