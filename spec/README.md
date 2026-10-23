@@ -15,7 +15,7 @@ Rules that need the whole graph are left to a validator, as section 11 describes
 
 [`examples/0.1/invoice-reminders.yaml`](examples/0.1/invoice-reminders.yaml) is the section 12 worked example as a product map that validates against the schema.
 
-`tests/` checks that the schema is valid, that every example validates, and that broken variants of the worked example are rejected. It runs in CI on every change under `spec/`. To run it locally:
+`tests/` checks that the schema is valid and that every example validates. It also runs every case in [`tests/0.1/cases.yaml`](tests/0.1/cases.yaml). Each case is a JSON Patch to the worked example, with the result the schema must give and, for an invalid document, the errors it must report by location and keyword. The cases are plain data, so any validator can run them. The tests run in CI on every change under `spec/`. To run it locally:
 
 ```sh
 pip install -r spec/tests/requirements.txt
