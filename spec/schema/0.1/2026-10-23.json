@@ -1,0 +1,285 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://exacly.dev/spec/schema/0.1/2026-10-23",
+  "title": "Exacly Specification 0.1 product map (schema iteration 2026-10-23)",
+  "description": "Structure of a product map that follows Exacly Specification 0.1.x: its records, relationships, exceptions and assessments, in YAML or JSON. This checks the shape of one document. Rules that need the whole graph (unresolved references, legal relationship endpoints, duplicate edges, cycles, the traceability rules in section 7) are left to a validator, as section 11 describes.",
+  "type": "object",
+  "required": ["exacly", "model", "state", "records", "relationships"],
+  "additionalProperties": false,
+  "patternProperties": { "^x-": {} },
+  "properties": {
+    "exacly": {
+      "type": "string",
+      "pattern": "^0\\.1\\.\\d+$",
+      "description": "Specification version the map follows (section 3)."
+    },
+    "model": { "$ref": "#/$defs/model" },
+    "state": {
+      "enum": ["current", "proposed", "historical"],
+      "description": "Which state the document holds (section 9). One document never mixes states."
+    },
+    "revision": {
+      "type": "string",
+      "description": "Model revision the document describes, such as a Git commit (section 5)."
+    },
+    "base_revision": {
+      "type": "string",
+      "description": "For a proposed change: the baseline revision it is relative to (section 9)."
+    },
+    "environment": {
+      "type": "string",
+      "description": "For a current or historical baseline: the environment or business context it covers."
+    },
+    "adopted_at": {
+      "type": "string",
+      "format": "date",
+      "description": "For a historical baseline: when it was adopted."
+    },
+    "records": { "type": "array", "items": { "$ref": "#/$defs/record" } },
+    "relationships": { "type": "array", "items": { "$ref": "#/$defs/relationship" } },
+    "exceptions": { "type": "array", "items": { "$ref": "#/$defs/exception" } },
+    "assessments": { "type": "array", "items": { "$ref": "#/$defs/assessment" } }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "state": { "const": "proposed" } } },
+      "then": { "required": ["base_revision"] }
+    }
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable identifier, unique within the namespace. A reference to another model includes that model's namespace."
+    },
+    "date": { "type": "string", "format": "date" },
+    "model": {
+      "type": "object",
+      "description": "Model boundary and identity (section 3).",
+      "required": ["namespace", "product", "owner", "scope", "environment", "review_interval_days"],
+      "additionalProperties": false,
+      "patternProperties": { "^x-": {} },
+      "properties": {
+        "namespace": { "type": "string", "minLength": 1 },
+        "product": { "type": "string", "minLength": 1 },
+        "owner": { "type": "string", "minLength": 1 },
+        "scope": {
+          "type": "object",
+          "required": ["covers", "excludes"],
+          "additionalProperties": false,
+          "properties": {
+            "covers": { "type": "string", "minLength": 1 },
+            "excludes": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "extensions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Extensions in use, each defined in the project's README."
+        },
+        "environment": {
+          "type": "string",
+          "description": "Environment represented by the current operational baseline."
+        },
+        "review_interval_days": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "description": "Evidence reference (section 8).",
+      "required": ["locator", "kind", "claim", "observed_at", "applies_to"],
+      "additionalProperties": false,
+      "patternProperties": { "^x-": {} },
+      "properties": {
+        "locator": { "type": "string", "minLength": 1 },
+        "kind": {
+          "enum": ["implementation", "deployment", "test", "runtime_observation", "research", "measurement", "decision"]
+        },
+        "claim": { "type": "string", "minLength": 1, "description": "The claim the evidence supports." },
+        "observed_at": { "$ref": "#/$defs/date" },
+        "applies_to": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Revision, release, environment or measurement period the evidence applies to."
+        },
+        "snapshot": {
+          "type": "string",
+          "description": "Immutable version or retained snapshot, when the locator is mutable."
+        }
+      }
+    },
+    "reference": {
+      "type": "object",
+      "description": "Implementation or operational reference. A proposed record may point at a planned one.",
+      "required": ["locator"],
+      "additionalProperties": false,
+      "properties": {
+        "locator": { "type": "string", "minLength": 1 },
+        "planned": { "type": "boolean", "default": false }
+      }
+    },
+    "record": {
+      "type": "object",
+      "description": "A record (sections 4 and 5). Type-specific content is required once a record is active; proposed records may be incomplete.",
+      "required": ["id", "type", "name", "description", "owner", "lifecycle", "evidence", "last_reviewed_at"],
+      "additionalProperties": false,
+      "patternProperties": { "^x-": {} },
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "type": {
+          "type": "string",
+          "description": "A section 4 type, or a type a declared extension defines.",
+          "anyOf": [
+            { "enum": ["Outcome", "Capability", "Process", "Requirement", "Information", "Application", "Infrastructure", "Measure"] },
+            { "pattern": "^[a-z][a-z0-9-]*:[A-Z][A-Za-z]*$", "description": "Extension type, as <extension>:<Type>." }
+          ]
+        },
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "owner": { "type": "string", "minLength": 1 },
+        "lifecycle": { "enum": ["proposed", "active", "retired"] },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+        "last_reviewed_at": { "anyOf": [{ "$ref": "#/$defs/date" }, { "type": "null" }] },
+        "tags": { "type": "array", "items": { "type": "string" } },
+
+        "beneficiary": { "type": "string", "description": "Outcome: intended beneficiary." },
+        "success_criterion": { "type": "string", "description": "Outcome: what counts as success." },
+        "evaluation_period": { "type": "string", "description": "Outcome: period over which it is evaluated." },
+
+        "scope": { "type": "string", "description": "Capability: scope of the ability and its boundaries." },
+
+        "perspective": { "enum": ["customer", "business"], "description": "Process: whose account it gives." },
+        "actors": { "type": "array", "items": { "type": "string" }, "description": "Process: who takes part." },
+        "trigger": { "type": "string", "description": "Process: what starts it." },
+        "steps": { "type": "array", "items": { "type": "string" }, "description": "Process: major steps, in order." },
+        "completion": { "type": "string", "description": "Process: completion condition." },
+        "exceptions": { "type": "array", "items": { "type": "string" }, "description": "Process: significant exceptions." },
+
+        "statement": { "type": "string", "description": "Requirement: the verifiable behaviour or constraint." },
+        "acceptance_criteria": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Requirement: each criterion checkable on its own. Edge cases (zero, off, empty, failure, retry, duplicate) belong here."
+        },
+        "verification_method": { "type": "string", "description": "Requirement: how it is verified." },
+
+        "definition": { "type": "string", "description": "Information: what the concept means." },
+        "identifiers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Information: key identifiers or properties, named exactly as other records and acceptance criteria refer to them."
+        },
+        "steward": { "type": "string", "description": "Information: who is responsible for it." },
+
+        "responsibility": { "type": "string", "description": "Application: what it is responsible for." },
+        "interfaces": { "type": "array", "items": { "type": "string" }, "description": "Application: interfaces or entry points." },
+        "implementation_ref": { "$ref": "#/$defs/reference", "description": "Application: where it is implemented." },
+
+        "kind": { "type": "string", "description": "Infrastructure: resource kind." },
+        "purpose": { "type": "string", "description": "Infrastructure: what it is for." },
+        "operational_ref": { "$ref": "#/$defs/reference", "description": "Infrastructure: where it is operated or configured." },
+
+        "calculation": { "type": "string", "description": "Measure: how the value is calculated." },
+        "unit": { "type": "string" },
+        "population": { "type": "string" },
+        "source": { "type": "string", "description": "Measure: collection source." },
+        "cadence": { "type": "string" },
+        "baseline": {
+          "description": "Measure: the baseline value, or the string unknown (never zero for an unknown baseline).",
+          "anyOf": [{ "type": "number" }, { "type": "string", "minLength": 1 }]
+        },
+        "baseline_owner": { "type": "string", "description": "Measure: who will collect an unknown baseline." },
+        "baseline_action": { "type": "string", "description": "Measure: how an unknown baseline will be collected." },
+        "target": { "anyOf": [{ "type": "number" }, { "type": "string", "minLength": 1 }] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "Measure" }, "baseline": { "const": "unknown" } }, "required": ["type", "baseline"] },
+          "then": { "required": ["baseline_owner", "baseline_action"] }
+        },
+        { "$ref": "#/$defs/active-content" }
+      ]
+    },
+    "active-content": {
+      "description": "Type-specific content each active record must carry (section 4).",
+      "if": { "properties": { "lifecycle": { "const": "active" } }, "required": ["lifecycle"] },
+      "then": {
+        "allOf": [
+          { "if": { "properties": { "type": { "const": "Outcome" } } }, "then": { "required": ["beneficiary", "success_criterion", "evaluation_period"] } },
+          { "if": { "properties": { "type": { "const": "Capability" } } }, "then": { "required": ["scope"] } },
+          { "if": { "properties": { "type": { "const": "Process" } } }, "then": { "required": ["actors", "trigger", "steps", "completion", "exceptions"] } },
+          {
+            "if": { "properties": { "type": { "const": "Requirement" } } },
+            "then": {
+              "required": ["statement", "acceptance_criteria", "verification_method"],
+              "properties": { "acceptance_criteria": { "minItems": 1 } }
+            }
+          },
+          { "if": { "properties": { "type": { "const": "Information" } } }, "then": { "required": ["definition", "identifiers", "steward"] } },
+          { "if": { "properties": { "type": { "const": "Application" } } }, "then": { "required": ["responsibility", "interfaces", "implementation_ref"] } },
+          { "if": { "properties": { "type": { "const": "Infrastructure" } } }, "then": { "required": ["kind", "purpose", "operational_ref"] } },
+          { "if": { "properties": { "type": { "const": "Measure" } } }, "then": { "required": ["calculation", "unit", "population", "source", "cadence", "baseline", "target"] } }
+        ]
+      }
+    },
+    "relationship": {
+      "type": "object",
+      "description": "A directed, typed relationship (section 6). Its identity is id, or the tuple (source, type, target).",
+      "required": ["source", "type", "target"],
+      "additionalProperties": false,
+      "patternProperties": { "^x-": {} },
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "source": { "$ref": "#/$defs/id" },
+        "type": {
+          "type": "string",
+          "anyOf": [
+            { "enum": ["contributes_to", "uses_capability", "supports", "implements", "uses", "reads", "writes", "depends_on", "evaluates", "contains", "supersedes"] },
+            { "pattern": "^[a-z][a-z0-9-]*:[a-z][a-z0-9_]*$", "description": "Extension relationship, as <extension>:<name>." }
+          ]
+        },
+        "target": { "$ref": "#/$defs/id" },
+        "rationale": { "type": "string" },
+        "scope": { "type": "string" },
+        "conditions": {
+          "type": "string",
+          "description": "Required for a depends_on that is optional, asynchronous, or limited to specific operations."
+        },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } }
+      }
+    },
+    "exception": {
+      "type": "object",
+      "description": "A documented exception to a rule (section 7).",
+      "required": ["rule", "record", "reason", "owner", "expires_at"],
+      "additionalProperties": false,
+      "properties": {
+        "rule": { "type": "string", "description": "The rule waived, such as \"7.2\"." },
+        "record": { "$ref": "#/$defs/id" },
+        "reason": { "type": "string", "minLength": 1 },
+        "owner": { "type": "string", "minLength": 1 },
+        "expires_at": { "$ref": "#/$defs/date", "description": "Review or expiry date." }
+      }
+    },
+    "assessment": {
+      "type": "object",
+      "description": "A contextual status assessment (section 8).",
+      "required": ["subject", "dimension", "state", "context", "at", "evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "subject": { "$ref": "#/$defs/id" },
+        "dimension": { "enum": ["delivery", "verification", "operation", "outcome_evaluation"] },
+        "state": { "type": "string", "minLength": 1 },
+        "context": { "type": "string", "minLength": 1, "description": "Revision, release, environment or population assessed." },
+        "at": { "type": "string", "minLength": 1, "description": "Timestamp or period." },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } }
+      },
+      "allOf": [
+        { "if": { "properties": { "dimension": { "const": "delivery" } } }, "then": { "properties": { "state": { "enum": ["planned", "in_progress", "released", "withdrawn"] } } } },
+        { "if": { "properties": { "dimension": { "const": "verification" } } }, "then": { "properties": { "state": { "enum": ["not_checked", "passed", "failed", "inconclusive"] } } } },
+        { "if": { "properties": { "dimension": { "const": "operation" } } }, "then": { "properties": { "state": { "enum": ["unknown", "healthy", "degraded", "unavailable"] } } } },
+        { "if": { "properties": { "dimension": { "const": "outcome_evaluation" } } }, "then": { "properties": { "state": { "enum": ["not_evaluated", "target_met", "target_not_met", "inconclusive"] } } } }
+      ]
+    }
+  }
+}

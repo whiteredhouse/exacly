@@ -4,6 +4,17 @@
 | --- | --- | --- |
 | [0.1.0](versions/0.1.0.md) | Draft | 2026-10-18 |
 
+## Schema
+
+[`schema/0.1/2026-10-23.json`](schema/0.1/2026-10-23.json) is a JSON Schema for a product map that follows any 0.1.x version, in YAML or JSON. It checks one document's shape:
+- the model boundary;
+- the common record fields, plus the type-specific fields each active record needs;
+- evidence, relationships, exceptions and assessments.
+
+Rules that need the whole graph are left to a validator, as section 11 describes: unresolved references, legal relationship endpoints, duplicate edges, cycles and the section 7 traceability rules. Fields starting with `x-` are allowed anywhere.
+
+[`examples/0.1/invoice-reminders.yaml`](examples/0.1/invoice-reminders.yaml) is the section 12 worked example as a product map that validates against the schema.
+
 ## Versioning
 
 Versions follow the [OpenAPI](https://spec.openapis.org/oas/) pattern.
