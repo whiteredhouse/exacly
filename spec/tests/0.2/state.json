@@ -15,7 +15,14 @@
           "context": "production",
           "at": "2026-10-20",
           "evidence": [
-            { "locator": "deploys/1.4", "kind": "deployment", "claim": "Reminder service 1.4 deployed", "observed_at": "2026-10-20", "applies_to": "production", "digest": "sha256:4f1c9a" }
+            {
+              "locator": "deploys/1.4",
+              "kind": "deployment",
+              "claim": "Reminder service 1.4 deployed",
+              "observed_at": "2026-10-20",
+              "applies_to": "production",
+              "digest": "sha256:4f1c9a"
+            }
           ]
         },
         {
@@ -24,18 +31,52 @@
           "context": "9f2c41e",
           "at": "2026-10-20",
           "evidence": [
-            { "locator": "ci/runs/9", "kind": "test", "claim": "Reminder tests pass", "observed_at": "2026-10-20", "applies_to": "9f2c41e" }
+            {
+              "locator": "ci/runs/9",
+              "kind": "test",
+              "claim": "Reminder tests pass",
+              "observed_at": "2026-10-20",
+              "applies_to": "9f2c41e"
+            }
           ]
         }
       ]
     },
     "APP-001": {
       "assessments": [
-        { "dimension": "operation", "state": "unknown", "context": "production", "at": "2026-10-23", "reason": "No runtime binding", "evidence": [] }
+        {
+          "dimension": "operation",
+          "state": "unknown",
+          "context": "production",
+          "at": "2026-10-23",
+          "reason": "No runtime binding",
+          "evidence": []
+        }
       ]
     }
   },
+  "relationships": [
+    {
+      "source": "APP-001",
+      "type": "depends_on",
+      "target": "INF-002",
+      "evidence": [
+        {
+          "locator": "traces/reminders/2026-10-22",
+          "kind": "runtime_observation",
+          "claim": "Reminder runs publish to the queue",
+          "observed_at": "2026-10-22",
+          "applies_to": "production"
+        }
+      ]
+    }
+  ],
   "pending": [
-    { "record": "REQ-002", "task": "issues/88", "opened_at": "2026-10-22T14:00:00Z", "dimension": "delivery" }
+    {
+      "record": "REQ-002",
+      "task": "issues/88",
+      "opened_at": "2026-10-22T14:00:00Z",
+      "dimension": "delivery"
+    }
   ]
 }

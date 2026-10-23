@@ -168,6 +168,32 @@ suites:
         errors:
           - { at: /records/APP-001/assessments/0, keyword: required, property: reason }
 
+      - description: A record may carry observed evidence that supports no assessment
+        patch:
+          - op: add
+            path: /records/APP-001/evidence
+            value: [{ locator: commits/9f2c41e, kind: implementation, claim: Scheduler code merged, observed_at: "2026-10-19", applies_to: 9f2c41e }]
+        valid: true
+
+      - description: A relationship may be identified by its id
+        patch:
+          - { op: add, path: /relationships/-, value: { id: REL-7, evidence: [{ locator: traces/x, kind: runtime_observation, claim: Called, observed_at: "2026-10-22", applies_to: production }] } }
+        valid: true
+
+      - description: A relationship observation needs an identity
+        patch:
+          - { op: remove, path: /relationships/0/target }
+        valid: false
+        errors:
+          - { at: /relationships/0, keyword: anyOf }
+
+      - description: A relationship observation needs evidence
+        patch:
+          - { op: replace, path: /relationships/0/evidence, value: [] }
+        valid: false
+        errors:
+          - { at: /relationships/0/evidence, keyword: minItems }
+
       - description: Pending work names its record, task and when it was opened
         patch:
           - { op: remove, path: /pending/0/task }

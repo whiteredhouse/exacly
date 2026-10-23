@@ -59,6 +59,13 @@
         "$ref": "#/$defs/observed-record"
       }
     },
+    "relationships": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/observed-relationship"
+      },
+      "description": "Observed evidence per relationship."
+    },
     "pending": {
       "type": "array",
       "items": {
@@ -349,6 +356,13 @@
           "items": {
             "$ref": "#/$defs/assessment"
           }
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/observed-evidence"
+          },
+          "description": "Observed evidence that supports no assessment."
         }
       }
     },
@@ -384,6 +398,52 @@
             "outcome_evaluation"
           ],
           "description": "The assessment the work should change."
+        }
+      }
+    },
+    "observed-relationship": {
+      "type": "object",
+      "description": "Observed evidence about one relationship (section 9). It is identified by id, or by source, type and target.",
+      "required": [
+        "evidence"
+      ],
+      "anyOf": [
+        {
+          "required": [
+            "id"
+          ]
+        },
+        {
+          "required": [
+            "source",
+            "type",
+            "target"
+          ]
+        }
+      ],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {}
+      },
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "source": {
+          "$ref": "#/$defs/id"
+        },
+        "type": {
+          "$ref": "#/$defs/text"
+        },
+        "target": {
+          "$ref": "#/$defs/id"
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/observed-evidence"
+          }
         }
       }
     }
