@@ -1,0 +1,13 @@
+# The section 12 worked example as Exacly 0.2 config: the model boundary.
+# Fictional: names, figures and references are illustrative only.
+# The example is a proposed slice, so it has config and no state yet.
+exacly: "0.2.0"
+model:
+  namespace: invoicing
+  product: Freelancer invoicing
+  owner: billing-team
+  scope:
+    covers: Collecting payment for issued invoices
+    excludes: [Invoice creation, Tax reporting]
+  environment: production
+  review_interval_days: 90

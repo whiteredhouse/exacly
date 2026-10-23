@@ -1,0 +1,363 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://exacly.dev/spec/schema/0.2/state/2026-10-23",
+  "title": "Exacly Specification 0.2 state document (schema iteration 2026-10-23)",
+  "description": "Structure of a state document that follows Exacly Specification 0.2.x: observations of one environment or business context, against one config revision, written only by tooling (section 9).",
+  "type": "object",
+  "required": [
+    "exacly",
+    "namespace",
+    "context",
+    "config_revision",
+    "serial",
+    "lineage",
+    "written_at",
+    "records"
+  ],
+  "additionalProperties": false,
+  "patternProperties": {
+    "^x-": {}
+  },
+  "properties": {
+    "exacly": {
+      "type": "string",
+      "pattern": "^0\\.2\\.\\d+$",
+      "description": "Specification version the document follows."
+    },
+    "namespace": {
+      "$ref": "#/$defs/text",
+      "description": "Namespace of the model observed."
+    },
+    "context": {
+      "$ref": "#/$defs/text",
+      "description": "Environment or business context observed, such as production."
+    },
+    "config_revision": {
+      "$ref": "#/$defs/text",
+      "description": "Config revision the observations were made against, such as a Git commit."
+    },
+    "serial": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Increases with every write."
+    },
+    "lineage": {
+      "$ref": "#/$defs/text",
+      "description": "Stays the same for the life of this context's state."
+    },
+    "written_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "records": {
+      "type": "object",
+      "description": "Observations per record ID.",
+      "propertyNames": {
+        "$ref": "#/$defs/id"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/observed-record"
+      }
+    },
+    "pending": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/pending"
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable identifier, unique within the namespace. A reference to another model includes that model's namespace."
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "text": {
+      "type": "string",
+      "pattern": "\\S",
+      "description": "Non-empty text: at least one non-whitespace character."
+    },
+    "evidence": {
+      "type": "object",
+      "description": "Evidence reference (section 8).",
+      "required": [
+        "locator",
+        "kind",
+        "claim",
+        "observed_at",
+        "applies_to"
+      ],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {}
+      },
+      "properties": {
+        "locator": {
+          "$ref": "#/$defs/text"
+        },
+        "kind": {
+          "enum": [
+            "implementation",
+            "deployment",
+            "test",
+            "runtime_observation",
+            "research",
+            "measurement",
+            "decision"
+          ]
+        },
+        "claim": {
+          "$ref": "#/$defs/text",
+          "description": "The claim the evidence supports."
+        },
+        "observed_at": {
+          "$ref": "#/$defs/date"
+        },
+        "applies_to": {
+          "$ref": "#/$defs/text",
+          "description": "Revision, release, environment or measurement period the evidence applies to."
+        },
+        "snapshot": {
+          "type": "string",
+          "description": "Immutable version or retained snapshot, when the locator is mutable."
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+:[A-Za-z0-9+/=._-]+$",
+          "description": "Content digest of what the locator points at, as <algorithm>:<value>, such as sha256:4f1c..."
+        },
+        "expires_at": {
+          "$ref": "#/$defs/date",
+          "description": "After this date the reference no longer supports its claim."
+        }
+      }
+    },
+    "observed-evidence": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/evidence"
+        }
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "implementation",
+            "deployment",
+            "test",
+            "runtime_observation",
+            "measurement"
+          ]
+        }
+      },
+      "description": "Observed evidence inside an assessment (section 8)."
+    },
+    "assessment": {
+      "type": "object",
+      "description": "A contextual status assessment of one record (section 8).",
+      "required": [
+        "dimension",
+        "state",
+        "context",
+        "at",
+        "evidence"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "dimension": {
+          "enum": [
+            "delivery",
+            "verification",
+            "operation",
+            "outcome_evaluation"
+          ]
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "context": {
+          "$ref": "#/$defs/text",
+          "description": "Revision, release, environment or population assessed."
+        },
+        "at": {
+          "$ref": "#/$defs/text",
+          "description": "Timestamp or period."
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/observed-evidence"
+          }
+        },
+        "reason": {
+          "$ref": "#/$defs/text",
+          "description": "Why the assessment has this state, such as why it could not be checked."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "dimension": {
+                "const": "delivery"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "planned",
+                  "in_progress",
+                  "released",
+                  "withdrawn"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dimension": {
+                "const": "verification"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "not_checked",
+                  "passed",
+                  "failed",
+                  "inconclusive"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dimension": {
+                "const": "operation"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "unknown",
+                  "healthy",
+                  "degraded",
+                  "unavailable"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dimension": {
+                "const": "outcome_evaluation"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "not_evaluated",
+                  "target_met",
+                  "target_not_met",
+                  "inconclusive"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "description": "Section 8: an assessment names its supporting evidence. Only unknown, not-checked and not-evaluated states may have none.",
+          "if": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "unknown",
+                  "not_checked",
+                  "not_evaluated"
+                ]
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "else": {
+            "properties": {
+              "evidence": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "observed-record": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {}
+      },
+      "properties": {
+        "assessments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/assessment"
+          }
+        }
+      }
+    },
+    "pending": {
+      "type": "object",
+      "description": "Work handed to a person or agent, not yet confirmed by observation (section 9).",
+      "required": [
+        "record",
+        "task",
+        "opened_at"
+      ],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {}
+      },
+      "properties": {
+        "record": {
+          "$ref": "#/$defs/id"
+        },
+        "task": {
+          "$ref": "#/$defs/text",
+          "description": "Identifier or locator of the task."
+        },
+        "opened_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "dimension": {
+          "enum": [
+            "delivery",
+            "verification",
+            "operation",
+            "outcome_evaluation"
+          ],
+          "description": "The assessment the work should change."
+        }
+      }
+    }
+  }
+}

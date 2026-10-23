@@ -1,0 +1,41 @@
+{
+  "exacly": "0.2.0",
+  "namespace": "invoicing",
+  "context": "production",
+  "config_revision": "9f2c41e",
+  "serial": 14,
+  "lineage": "6c1e0f3a-2b7d-4e8a-9c21-7d4e5f6a8b90",
+  "written_at": "2026-10-23T09:00:00Z",
+  "records": {
+    "REQ-001": {
+      "assessments": [
+        {
+          "dimension": "delivery",
+          "state": "released",
+          "context": "production",
+          "at": "2026-10-20",
+          "evidence": [
+            { "locator": "deploys/1.4", "kind": "deployment", "claim": "Reminder service 1.4 deployed", "observed_at": "2026-10-20", "applies_to": "production", "digest": "sha256:4f1c9a" }
+          ]
+        },
+        {
+          "dimension": "verification",
+          "state": "passed",
+          "context": "9f2c41e",
+          "at": "2026-10-20",
+          "evidence": [
+            { "locator": "ci/runs/9", "kind": "test", "claim": "Reminder tests pass", "observed_at": "2026-10-20", "applies_to": "9f2c41e" }
+          ]
+        }
+      ]
+    },
+    "APP-001": {
+      "assessments": [
+        { "dimension": "operation", "state": "unknown", "context": "production", "at": "2026-10-23", "reason": "No runtime binding", "evidence": [] }
+      ]
+    }
+  },
+  "pending": [
+    { "record": "REQ-002", "task": "issues/88", "opened_at": "2026-10-22T14:00:00Z", "dimension": "delivery" }
+  ]
+}
