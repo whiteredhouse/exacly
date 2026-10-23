@@ -43,6 +43,7 @@ ENDPOINTS: dict[str, dict[str, set[str]]] = {
 # From 0.2: Infrastructure stores Information, in a role (section 6).
 ENDPOINTS_0_2 = {**ENDPOINTS, "stores": {"Infrastructure": {"Information"}}}
 SAME_TYPE = {"contains", "supersedes"}
+PARTS = ("records", "relationships", "exceptions")  # The parts of config that several documents may share.
 DELIVERY_EVIDENCE = {"implementation", "deployment"}
 VERIFICATION_EVIDENCE = {"test", "decision"}
 
@@ -198,17 +199,24 @@ class Edge:
     target: str
     label: str
     role: str | None = None
+    document: str | None = None
 
 
 class Graph:
-    """The map's records and resolved relationships, indexed once. The document is not changed."""
+    """The map's records and resolved relationships, indexed once. The document is not changed.
 
-    def __init__(self, doc: Doc, report: Report) -> None:
+    `sources` maps each record, relationship and exception (by object identity) to the document it came from,
+    when the model spans several documents.
+    """
+
+    def __init__(self, doc: Doc, report: Report, sources: dict[int, str] | None = None) -> None:
         self.namespace: str = doc["model"]["namespace"]
+        self.sources = sources or {}
         self.records: dict[str, Doc] = {}
         for r in doc["records"]:
             if r["id"] in self.records:
-                report.add(ERROR, "11.duplicate-id", r["id"], "ID is used by more than one record")
+                message = "ID is used by more than one record"
+                report.add(ERROR, "11.duplicate-id", r["id"], message, self.document_of(r))
             self.records.setdefault(r["id"], r)
         self.edges: list[Edge] = []
         self.relationship_ids: set[str] = set()
@@ -223,7 +231,8 @@ class Graph:
             label = f"{rel['source']} --{rel['type']}--> {rel['target']}"
             if "id" in rel:
                 if rel["id"] in rel_ids or rel["id"] in self.records:
-                    report.add(ERROR, "11.duplicate-id", rel["id"], "relationship ID is already used")
+                    message = "relationship ID is already used"
+                    report.add(ERROR, "11.duplicate-id", rel["id"], message, self.document_of(rel))
                 rel_ids.add(rel["id"])
             source, target = self.local(rel["source"]), self.local(rel["target"])
             missing = [
@@ -233,17 +242,20 @@ class Graph:
             ]
             for ref in missing:
                 message = f"{label}: {ref} is not a record in this model"
-                report.add(ERROR, "11.unresolved", source or rel["source"], message)
+                report.add(ERROR, "11.unresolved", source or rel["source"], message, self.document_of(rel))
             key = self.key(rel)
             if key in seen:
-                report.add(ERROR, "11.duplicate-edge", key[0], f"duplicate relationship {label}")
+                report.add(ERROR, "11.duplicate-edge", key[0], f"duplicate relationship {label}", self.document_of(rel))
             seen.add(key)
             if source is None or target is None or missing:
                 continue  # references another model, or nothing: no local edge
-            edge = Edge(source, rel["type"], target, label, rel.get("role"))
+            edge = Edge(source, rel["type"], target, label, rel.get("role"), self.document_of(rel))
             self.edges.append(edge)
             self._out[(source, edge.type)].append(target)
             self._in[(target, edge.type)].append(source)
+
+    def document_of(self, item: Doc) -> str | None:
+        return self.sources.get(id(item))
 
     def key(self, rel: Doc) -> tuple[str, str, str]:
         """A relationship's identity as (source, type, target), with references made local where they can be."""
@@ -279,16 +291,18 @@ def check_structure(g: Graph, doc: Doc, report: Report, endpoints: dict[str, dic
             continue  # extension vocabulary: its endpoint rules live in the extension
         if e.type in SAME_TYPE:
             if source_type != target_type:
-                report.add(ERROR, "11.endpoint", e.source, f"{e.label}: {e.type} must link records of the same type")
+                message = f"{e.label}: {e.type} must link records of the same type"
+                report.add(ERROR, "11.endpoint", e.source, message, e.document)
             continue
         if target_type not in endpoints.get(e.type, {}).get(source_type, set()):
             message = f"{e.label}: {source_type} --{e.type}--> {target_type} is not allowed"
-            report.add(ERROR, "11.endpoint", e.source, message)
+            report.add(ERROR, "11.endpoint", e.source, message, e.document)
     for field, items in (("record", doc.get("exceptions", [])), ("subject", doc.get("assessments", []))):
         for item in items:
             local = g.local(item[field])
             if local is not None and local not in g.records:
-                report.add(ERROR, "11.unresolved", local, f"{field} {item[field]} is not a record in this model")
+                message = f"{field} {item[field]} is not a record in this model"
+                report.add(ERROR, "11.unresolved", local, message, g.document_of(item))
     for rel in sorted(SAME_TYPE):
         for cycle in cycles(g, rel):
             report.add(ERROR, "11.cycle", cycle[0], f"{rel} cycle: {' -> '.join([*cycle, cycle[0]])}")
@@ -380,7 +394,8 @@ def check_traceability(g: Graph, assessments: list[Doc], report: Report) -> None
     for e in g.edges:
         source, target = g.records[e.source], g.records[e.target]
         if e.type != "supersedes" and source["lifecycle"] == "active" and target["lifecycle"] == "retired":
-            report.add(ERROR, "7.retired-target", e.source, f"active {e.type} relationship to retired {e.target}")
+            message = f"active {e.type} relationship to retired {e.target}"
+            report.add(ERROR, "7.retired-target", e.source, message, e.document)
 
 
 def traceability_gap(
@@ -465,15 +480,14 @@ def check_claims(g: Graph, assessments: list[Doc], report: Report) -> None:
         for a in delivered:
             if not supported(a, DELIVERY_EVIDENCE, report.date):
                 message = f"claimed released in {a['context']} without implementation or deployment evidence for it"
-                report.add(ERROR, "7.8", rid, message)
+                report.add(ERROR, "7.8", rid, message, a.get("document"))
         for a in verified:
             if not supported(a, VERIFICATION_EVIDENCE, report.date):
-                report.add(
-                    ERROR, "7.8", rid, f"claimed verified in {a['context']} without test or decision evidence for it"
-                )
+                message = f"claimed verified in {a['context']} without test or decision evidence for it"
+                report.add(ERROR, "7.8", rid, message, a.get("document"))
         if verified and not any(supported(a, DELIVERY_EVIDENCE, report.date) for a in delivered):
             message = "claimed verified, but no released delivery assessment has implementation or deployment evidence"
-            report.add(ERROR, "7.8", rid, message)
+            report.add(ERROR, "7.8", rid, message, verified[0].get("document"))
 
 
 def check_hygiene(g: Graph, doc: Doc, report: Report) -> None:
@@ -502,7 +516,7 @@ def apply_exceptions(g: Graph, doc: Doc, report: Report) -> None:
         expires = dt.date.fromisoformat(exc["expires_at"])
         if expires < report.date:
             message = f"exception to {exc['rule']} expired {exc['expires_at']} and no longer applies"
-            report.add(WARNING, "11.exception-expired", record, message)
+            report.add(WARNING, "11.exception-expired", record, message, g.document_of(exc))
             continue
         targets = [
             f
@@ -512,16 +526,23 @@ def apply_exceptions(g: Graph, doc: Doc, report: Report) -> None:
         for f in targets:
             f.waived_by = exc
         if not targets:
-            report.add(WARNING, "11.exception-unused", record, f"exception to {exc['rule']} matches no finding")
+            message = f"exception to {exc['rule']} matches no finding"
+            report.add(WARNING, "11.exception-unused", record, message, g.document_of(exc))
         elif (expires - report.date).days <= EXPIRY_WARNING_DAYS:
             message = f"exception to {exc['rule']} expires {exc['expires_at']}"
-            report.add(WARNING, "11.exception-expiring", record, message)
+            report.add(WARNING, "11.exception-expiring", record, message, g.document_of(exc))
+
+
+GIT_HASH = re.compile(r"[0-9a-f]{7,64}")
 
 
 def revisions_match(a: str, b: str) -> bool:
-    """Equal, or one is an abbreviation of the other, as Git commits are (at least 7 characters)."""
+    """Equal, or both Git commit hashes and one abbreviates the other. Other revision names compare exactly,
+    so release-1 does not match release-10."""
     short, full = sorted((a, b), key=len)
-    return short == full or (len(short) >= 7 and full.startswith(short))
+    if short == full:
+        return True
+    return bool(GIT_HASH.fullmatch(short) and GIT_HASH.fullmatch(full)) and full.startswith(short)
 
 
 def check_states(g: Graph, states: dict[str, Doc], revision: str | None, report: Report) -> list[Doc]:
@@ -559,7 +580,7 @@ def check_states(g: Graph, states: dict[str, Doc], revision: str | None, report:
                 )
                 continue
             for a in observed.get("assessments", []):
-                assessments.append({**a, "subject": rid})
+                assessments.append({**a, "subject": rid, "document": name})
                 check_expiry(a["evidence"], rid, name, report)
             check_expiry(observed.get("evidence", []), rid, name, report)
         for rel in state.get("relationships", []):
@@ -657,15 +678,16 @@ def validate_documents(documents: Mapping[str, Any], date: dt.date, revision: st
     report.graph_checked = True
     merged: Doc = {"model": model, "records": [], "relationships": [], "exceptions": []}
     origin: dict[str, str] = {}
+    sources = {id(item): name for name, doc in configs.items() for part in PARTS for item in doc.get(part, [])}
     for name, doc in configs.items():
-        for part in ("records", "relationships", "exceptions"):
+        for part in PARTS:
             merged[part] += doc.get(part, [])
         for r in doc.get("records", []):
             origin.setdefault(r["id"], name)
             check_expiry(r["evidence"], r["id"], name, report)
         for rel in doc.get("relationships", []):
             check_expiry(rel.get("evidence", []), rel["source"], name, report)
-    g = Graph(merged, report)
+    g = Graph(merged, report, sources if len(configs) > 1 else None)
     check_structure(g, merged, report, ENDPOINTS_0_2)
     assessments = check_states(g, states, revision, report)
     check_traceability(g, assessments, report)

@@ -379,3 +379,39 @@ cases:
     findings: []
     waived:
       - { rule: "7.8", record: REQ-001 }
+
+  - description: A named revision is compared exactly, not as an abbreviation
+    base: active
+    revision: release-10
+    patch:
+      - { op: replace, path: /production/config_revision, value: release-1 }
+    result: conforms
+    findings:
+      - { severity: warning, rule: "11.state-revision", record: null, document: production }
+
+  - description: Claim findings name the state document the claim is in
+    base: active
+    patch:
+      - { op: replace, path: /production/records/REQ-001/assessments/0/evidence/0/kind, value: test }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "7.8", record: REQ-001, document: production }
+      - { severity: error, rule: "7.8", record: REQ-001, document: production }
+
+  - description: Relationship and exception findings name the config document they are in
+    base: active
+    patch:
+      - op: add
+        path: /links
+        value:
+          exacly: "0.2.0"
+          relationships:
+            - { source: APP-001, type: stores, target: INFO-001, role: cache }
+            - { source: CAP-001, type: contributes_to, target: OUT-001 }
+          exceptions:
+            - { rule: "7.1", record: OUT-001, reason: Measure not chosen yet, owner: billing-team, expires_at: "2027-03-01" }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.endpoint", record: APP-001, document: links }
+      - { severity: error, rule: "11.duplicate-edge", record: CAP-001, document: links }
+      - { severity: warning, rule: "11.exception-unused", record: OUT-001, document: links }

@@ -12,7 +12,7 @@ exacly-validate spec/exacly --revision "$(git rev-parse HEAD)"
 exacly-validate docs/exacly/product-map.yaml --json --date 2026-10-23
 ```
 
-Given a folder, it reads every YAML and JSON file under it, skipping hidden folders, so a README or the copied spec beside them is ignored. Files and folders can also be given one by one. A document is state when it has state's fields (`context`, `config_revision`, `serial` or `lineage`); every other document is config. `--revision` is the config revision being validated. State computed against another revision is reported, and an abbreviated Git commit matches the full one.
+Given a folder, it reads every YAML and JSON file under it, skipping hidden folders, so a README or the copied spec beside them is ignored. Files and folders can also be given one by one. A document is state when it has state's fields (`context`, `config_revision`, `serial` or `lineage`); every other document is config. `--revision` is the config revision being validated. State computed against another revision is reported. An abbreviated Git commit hash matches the full one; any other revision name, such as `release-1`, must match exactly.
 
 `pip install` works the same way. The package carries the spec's schemas, so it runs anywhere. In Python, `exacly_validate.validate_documents({name: doc, ...}, date, revision)` returns the report for a set of documents, and `exacly_validate.validate(doc, date)` for one document. Neither changes its input.
 
@@ -43,7 +43,7 @@ It exits 0 when the model conforms, with or without exceptions, and 1 when it do
    - Exceptions that are expired, expiring within 30 days, or match no finding.
    - Evidence past its `expires_at` date, in config or state (`11.evidence-expired`). Evidence still applies on the day it expires.
 
-In 0.2, a finding names the document it comes from when there is more than one.
+In 0.2, a finding names the document that holds what it is about when there is more than one: the state document for a claim or an observation, the config document for a relationship or an exception, and otherwise the config document that defines the record.
 
 An exception names the rule code from the report, such as `7.1` or `7.retired-target`, and the record, with or without the model's own namespace. A valid exception waives that error, and the report then says "conforms with exceptions". An expired exception waives nothing.
 
