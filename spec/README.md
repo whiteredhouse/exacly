@@ -11,7 +11,7 @@
 - the common record fields, plus the type-specific fields each active record needs;
 - evidence, relationships, exceptions and assessments.
 
-Rules that need the whole graph are left to a validator, as section 11 describes: unresolved references, legal relationship endpoints, duplicate edges, cycles and the section 7 traceability rules. Fields starting with `x-` are allowed anywhere.
+Rules that need the whole graph are left to a validator, as section 11 describes: unresolved references, legal relationship endpoints, duplicate edges, cycles and the section 7 traceability rules. Fields starting with `x-` are allowed on the document, the model boundary, records, relationships and evidence.
 
 [`examples/0.1/invoice-reminders.yaml`](examples/0.1/invoice-reminders.yaml) is the section 12 worked example as a product map that validates against the schema.
 
