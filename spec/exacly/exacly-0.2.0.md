@@ -1,0 +1,343 @@
+# Exacly Specification
+
+Product modeling and traceability
+
+Version: 0.2.0  
+Status: Draft  
+Date: 2026-10-23
+
+## 1. Purpose
+
+This specification defines a lightweight, reusable model for tracking a product from business purpose to supporting infrastructure. It connects intended outcomes, business capabilities, processes, requirements, information, software, and operational resources.
+
+The model should answer:
+
+- Why does a particular service or requirement exist?
+- What could be affected by a proposed change or operational failure?
+- Which requirements have implementation and verification evidence?
+- What is planned, what is deployed, and what was true in an earlier release?
+- Which outcomes have supporting work, and which have evidence of improvement?
+- Where are ownership, traceability, or evidence missing?
+
+The product model is a durable description. Delivery tickets describe changes to it. Diagrams present selected views of it. Metrics and other evidence establish what is known about its implementation and results.
+
+## 2. Scope and standards
+
+This specification is informed by ArchiMate but does not claim ArchiMate conformance. Its record types and relationship names form a local vocabulary. A future ArchiMate export must explicitly map that vocabulary to the selected version of ArchiMate and validate the resulting relationships.
+
+UML may describe detailed structure and behavior, particularly interactions, workflows, and state transitions. TOGAF may guide wider architecture governance, but adopting its process is not a prerequisite.
+
+This specification defines meaning and validation rules independently of storage and tools. Markdown, YAML, relational storage, and graph storage are possible implementations. It does not require a diagram editor, graph database, code generator, automatic discovery engine, or delivery platform.
+
+The model separates what a project intends from what has been observed. **Config** holds intent: the model boundary, records, relationships, exceptions, and how each record can be observed. People and agents author it and review changes to it. **State** holds observations: assessments and the evidence behind them, for one environment or business context. Only tooling writes state, and everything in it can be rebuilt by observing again. Section 9 defines both.
+
+The model is a graph, not a strict seven-layer stack. Information, requirements, and concerns such as security, accessibility, reliability, and cost can span several areas. Those concerns should be expressed as requirements, measures, and relationships rather than forced into an additional layer.
+
+The terms **MUST**, **SHOULD**, and **MAY** mean required, recommended with a documented reason for exceptions, and optional within this specification. These are rules of this draft, not claims about external standards.
+
+## 3. Model boundary and identity
+
+Each adopting project MUST declare:
+
+- A unique model namespace, product name, and accountable owner.
+- The product or product area covered, plus explicit exclusions.
+- The specification version and any extensions in use.
+- The environment represented by its current operational baseline.
+- A review interval for records and evidence, such as 90 days.
+
+Records MUST have stable IDs, unique within the namespace. Renaming a record MUST NOT change its ID. Deleted or retired IDs MUST NOT be reassigned. Cross-model references MUST include the namespace.
+
+Suggested IDs are `OUT-001`, `CAP-001`, `PROC-001`, `REQ-001`, `INFO-001`, `APP-001`, `INF-001`, and `MEAS-001`. Prefixes are conventions, not mandatory syntax.
+
+The initial scope SHOULD be one important journey or process. Model elements at the level where ownership, investment, behavior, or dependency decisions occur. Individual classes, methods, servers, and ephemeral instances need not be represented unless those decisions require them.
+
+## 4. Record types
+
+| Type | Meaning | Required type-specific content |
+| --- | --- | --- |
+| Outcome | A desired business or customer result | Intended beneficiary, success criterion, evaluation period, and linked measure |
+| Capability | An ability the business needs, independent of its implementation | Scope of the ability and boundaries |
+| Process | An ordered or branching account of how an objective is accomplished | Actors, trigger, major steps, completion condition, and significant exceptions |
+| Requirement | A verifiable behavior or constraint | Requirement statement, acceptance criteria, and verification method |
+| Information | A business information concept, independent of its physical storage | Definition, key identifiers or properties, and stewardship responsibility |
+| Application | A software system, service, or component with a defined responsibility | Responsibility, interfaces or entry points, and implementation reference |
+| Infrastructure | A logical or concrete technology resource supporting execution | Resource kind, purpose, and operational reference |
+| Measure | A defined way of evaluating an outcome | Calculation, unit, population, collection source, cadence, baseline, and target |
+
+A customer journey MAY be represented as a Process with `perspective: customer`. A business workflow may use `perspective: business`. Detailed sub-processes MAY be separate records linked through `contains`.
+
+An unknown baseline MUST be recorded as `unknown`, with an owner and a collection action; it MUST NOT be represented as zero. A proposed Application or Infrastructure record MAY use a planned implementation or operational reference, explicitly labeled as planned.
+
+For example, “collect payments” is a Capability, “send a reminder three days before the due date” is a Requirement, and “reminder service” is an Application. These records remain distinct even if one team owns all three.
+
+## 5. Common record fields
+
+| Field | Rule |
+| --- | --- |
+| `id` | Required stable identifier |
+| `type` | Required record type from section 4 or a declared extension |
+| `name` | Required concise human-readable name |
+| `description` | Required meaning and scope |
+| `owner` | Required accountable person or resolvable team identifier |
+| `lifecycle` | Required: `proposed`, `active`, or `retired` |
+| `evidence` | Required list of evidence references that justify the record, of kind `research` or `decision`; may be empty without implying verification. Evidence that supports an assessment belongs in state (section 8) |
+| `last_reviewed_at` | Required ISO 8601 date of the latest substantive review, or `null` if unreviewed |
+| `tags` | Optional labels for concerns or grouping; tags do not replace typed relationships |
+| `observe` | Optional bindings: where tooling observes this record, such as the tests, deployments, runtime signals, or measurement query that are its reality |
+| `observe_only` | Optional; `true` when the project reports on this record but does not change it, such as a provider it does not own |
+
+Active means the record is currently adopted in the selected model state. It does not mean that software is deployed, a requirement is satisfied, or an outcome is achieved. Those assertions require separate evidence, recorded as assessments in state.
+
+`lifecycle` and `last_reviewed_at` are authored: adoption and review are human decisions recorded in config.
+
+A binding names an observation source and how to select from it. Each key under `observe` is a source kind: `tests`, `deployments`, `runtime`, or `measurement`, or an extension source as `<extension>:<name>`. Its value identifies what to observe, for example a CI workflow and a test path, or a service name and environments. The fields of a binding are defined by the tool that reads it. Bindings are the only link between a record and its reality that observation cannot rediscover, so they MUST be authored rather than inferred. Outcomes and Capabilities usually have no bindings; their status comes from linked Measures and records.
+
+All records MUST be attributable to a model revision. A revision may be a Git commit or an equivalent immutable version. The storage format MAY carry revision information at the document or snapshot level instead of repeating it on each record.
+
+## 6. Relationships
+
+Relationships MUST be explicit, directed, and typed. Each relationship MUST identify its source, type, and target. Its identity may be an explicit stable ID or the unique tuple `(source, type, target)` within a revision. Relationships are versioned with the records.
+
+The direction in the following table is normative for this draft:
+
+| Source | Relationship | Target | Meaning |
+| --- | --- | --- | --- |
+| Capability | `contributes_to` | Outcome | The capability is intended to help achieve the outcome; this is not causal proof |
+| Process | `uses_capability` | Capability | The process exercises the business ability |
+| Requirement | `supports` | Process, Capability, or Outcome | The requirement has this business justification |
+| Application | `implements` | Requirement | The application is responsible for realizing the requirement; verification is separate |
+| Infrastructure | `implements` | Requirement | The resource realizes a technology constraint, such as a retention requirement |
+| Process | `implements` | Requirement | A human or organizational procedure realizes the requirement |
+| Process | `uses` | Application | The process relies on software for part of its execution |
+| Application | `reads` or `writes` | Information | The application consumes or produces this information |
+| Infrastructure | `stores` | Information | The resource physically holds this information, in the role the relationship names |
+| Application | `depends_on` | Application or Infrastructure | Its operation requires the target within the documented scope |
+| Infrastructure | `depends_on` | Infrastructure | The source resource relies on the target resource |
+| Measure | `evaluates` | Outcome | The measurement provides evidence about the outcome |
+| Record | `contains` | Record of the same type | The target is a decomposition of the source |
+| Record | `supersedes` | Record of the same type | The source replaces the target while preserving historical identity |
+
+Relations are many-to-many unless restricted above. Duplicate edges are invalid. `contains` and `supersedes` MUST be acyclic. Dependency cycles MAY be valid but SHOULD be flagged for review.
+
+A `stores` relationship MUST name its `role`: `system_of_record`, `replica`, `cache`, or `archive`. The system of record is the authoritative copy; the other roles hold derived copies. Information stays independent of physical storage: storage is a relationship, so the same concept may be held in several places.
+
+Relationships MAY include rationale, scope, and evidence. As for records, research and decision evidence that justifies the relationship is authored on it; other evidence belongs in state (section 8). A `depends_on` relationship MUST describe relevant conditions if the dependency is optional, asynchronous, or limited to specific operations. A dependency path identifies potential impact; it does not establish that every upstream function will fail.
+
+External systems MUST be represented by a local boundary record with an external reference, or a resolvable reference to another model. A provider may be externally owned, but the product MUST identify its own accountable contact for the dependency.
+
+## 7. Traceability requirements
+
+Within each model state:
+
+1. Every active Outcome MUST have at least one linked Measure.
+2. Every active Capability MUST have a `contributes_to` relationship to an Outcome.
+3. Every active Process MUST have a `uses_capability` relationship to a Capability.
+4. Every active Requirement MUST have at least one `supports` relationship and a path through those business relationships to an Outcome.
+5. Every active Application MUST implement a Requirement or be used by a Process. Shared supporting applications MAY instead be justified through incoming `depends_on` relationships from justified applications.
+6. Every active Infrastructure record MUST be reachable through `depends_on` relationships from a justified Application, or implement a Requirement that has business justification.
+7. Every active Information record MUST have a linked Application that reads or writes it. Projects with information used only by humans MUST declare an extension for Process-to-Information access.
+8. A requirement claimed to be delivered MUST have an identified implementer and delivery evidence. A requirement claimed to be verified MUST additionally have verification evidence. Claims and their evidence are assessments in state, and each claim needs evidence for its own context.
+9. Every active Information record SHOULD have exactly one `stores` relationship with role `system_of_record`.
+
+Proposed records MAY be incomplete; validation reports MUST show their gaps. An active record that cannot meet a rule MUST have a documented exception identifying the rule, record, reason, accountable owner, and review or expiry date. Exceptions MUST remain visible in validation reports.
+
+Retired records remain available for historical references. Active operational relationships to retired targets MUST be flagged as errors unless covered by an explicit exception. Historical `supersedes` links to retired records are permitted.
+
+## 8. Evidence and independent status dimensions
+
+Evidence references MUST include a locator, evidence kind, a short description of the claim supported, observation date, and applicable revision, release, environment, or measurement period. Where a locator is mutable, the reference SHOULD include an immutable version or retained snapshot, or a content digest of what it points at. A reference MAY carry an expiry date after which it no longer supports its claim.
+
+Evidence kinds include implementation, deployment, test, runtime observation, research, measurement, and decision. Evidence may be stored outside the model, but the reference MUST identify what it supports.
+
+Evidence that justifies a record or relationship, research or a decision, is authored in config on that record or relationship. Evidence that supports an assessment belongs in state, inside that assessment, whatever its kind: a review decision that verified a requirement is cited there by locator, just as a test run is. Implementation, deployment, test, runtime observation, and measurement evidence that supports no assessment belongs in state on the record or relationship it was observed for. Where a standard attestation exists, such as an in-toto test result or a deployment record, the reference SHOULD point at it rather than copy its content.
+
+The following dimensions MUST remain independent:
+
+| Dimension | Example states | Evidence |
+| --- | --- | --- |
+| Delivery | Planned, in progress, released, withdrawn | Issue, change, release, and deployment records |
+| Verification | Not checked, passed, failed, inconclusive | Acceptance test or review result tied to a revision |
+| Operation | Unknown, healthy, degraded, unavailable | Time-bounded runtime observations |
+| Outcome evaluation | Not evaluated, target met, target not met, inconclusive | Measurements over the declared population and period |
+
+These states are contextual assessments, not a single field on every record. Assessments are stored in state, under the record they assess. An assessment MUST name its dimension, state, context, timestamp or period, and supporting evidence, and MAY give a reason. Unknown, not-checked, and not-evaluated assessments may have no supporting evidence. An assessment whose state is negative, inconclusive, or not yet known (withdrawn, failed, inconclusive, unknown, not checked, degraded, unavailable, not evaluated, or target not met) MUST give a reason, for example that a test failed, no binding exists, or the source could not be reached. Assessments MUST NOT silently carry forward to a new revision or environment.
+
+A closed ticket is not evidence of deployment. Deployment is not evidence of correct behavior. Passing tests are evidence only within their coverage. Improved metrics do not by themselves prove that a particular feature caused the improvement.
+
+## 9. Config, state, and history
+
+A project MUST distinguish:
+
+- **Current baseline:** the adopted model for a named environment or business context at a known point in time.
+- **Proposed change:** additions, edits, and retirements relative to a named baseline revision.
+- **Historical baseline:** an immutable previous state linked to a release or other adoption event.
+
+Config is versioned in source control. The config on the main line is the current baseline. A branch or change request holds a proposed change, and its base is the main-line revision it branched from. Tags or releases mark historical baselines. Record IDs MUST stay stable across revisions when the underlying concept is unchanged. Proposed edits to an active record belong in the proposed change; they do not change the meaning of the current baseline.
+
+Every proposed change MUST identify its base revision and affected record and relationship IDs. Concurrent changes MUST be reconciled against the current baseline before adoption.
+
+### Config documents
+
+Config MAY be split across several documents, such as one per product area. All of them MUST declare the same specification version, and exactly one MUST declare the model boundary (section 3). The model is the union of their records, relationships, and exceptions; IDs MUST be unique across all of them.
+
+### State documents
+
+A state document records observations of one environment or business context, such as `production`, against one config revision. It MUST name the model namespace, the context, the config revision observed against, and when it was written. It MUST carry a serial that increases with every write, and a lineage identifier that stays the same for the life of that context's state.
+
+State holds, per record ID, the record's assessments and any observed evidence that supports no assessment. It holds, per relationship, observed evidence about that edge, such as runtime traces showing that a dependency is exercised; a relationship is identified by its `id`, or by its source, type, and target when it has none (section 6). A tool MUST NOT use state that was computed against a different config revision, or whose lineage differs, without reporting it.
+
+State is written only by tooling that observes the bindings, never by hand. A person who disputes an observation records an exception or a decision in config. Because state can always be rebuilt by observing again, a conflict between two versions of a state document is resolved by observing again, not by merging. State documents SHOULD be written only from the main line, after a change is adopted; a proposed change MAY compute state to show its effect but SHOULD NOT store it.
+
+Work handed to people or agents to bring reality in line with config MAY be recorded in state as pending, with the record, a task identifier, and when it was opened. Pending work is complete only when an observation confirms it, not when the person or agent reports it done.
+
+For software and infrastructure, promotion to an operational baseline MUST reference deployment evidence for the named environment. For business definitions and goals, promotion MUST reference the accountable owner's adoption decision. Partial deployment MUST be represented explicitly through environment-specific baselines or scoped assessments.
+
+Rollback restores the applicable prior state and records the rollback event. Historical records and evidence MUST NOT be rewritten to imply that a withdrawn change was never deployed.
+
+## 10. Views and detailed diagrams
+
+Views SHOULD answer a specific question:
+
+| View | Included information |
+| --- | --- |
+| Business purpose | Outcomes, measures, capabilities, and supporting requirements |
+| Process | Actors, steps, requirements, and participating applications |
+| Architecture | Applications, information access, infrastructure, and dependencies |
+| Change impact | Changed elements, their affected relationships, and relevant business paths |
+| Coverage | Missing justification, implementation, verification, ownership, or measurement |
+| Release comparison | Added, changed, and retired elements between named revisions |
+
+UML sequence diagrams MAY describe interactions, activity diagrams MAY describe workflows, and state diagrams MAY describe lifecycles. Diagrams MUST identify the model revision and relevant record IDs.
+
+Generated diagrams SHOULD be treated as derived views. Manually maintained diagrams MUST have an owner and review date. If a detailed diagram defines normative behavior, the relevant Requirement MUST reference its exact version as part of the acceptance criteria. Other diagrams are explanatory; conflicts must be resolved against the normative record and its referenced artifacts.
+
+## 11. Validation
+
+Validation MAY be manual initially. Each report MUST identify the model revision, scope, date, findings, and applicable exceptions. Automation is an implementation choice.
+
+| Severity | Checks |
+| --- | --- |
+| Error | Duplicate or reused IDs; missing required fields; unknown types; unresolved internal references; illegal relationship endpoints; duplicate edges; containment or replacement cycles |
+| Error | Active records violate section 7 without a valid exception; current and proposed states are mixed; delivered or verified claims lack required evidence; config documents disagree on the specification version or more than one declares the model boundary; observed evidence is authored in config; state refers to a record the config does not contain |
+| Warning | Proposed records are incomplete; review dates exceed the declared interval; a baseline is unknown; dependency cycles need review; an external locator cannot be checked; active Information has no single system of record; state was computed against a different config revision |
+| Warning | An exception is approaching expiry; a diagram is older than the records it describes; operational or measurement evidence is outside its declared validity period |
+
+An expired exception no longer satisfies the waived rule. Unreachable external evidence MUST be reported as unavailable, not assumed valid. A project MAY retain a snapshot to preserve the evidence.
+
+Structural validation does not establish truth. A human owner must review business intent, and tests or observations must substantiate behavioral and operational claims.
+
+A baseline conforms to this draft when it satisfies its required rules or explicitly reports valid exceptions. A report MUST distinguish “conforms” from “conforms with exceptions.”
+
+## 12. Worked example: invoice reminders
+
+This example is fictional. Names, figures, dates, and references illustrate the model and do not describe a deployed product. All records start as `proposed` with no delivery or outcome claims, so the example has config and no state yet.
+
+### Records
+
+| ID | Type | Name | Key content |
+| --- | --- | --- | --- |
+| OUT-001 | Outcome | Faster invoice payment | Help freelancers receive payment sooner; reduce median payment time to 14 days in the first complete quarter after rollout |
+| CAP-001 | Capability | Collect payments | Obtain and reconcile payment for issued invoices |
+| PROC-001 | Process | Collect an invoice payment | Freelancer issues invoice; customer is reminded; customer pays; provider confirms payment; failures enter manual follow-up |
+| REQ-001 | Requirement | Remind before due date | Send one reminder three days before the due date if the invoice remains unpaid and the customer can receive email |
+| INFO-001 | Information | Invoice | Invoice ID, customer contact, due date, payment status, and reminder history; steward: billing team |
+| APP-001 | Application | Reminder service | Select eligible invoices and request email delivery; planned reference: reminder-service design |
+| INF-001 | Infrastructure | Scheduler | Initiate daily reminder processing; planned operational reference: scheduler configuration |
+| INF-002 | Infrastructure | Message queue | Buffer reminder work; planned operational reference: reminder queue configuration |
+| INF-003 | Infrastructure | Billing database | Hold invoices and reminder history; planned operational reference: billing database configuration |
+| MEAS-001 | Measure | Median payment time | Median elapsed days between invoice issue and settlement for invoices issued in a fixed cohort, measured after 90 days of observation; baseline 20 days, target 14 |
+
+Each record also carries the common fields. For illustration, the owner is `billing-team`, `evidence` is empty, and `last_reviewed_at` is `null`. A real project must resolve that team identifier and supply the complete type-specific fields before adoption.
+
+The process actor is the freelancer or customer as appropriate; its trigger is invoice issue and its successful completion is a reconciled payment. Significant exceptions include payment-provider failure and unreachable customer contact.
+
+For MEAS-001, the collection source is a billing analytics query, the unit is elapsed days, and evaluation is quarterly. The cohort, observation cutoff, and proportion still unpaid MUST accompany the result so that omitting unpaid invoices cannot silently make the metric appear better. Before adoption, the owner must provide the actual baseline query and evidence; the example's 20-day figure is illustrative only.
+
+### Relationships
+
+```text
+CAP-001  --contributes_to-->  OUT-001
+PROC-001 --uses_capability--> CAP-001
+REQ-001  --supports-->        PROC-001
+PROC-001 --uses-->            APP-001
+APP-001  --implements-->      REQ-001
+APP-001  --reads-->           INFO-001
+APP-001  --writes-->          INFO-001
+APP-001  --depends_on-->      INF-001
+APP-001  --depends_on-->      INF-002
+APP-001  --depends_on-->      INF-003
+INF-003  --stores-->          INFO-001   (role: system_of_record)
+MEAS-001 --evaluates-->       OUT-001
+```
+
+The scheduler dependency concerns starting a processing run. The queue dependency concerns handing off and retrying reminder work. Neither relationship alone asserts that invoice creation or payment collection becomes unavailable when reminders fail.
+
+### Requirement detail
+
+REQ-001 acceptance criteria:
+
+1. An eligible unpaid invoice receives one reminder on the date three calendar days before its due date, using the product's declared billing timezone.
+2. An invoice already paid when processing begins receives no reminder.
+3. Reprocessing the same invoice for the same due date does not create a duplicate reminder request.
+4. Missing email contact produces a recorded skip reason available to the billing team.
+5. A transient delivery failure is recorded and retried under a separately documented retry policy.
+
+Verification combines eligibility tests, idempotency tests, and an integration test with a controlled email provider. A sequence diagram may detail the provider interaction. Any behavior required from the retry policy must be linked through a separately identified requirement before claiming complete verification.
+
+### Change and evidence
+
+The proposed change links REQ-001, APP-001, INF-001, INF-002, and INF-003 to delivery issues, and binds REQ-001 to its tests and APP-001 to its deployments. After implementation, observing those bindings adds a verification assessment to state, with test evidence that identifies the code revision and covered criteria. After deployment, a delivery assessment in the production state identifies the deployed revision. Quarterly metric evidence, observed through MEAS-001's binding, evaluates OUT-001 independently of those delivery and verification results.
+
+This example is deliberately a proposed slice: full email-provider dependencies, operational references, evidence, and complete field values must be supplied for a conforming operational baseline.
+
+## 13. Adoption and maintenance
+
+1. Declare the product boundary, namespace, owner, review interval, and specification version.
+2. Model one important process with its outcome, measure, capability, requirements, and supporting implementation.
+3. Record missing information explicitly and establish an initial reviewed baseline.
+4. Link subsequent delivery work to affected IDs and describe intended changes against that baseline.
+5. Review the affected records and relationships during the change review. Retain deployment and verification evidence when adopting the change.
+6. Evaluate outcomes on their measurement cadence and review stale records on the declared review interval.
+7. Expand scope only when the model supports useful decisions at an acceptable maintenance cost.
+
+A recommended layout in an adopting project's repository is:
+
+```text
+spec/
+  exacly/
+    exacly-0.2.0.md        # Unmodified copy of the adopted specification
+    README.md              # Boundary, namespace, ownership, version, extensions
+    model.yaml             # Config: the model boundary
+    billing.yaml           # Config: records, relationships, exceptions, bindings
+    state/
+      production.json      # State for one context, written only by tooling
+    validation-report.md   # Findings, exceptions, and reviewed model revision
+```
+
+The specification is reusable; config and state contain project-specific facts. An adopting project MUST pin a specification version rather than silently follow a changing draft. The copied specification MUST remain unchanged; project extensions and proposed specification improvements MUST be recorded separately in the README or linked documents. The validation report records findings against the adopted version. Adopting a newer version requires an explicit update to the README and a new validation report against that version, preserving earlier reports in version history.
+
+Future specification revisions must state breaking changes and migration requirements. Project extensions MUST define their fields, relationships, and validation rules without silently redefining the core vocabulary.
+
+Successful initial adoption means the team can trace an implementation back to its intended outcome, assess the likely scope of a change, distinguish planned and deployed states, and identify missing evidence after one real product change.
+
+## 14. Changes from 0.1.0
+
+This version changes the document format, which 0.x allows (see the versioning policy). The meaning of records, relationships, and the section 7 rules is unchanged except where listed.
+
+| Change | Migration |
+| --- | --- |
+| One product map becomes config documents plus state documents (section 9) | Keep `model`, `records`, `relationships`, and `exceptions` in config. Drop `state`, `revision`, `base_revision`, `environment`, and `adopted_at`; source control and the state document carry them |
+| Assessments move to state, under the record they assess | Move each assessment into the state document for its context, without its `subject` |
+| An assessment whose state is negative, inconclusive, or not yet known MUST give a `reason` (section 8). This is breaking: such 0.1 assessments are invalid in 0.2 without one | Add a `reason` when migrating. Where none was recorded, say so, for example "Not recorded in 0.1; carried over unchanged", and replace it at the next observation |
+| Evidence is split by what it supports | Move evidence that supports an assessment into that assessment in state, whatever its kind, including a decision that backs a verification. Keep other `research` and `decision` evidence on its record or relationship in config. Move other observed evidence to the record's or relationship's entry in state, keeping its identity |
+| Bindings: `observe` and `observe_only` on records (section 5) | Optional; add them where tooling should observe a record |
+| `stores` relationship from Infrastructure to Information, with a `role` (section 6), and rule 7.9 | Optional; add where physical storage matters |
+| Evidence MAY carry a `digest` and an `expires_at` (section 8) | None |
+
+## 15. Background references
+
+These references explain the external standards that informed the approach. They do not define conformance to this draft.
+
+- [The Open Group: ArchiMate introduction](https://archimate-community.pages.opengroup.org/workgroups/archimate-101/)
+- [The Open Group: how ArchiMate and TOGAF complement each other](https://help.opengroup.org/hc/en-us/articles/32115987894930-How-the-ArchiMate-Language-and-the-TOGAF-Standard-Complement-Each-Other)
+- [Object Management Group: What is UML?](https://www.omg.org/uml/what-is-uml.htm)

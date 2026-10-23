@@ -1,0 +1,97 @@
+# Exacly's own model: observing a model's reality, which is proposed and not built yet.
+# Config: records, relationships and bindings, authored by people and agents (section 9).
+exacly: "0.2.0"
+
+records:
+  - id: CAP-002
+    type: Capability
+    name: Observe a model's reality
+    description: Record what the product's tests, deployments and measures show, as state.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence:
+      - locator: "https://github.com/whiteredhouse/exacly/pull/5"
+        kind: decision
+        claim: Config and state are split; state is written only by tooling and committed by CI on main.
+        observed_at: "2026-10-23"
+        applies_to: spec 0.2.0
+    last_reviewed_at: "2026-10-23"
+    scope: Writing state from the sources a model's bindings name; excludes changing the product.
+
+  - id: PROC-002
+    type: Process
+    name: Refresh state on main
+    description: How state follows main after each change is adopted.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-23"
+    perspective: business
+    actors: [CI]
+    trigger: A push to main that changes the product or its model
+    steps:
+      - CI runs the checks and records each test case's result
+      - Refresh reads the bindings and the results, and writes state
+      - Validation checks the new state against the config
+      - CI commits the state to main
+    completion: State on main describes the latest commit
+    exceptions:
+      - Results cannot be read (state records the assessment as unknown, with the reason)
+
+  - id: REQ-010
+    type: Requirement
+    name: Write state from CI results
+    description: Verification assessments come from observed test results, never from people.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-23"
+    statement: >-
+      For each record with a tests binding, write a verification assessment for
+      the observed commit from the test cases the binding selects, with the run
+      as evidence, and increase the serial while keeping the lineage.
+    acceptance_criteria:
+      - Every selected case passing gives passed; any failing gives failed, with the failing cases as the reason.
+      - A binding that selects no case gives inconclusive, with the reason.
+      - A record without a binding gets no verification assessment.
+      - The serial increases by one on each write, and the lineage stays the same.
+    verification_method: Refresh test cases in CI.
+
+  - id: APP-002
+    type: Application
+    name: Refresh
+    description: The exacly refresh command.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-23"
+    responsibility: Observe the sources a model's bindings name and write state.
+    interfaces: [exacly refresh command]
+    implementation_ref: { locator: refresh, planned: true }
+
+  - id: MEAS-001
+    type: Measure
+    name: Verified requirement share
+    description: How much of Exacly's own model is verified on main.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-23"
+    calculation: Active Requirements whose latest verification assessment on main is passed, divided by all active Requirements.
+    unit: percent
+    population: Active Requirements in Exacly's own model
+    source: spec/exacly/state/
+    cadence: Each push to main
+    target: 100
+
+relationships:
+  - { source: CAP-002, type: contributes_to, target: OUT-001 }
+  - { source: PROC-002, type: uses_capability, target: CAP-002 }
+  - { source: PROC-002, type: uses, target: APP-002 }
+  - { source: REQ-010, type: supports, target: PROC-002 }
+  - { source: APP-002, type: implements, target: REQ-010 }
+  - { source: APP-002, type: reads, target: INFO-001 }
+  - { source: APP-002, type: writes, target: INFO-002 }
+  - { source: APP-002, type: depends_on, target: INF-001, conditions: Only to read the results of a finished run. }
+  - { source: APP-002, type: depends_on, target: INF-002, conditions: Only to commit state from main. }
+  - { source: MEAS-001, type: evaluates, target: OUT-001 }
