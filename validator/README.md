@@ -24,14 +24,14 @@ It exits 0 when the map conforms, with or without exceptions, and 1 when it does
 3. **Section 7 traceability.** Rules 7.1 to 7.8, plus active relationships to retired records (`7.retired-target`).
    - A gap in an active record is an error. A gap in a proposed record is a warning, because proposed records may be incomplete.
    - Rule 7.4's business path runs through `supports`, `uses_capability` and `contributes_to`.
-   - Rule 7.8 needs an implementer and implementation or deployment evidence for a released Requirement. A passed verification also needs test or decision evidence.
+   - Rule 7.8 needs an implementer for a released or verified Requirement. Each released delivery assessment needs implementation or deployment evidence, and each passed verification needs test or decision evidence. The evidence must apply to that assessment's own context, because assessments do not carry forward to another release or environment. A verified Requirement also needs at least one supported release.
 4. **Section 11 warnings.**
    - Active records never reviewed or reviewed longer ago than the declared interval (`11.review-overdue`).
    - Unknown baselines (`11.unknown-baseline`).
-   - `depends_on` cycles (`11.dependency-cycle`).
+   - `depends_on` cycles, including a record that depends on itself (`11.dependency-cycle`).
    - Exceptions that are expired, expiring within 30 days, or match no finding.
 
-An exception names the rule code from the report, such as `7.1` or `7.retired-target`, and the record. A valid exception waives that error, and the report then says "conforms with exceptions". An expired exception waives nothing.
+An exception names the rule code from the report, such as `7.1` or `7.retired-target`, and the record, with or without the model's own namespace. A valid exception waives that error, and the report then says "conforms with exceptions". An expired exception waives nothing.
 
 ## Not checked
 

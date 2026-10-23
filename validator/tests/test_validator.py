@@ -56,6 +56,15 @@ class ValidatorTest(unittest.TestCase):
                 self.assertEqual(waived, sorted((w["rule"], w["record"]) for w in case.get("waived", [])))
                 self.assertEqual(report["result"], case["result"])
 
+    def test_reports_render_for_malformed_metadata(self) -> None:
+        for model in (None, "invoicing", {"namespace": "invoicing", "scope": "everything"}):
+            with self.subTest(model=model):
+                doc = copy.deepcopy(self.bases["active"])
+                doc["model"] = model
+                report = validate(doc, self.date)
+                self.assertEqual(report.as_dict()["result"], "does not conform")
+                self.assertIn("Result: does not conform", report.as_text())
+
     def test_cli_exit_codes(self) -> None:
         doc = yaml.safe_load(EXAMPLE.read_text())
         doc["records"][5]["lifecycle"] = "active"

@@ -222,6 +222,32 @@ cases:
     result: conforms
     findings: []
 
+  - description: "7.8: evidence for one release does not support a claim about another"
+    base: active
+    patch:
+      - op: add
+        path: /assessments
+        value:
+          - { subject: REQ-001, dimension: delivery, state: released, context: r1, at: "2026-10-20", evidence: [{ locator: releases/1.4, kind: deployment, claim: Reminders deployed, observed_at: "2026-10-20", applies_to: r1 }] }
+          - { subject: REQ-001, dimension: delivery, state: released, context: r2, at: "2026-10-22", evidence: [{ locator: adr/7, kind: decision, claim: Release approved, observed_at: "2026-10-22", applies_to: r2 }] }
+          - { subject: REQ-001, dimension: verification, state: passed, context: r1, at: "2026-10-20", evidence: [{ locator: ci/runs/9, kind: test, claim: Reminder tests pass, observed_at: "2026-10-20", applies_to: r1 }] }
+          - { subject: REQ-001, dimension: verification, state: passed, context: r2, at: "2026-10-22", evidence: [{ locator: releases/1.5, kind: deployment, claim: Reminders deployed, observed_at: "2026-10-22", applies_to: r2 }] }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "7.8", record: REQ-001 }
+      - { severity: error, rule: "7.8", record: REQ-001 }
+
+  - description: "7.8: evidence must apply to the assessment's context"
+    base: active
+    patch:
+      - op: add
+        path: /assessments
+        value:
+          - { subject: REQ-001, dimension: delivery, state: released, context: r2, at: "2026-10-22", evidence: [{ locator: releases/1.4, kind: deployment, claim: Reminders deployed, observed_at: "2026-10-20", applies_to: r1 }] }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "7.8", record: REQ-001 }
+
   - description: An active relationship to a retired record is an error
     base: active
     patch:
@@ -290,6 +316,14 @@ cases:
     findings:
       - { severity: error, rule: "11.cycle", record: CAP-001 }
 
+  - description: A map with no model still gets a report
+    base: active
+    patch:
+      - { op: replace, path: /model, value: null }
+    result: does not conform
+    findings:
+      - { severity: error, rule: schema, record: null }
+
   # Section 11 warnings
 
   - description: A dependency cycle is a warning for review
@@ -300,6 +334,14 @@ cases:
     result: conforms
     findings:
       - { severity: warning, rule: "11.dependency-cycle", record: INF-001 }
+
+  - description: A record that depends on itself is a cycle for review
+    base: active
+    patch:
+      - { op: add, path: /relationships/-, value: { source: APP-001, type: depends_on, target: APP-001 } }
+    result: conforms
+    findings:
+      - { severity: warning, rule: "11.dependency-cycle", record: APP-001 }
 
   - description: An active record never reviewed
     base: active
@@ -334,6 +376,16 @@ cases:
     patch:
       - { op: remove, path: /relationships/9 }
       - { op: add, path: /exceptions, value: [{ rule: "7.1", record: OUT-001, reason: Measure being defined, owner: billing-team, expires_at: "2027-06-30" }] }
+    result: conforms with exceptions
+    findings: []
+    waived:
+      - { rule: "7.1", record: OUT-001 }
+
+  - description: An exception may name the record with the model's own namespace
+    base: active
+    patch:
+      - { op: remove, path: /relationships/9 }
+      - { op: add, path: /exceptions, value: [{ rule: "7.1", record: "invoicing:OUT-001", reason: Measure being defined, owner: billing-team, expires_at: "2027-06-30" }] }
     result: conforms with exceptions
     findings: []
     waived:

@@ -82,7 +82,8 @@ class Report:
         return "conforms with exceptions" if self.waived else "conforms"
 
     def as_dict(self) -> dict[str, Any]:
-        model = self.doc.get("model", {})
+        model = self.doc.get("model")
+        model = model if isinstance(model, dict) else {}
         return {
             "result": self.result,
             "date": self.date.isoformat(),
@@ -100,13 +101,13 @@ class Report:
 
     def as_text(self) -> str:
         d = self.as_dict()
-        scope = d["scope"] or {}
+        covers = d["scope"].get("covers") if isinstance(d["scope"], dict) else None
         base = f"  base {d['base_revision']}" if d["base_revision"] else ""
         lines = [
             "Exacly validation report",
             f"Model: {d['namespace']}  spec {d['spec_version']}  state {d['state']}",
             f"Revision: {d['revision'] or '(not given)'}{base}",
-            f"Scope: {scope.get('covers', '(not given)')}",
+            f"Scope: {covers or '(not given)'}",
             f"Date: {d['date']}",
             f"Result: {d['result']}",
         ]
@@ -236,8 +237,6 @@ def check_structure(g: Graph, doc: Doc, report: Report) -> None:
         if e.type in SAME_TYPE:
             if source_type != target_type:
                 report.add(ERROR, "11.endpoint", e.source, f"{e.label}: {e.type} must link records of the same type")
-            if e.source == e.target:
-                report.add(ERROR, "11.cycle", e.source, f"{e.label}: a record cannot {e.type} itself")
             continue
         if target_type not in ENDPOINTS.get(e.type, {}).get(source_type, set()):
             message = f"{e.label}: {source_type} --{e.type}--> {target_type} is not allowed"
@@ -256,7 +255,7 @@ def check_structure(g: Graph, doc: Doc, report: Report) -> None:
 
 
 def cycles(g: Graph, rel: str) -> list[list[str]]:
-    """Strongly connected components with more than one node (Tarjan)."""
+    """Strongly connected components that contain a cycle, including a record linked to itself (Tarjan)."""
     nodes = sorted({n for e in g.edges if e.type == rel for n in (e.source, e.target)})
     index: dict[str, int] = {}
     low: dict[str, int] = {}
@@ -282,7 +281,7 @@ def cycles(g: Graph, rel: str) -> list[list[str]]:
                 component.append(w)
                 if w == v:
                     break
-            if len(component) > 1:
+            if len(component) > 1 or v in g.out(v, rel):
                 found.append(sorted(component))
 
     for v in nodes:
@@ -378,8 +377,12 @@ def traceability_gap(
     return None
 
 
-def evidence_kinds(assessments: list[Doc]) -> set[str]:
-    return {ev["kind"] for a in assessments for ev in a["evidence"]}
+def supported(assessment: Doc, kinds: set[str]) -> bool:
+    """Whether the assessment carries evidence of one of these kinds that applies to its own context.
+
+    Each claim stands on its own evidence: assessments do not carry forward to another revision or environment.
+    """
+    return any(ev["kind"] in kinds and ev["applies_to"] == assessment["context"] for ev in assessment["evidence"])
 
 
 def check_claims(g: Graph, doc: Doc, report: Report) -> None:
@@ -396,14 +399,18 @@ def check_claims(g: Graph, doc: Doc, report: Report) -> None:
             continue
         if not g.into(rid, "implements"):
             report.add(ERROR, "7.8", rid, "claimed delivered or verified, but nothing implements it")
-        if not evidence_kinds(delivered) & DELIVERY_EVIDENCE:
-            message = (
-                "claimed delivered or verified without implementation or deployment evidence"
-                " on a released delivery assessment"
-            )
+        for a in delivered:
+            if not supported(a, DELIVERY_EVIDENCE):
+                message = f"claimed released in {a['context']} without implementation or deployment evidence for it"
+                report.add(ERROR, "7.8", rid, message)
+        for a in verified:
+            if not supported(a, VERIFICATION_EVIDENCE):
+                report.add(
+                    ERROR, "7.8", rid, f"claimed verified in {a['context']} without test or decision evidence for it"
+                )
+        if verified and not any(supported(a, DELIVERY_EVIDENCE) for a in delivered):
+            message = "claimed verified, but no released delivery assessment has implementation or deployment evidence"
             report.add(ERROR, "7.8", rid, message)
-        if verified and not evidence_kinds(verified) & VERIFICATION_EVIDENCE:
-            report.add(ERROR, "7.8", rid, "claimed verified without test or decision evidence")
 
 
 def check_hygiene(g: Graph, doc: Doc, report: Report) -> None:
@@ -422,29 +429,30 @@ def check_hygiene(g: Graph, doc: Doc, report: Report) -> None:
             )
 
 
-def apply_exceptions(doc: Doc, report: Report) -> None:
+def apply_exceptions(g: Graph, doc: Doc, report: Report) -> None:
     """A valid exception waives the error it names (rule and record); an expired one does not.
 
     Exceptions name rules by the codes in this report, such as 7.2 or 7.retired-target.
     """
     for exc in doc.get("exceptions", []):
+        record = g.local(exc["record"]) or exc["record"]
         expires = dt.date.fromisoformat(exc["expires_at"])
         if expires < report.date:
             message = f"exception to {exc['rule']} expired {exc['expires_at']} and no longer applies"
-            report.add(WARNING, "11.exception-expired", exc["record"], message)
+            report.add(WARNING, "11.exception-expired", record, message)
             continue
         targets = [
             f
             for f in report.findings
-            if f.rule == exc["rule"] and f.record == exc["record"] and f.severity == ERROR and not f.waived_by
+            if f.rule == exc["rule"] and f.record == record and f.severity == ERROR and not f.waived_by
         ]
         for f in targets:
             f.waived_by = exc
         if not targets:
-            report.add(WARNING, "11.exception-unused", exc["record"], f"exception to {exc['rule']} matches no finding")
+            report.add(WARNING, "11.exception-unused", record, f"exception to {exc['rule']} matches no finding")
         elif (expires - report.date).days <= EXPIRY_WARNING_DAYS:
             message = f"exception to {exc['rule']} expires {exc['expires_at']}"
-            report.add(WARNING, "11.exception-expiring", exc["record"], message)
+            report.add(WARNING, "11.exception-expiring", record, message)
 
 
 def validate(doc: Any, date: dt.date) -> Report:
@@ -457,5 +465,5 @@ def validate(doc: Any, date: dt.date) -> Report:
     check_structure(g, doc, report)
     check_traceability(g, doc, report)
     check_hygiene(g, doc, report)
-    apply_exceptions(doc, report)
+    apply_exceptions(g, doc, report)
     return report
