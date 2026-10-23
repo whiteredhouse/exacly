@@ -306,6 +306,34 @@
               }
             }
           }
+        },
+        {
+          "description": "Section 8: an assessment that is negative, inconclusive or not checked says why.",
+          "if": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "withdrawn",
+                  "failed",
+                  "inconclusive",
+                  "unknown",
+                  "not_checked",
+                  "degraded",
+                  "unavailable",
+                  "not_evaluated",
+                  "target_not_met"
+                ]
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "required": [
+              "reason"
+            ]
+          }
         }
       ]
     },

@@ -161,6 +161,13 @@ suites:
         errors:
           - { at: /records/REQ-001/assessments/1/state, keyword: enum }
 
+      - description: An assessment that is not positive says why
+        patch:
+          - { op: remove, path: /records/APP-001/assessments/0/reason }
+        valid: false
+        errors:
+          - { at: /records/APP-001/assessments/0, keyword: required, property: reason }
+
       - description: Pending work names its record, task and when it was opened
         patch:
           - { op: remove, path: /pending/0/task }
