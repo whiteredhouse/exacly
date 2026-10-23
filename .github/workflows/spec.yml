@@ -2,10 +2,10 @@ name: Spec
 
 on:
   pull_request:
-    paths: ["spec/**", ".github/workflows/spec.yml"]
+    paths: ["spec/**", "validator/**", ".github/workflows/spec.yml"]
   push:
     branches: [main]
-    paths: ["spec/**", ".github/workflows/spec.yml"]
+    paths: ["spec/**", "validator/**", ".github/workflows/spec.yml"]
 
 permissions:
   contents: read
@@ -21,3 +21,16 @@ jobs:
       - run: pip install -r spec/tests/requirements.txt
       - name: Validate schema, examples and test cases
         run: python -m unittest discover -s spec/tests -v
+
+  validator:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: pip install -r validator/requirements.txt
+      - name: Run validator test cases
+        run: python -m unittest discover -s validator/tests -v
+      - name: Validate every example
+        run: for f in spec/examples/*/*.yaml; do python validator/exacly_validate.py "$f"; done

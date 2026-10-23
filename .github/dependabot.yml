@@ -8,3 +8,7 @@ updates:
     directory: /spec/tests
     schedule:
       interval: monthly
+  - package-ecosystem: pip
+    directory: /validator
+    schedule:
+      interval: monthly
