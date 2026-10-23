@@ -1,7 +1,7 @@
 [project]
 name = "exacly-validate"
 version = "0.1.0"
-description = "Validate Exacly product maps against the Exacly Specification"
+description = "Validate Exacly models (0.1 product maps, 0.2 config and state) against the Exacly Specification"
 readme = "validator/README.md"
 requires-python = ">=3.12"
 dependencies = [
