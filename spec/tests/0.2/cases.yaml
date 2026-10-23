@@ -140,12 +140,21 @@ suites:
         errors:
           - { at: /records/APP-001, keyword: additionalProperties, property: lifecycle }
 
-      - description: Research evidence is authored, not observed
+      - description: A review decision may back a verification
         patch:
-          - { op: replace, path: /records/REQ-001/assessments/1/evidence/0/kind, value: research }
+          - op: replace
+            path: /records/REQ-001/assessments/1/evidence
+            value: [{ locator: reviews/42, kind: decision, claim: Acceptance criteria reviewed and accepted, observed_at: "2026-10-20", applies_to: 9f2c41e }]
+        valid: true
+
+      - description: Evidence outside an assessment must be observed, not a decision
+        patch:
+          - op: add
+            path: /records/APP-001/evidence
+            value: [{ locator: decisions/12, kind: decision, claim: Approved, observed_at: "2026-10-01", applies_to: production }]
         valid: false
         errors:
-          - { at: /records/REQ-001/assessments/1/evidence/0/kind, keyword: enum }
+          - { at: /records/APP-001/evidence/0/kind, keyword: enum }
 
       - description: A released assessment needs evidence
         patch:

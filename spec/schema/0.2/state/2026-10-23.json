@@ -160,7 +160,7 @@
           ]
         }
       },
-      "description": "Observed evidence inside an assessment (section 8)."
+      "description": "Observed evidence on a record or relationship that supports no assessment (section 8)."
     },
     "assessment": {
       "type": "object",
@@ -197,8 +197,9 @@
         "evidence": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/observed-evidence"
-          }
+            "$ref": "#/$defs/evidence"
+          },
+          "description": "Evidence supporting the assessment, of any kind, including a decision such as a review that verified a requirement (section 8)."
         },
         "reason": {
           "$ref": "#/$defs/text",
