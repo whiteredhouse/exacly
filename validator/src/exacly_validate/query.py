@@ -289,21 +289,38 @@ def changes(base: Model, head: Model) -> Doc:
     }
 
 
+def reliant(e: Edge) -> set[str]:
+    """The end of a relationship that relies on the other: the reason end, or both when neither is."""
+    if e.type in WHY_IS_TARGET:
+        return {e.target}
+    if e.type in WHY_IS_SOURCE:
+        return {e.source}
+    return {e.source, e.target}
+
+
 def change_impact(base: Model, head: Model) -> Doc:
     """The changes from `base` to `head`, and what they affect. Added and changed records are traced in `head`;
-    removed ones in `base`, keeping only what still exists in `head`. Records at either end of an added or
-    removed relationship count as changed."""
+    removed ones in `base`, keeping only what still exists in `head`. An added or removed relationship changes
+    the record that relies on the other end: a Requirement that gains an implementer, or an Application that
+    reads new Information, but not the Information itself."""
     diff = changes(base, head)
     touched = {r["id"] for kind in ("added", "changed") for r in diff["records"][kind]}
     removed = {r["id"] for r in diff["records"]["removed"]}
     for e in head.graph.edges:
         if e.label in diff["relationships"]["added"]:
-            touched |= {e.source, e.target}
+            touched |= reliant(e)
     for e in base.graph.edges:
         if e.label in diff["relationships"]["removed"]:
-            for rid in (e.source, e.target):
+            for rid in reliant(e):
                 (touched if rid in head.records else removed).add(rid)
     result = impact(head, touched)
+    # A record whose relationships changed, but not its fields, is affected rather than changed.
+    edited = {r["id"] for kind in ("added", "changed") for r in diff["records"][kind]}
+    result["changed"] = [r for r in result["changed"] if r["id"] in edited]
+    result["affected"][:0] = [
+        {**head.summary(rid), "path": [rid], **({"status": head.status(rid)} if head.status(rid) else {})}
+        for rid in sorted(touched - edited)
+    ]
     known = {a["id"] for a in result["affected"]} | touched
     for rid, path in sorted(reached(base, removed, "why").items()):
         if rid in head.records and rid not in known:

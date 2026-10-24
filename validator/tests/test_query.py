@@ -206,7 +206,9 @@ class TestChanges:
 
     def test_the_impact_of_a_removal_is_traced_in_the_base(self) -> None:
         answer = query.change_impact(model(), self.edited())["impact"]
-        assert ids(answer["changed"]) == ["APP-001", "INF-001"]  # APP-001 lost a relationship.
+        assert ids(answer["changed"]) == ["INF-001"]
+        # APP-001 relied on the removed INF-002: losing that relationship affects it, though its fields didn't change.
+        assert answer["affected"][0] == {**query.Model.summary(model(), "APP-001"), "path": ["APP-001"]}
         assert "OUT-001" in answer["outcomes"]
         assert ids(answer["recheck"]) == ["REQ-001"]
 

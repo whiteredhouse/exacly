@@ -72,3 +72,16 @@ def test_the_state_job_commits_only_state_and_skips_ci() -> None:
 
 def test_reports_and_computed_state_are_not_committed() -> None:
     assert "reports/" in (ROOT / ".gitignore").read_text().splitlines()
+
+
+def test_the_plan_is_commented_only_on_pull_requests_from_this_repository() -> None:
+    plan = JOBS["plan"]
+    assert plan["permissions"] == {"contents": "read", "pull-requests": "write"}
+    assert plan["if"] == (
+        "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository"
+    )
+    script = run_steps("plan")
+    assert 'exacly view plan --base "origin/$BASE"' in script
+    # The base branch's name reaches the script through the environment, never pasted into it.
+    assert "${{" not in script
+    assert "<!-- exacly-plan -->" in script

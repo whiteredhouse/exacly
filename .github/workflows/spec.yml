@@ -27,6 +27,42 @@ jobs:
       - name: Test, lint, type-check, validate the examples, and refresh and validate Exacly's own state
         run: mise run check
 
+  plan:
+    # The change plan (section 10's change impact view) as a comment on the pull request, kept up to date.
+    # A pull request from a fork gets a read-only token, so it isn't commented on.
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
+      - name: Write the plan against the base branch
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          mise run sync
+          uv run --locked exacly view plan --base "origin/$BASE" > plan.md
+          cat plan.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Comment the plan, replacing the earlier one
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          comment="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- exacly-plan -->"))) | .id' \
+            | head -n 1)"
+          if [ -n "$comment" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$comment" -F body=@plan.md > /dev/null
+          else
+            gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F body=@plan.md > /dev/null
+          fi
+
   state:
     # State is written only by tooling and committed only from main (spec section 9).
     # This job reruns the checks rather than reusing the check job's reports, so that only

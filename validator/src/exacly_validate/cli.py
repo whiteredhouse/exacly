@@ -3,6 +3,7 @@
 exacly-validate PATH... [--revision REV] [--date YYYY-MM-DD] [--json]
 exacly-refresh PATH... --context CONTEXT --state FILE [--junit FILE...] [--distribution] [run options]
 exacly show|trace|impact|gaps [-m PATH]... [--json] ...; exacly mcp [-m PATH]...
+exacly view plan [--base REV] | site [--out DIR]
 exacly validate|refresh ... run the commands above
 """
 
@@ -22,7 +23,7 @@ from typing import Any
 
 import yaml
 
-from exacly_validate import mcp, query
+from exacly_validate import mcp, query, views
 from exacly_validate.core import is_state, validate_documents
 from exacly_validate.refresh import RefreshError, Run, read_junit, refresh
 
@@ -249,7 +250,7 @@ def impact_text(answer: dict[str, Any]) -> str:
     else:
         lines += ["Changed", *(f"  {label(r)}" for r in answer["changed"]), ""]
     lines.append("Affected")
-    lines += [f"  {label(r)}\n    via {' -> '.join(r['path'])}" for r in answer["affected"]] or ["  nothing else"]
+    lines += [f"  {label(r)}\n    {views.via(r['path'], ' -> ')}" for r in answer["affected"]] or ["  nothing else"]
     lines += ["", "Outcomes: " + (", ".join(answer["outcomes"]) or "none reached"), "", "Check again"]
     for r in answer["recheck"]:
         tests = r["observe"].get("tests")
@@ -287,6 +288,15 @@ def gaps_text(answer: dict[str, Any]) -> str:
     return "\n".join(lines).rstrip()
 
 
+def load_base(revision: str, paths: list[Path], model: query.Model) -> query.Model:
+    """The model at `paths` as it was at a Git revision; empty when it didn't exist yet."""
+    try:
+        documents = load_at(revision, paths)
+    except subprocess.CalledProcessError as error:
+        raise query.QueryError(f"git failed: {error.stderr.strip()}") from error
+    return query.load(documents) if documents else query.empty(model.graph.namespace)
+
+
 def ask(
     command: str,
     paths: list[Path],
@@ -306,20 +316,25 @@ def ask(
         records = list(records)
         if bool(base) == bool(records):
             raise query.QueryError("impact takes record IDs or a base revision, not both")
-        if base:
-            try:
-                documents = load_at(base, paths)
-            except subprocess.CalledProcessError as error:
-                raise query.QueryError(f"git failed: {error.stderr.strip()}") from error
-            earlier = query.load(documents) if documents else query.empty(model.graph.namespace)
-            answer = query.change_impact(earlier, model)
-        else:
-            answer = query.impact(model, records)
+        answer = query.change_impact(load_base(base, paths, model), model) if base else query.impact(model, records)
         return answer, impact_text(answer)
     if command == "gaps":
         answer = query.gaps(model)
         return answer, gaps_text(answer)
     raise query.QueryError(f"unknown question {command}")
+
+
+def view_main(args: argparse.Namespace) -> int:
+    paths = args.model or [DEFAULT_MODEL]
+    model = query.load(load(paths))
+    if args.kind == "plan":
+        base = args.base or "main"
+        print(views.plan(query.change_impact(load_base(base, paths, model), model), query.gaps(model), base), end="")
+        return 0
+    out = args.out or Path("reports/site")
+    written = views.site(model, out)
+    print(f"Wrote {len(written)} pages to {out}; open {out / 'index.html'}")
+    return 0
 
 
 def exacly_main(argv: list[str] | None = None) -> int:
@@ -355,7 +370,17 @@ def exacly_main(argv: list[str] | None = None) -> int:
     commands.add_parser(
         "mcp", parents=[common], help="answer these questions for coding agents, as an MCP server on stdio"
     )
+    view = commands.add_parser("view", parents=[common], help="section 10 views: a pull request plan, or a site")
+    view.add_argument("kind", choices=["plan", "site"], help="plan: Markdown for a pull request; site: HTML pages")
+    view.add_argument("--base", metavar="REV", help="plan: the Git revision the change is against (default: main)")
+    view.add_argument("--out", type=Path, metavar="DIR", help="site: the folder to write (default: reports/site)")
     args = parser.parse_args(argv)
+    if args.command == "view":
+        try:
+            return view_main(args)
+        except query.QueryError as error:
+            print(f"exacly: {error}", file=sys.stderr)
+            return 1
     if args.command == "mcp":
         mcp.serve(mcp.Server(args.model or [DEFAULT_MODEL], ask, metadata.version("exacly-validate")))
         return 0
