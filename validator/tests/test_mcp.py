@@ -1,0 +1,114 @@
+"""Checks the MCP server: the protocol messages, and each tool's answer over the invoice reminders example.
+
+Run with `mise run test`, or from the repository root: uv run pytest validator/tests
+"""
+
+import io
+import json
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+from exacly_validate import mcp
+from exacly_validate.cli import ask
+
+ROOT = Path(__file__).resolve().parents[2]
+EXAMPLE = ROOT / "spec" / "examples" / "0.2" / "invoice-reminders"
+SERVER = mcp.Server([EXAMPLE], ask, "1.2.3")
+
+
+def request(method: str, params: dict[str, Any] | None = None, rid: int = 1) -> dict[str, Any]:
+    response = SERVER.handle({"jsonrpc": "2.0", "id": rid, "method": method, **({"params": params} if params else {})})
+    assert response is not None and response["id"] == rid
+    return response
+
+
+def call(name: str, **arguments: Any) -> dict[str, Any]:
+    result: dict[str, Any] = request("tools/call", {"name": name, "arguments": arguments})["result"]
+    return result
+
+
+def test_initialize_agrees_on_a_protocol_version() -> None:
+    result = request("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}})["result"]
+    assert result["protocolVersion"] == "2025-06-18"
+    assert result["capabilities"] == {"tools": {}}
+    assert result["serverInfo"] == {"name": "exacly", "version": "1.2.3"}
+    newer = request("initialize", {"protocolVersion": "2099-01-01"})["result"]
+    assert newer["protocolVersion"] == mcp.PROTOCOL_VERSIONS[0]
+
+
+def test_notifications_get_no_response() -> None:
+    assert SERVER.handle({"jsonrpc": "2.0", "method": "notifications/initialized"}) is None
+
+
+def test_one_tool_per_question() -> None:
+    tools = request("tools/list")["result"]["tools"]
+    assert [t["name"] for t in tools] == ["exacly_show", "exacly_trace", "exacly_impact", "exacly_gaps"]
+    assert all(t["inputSchema"]["type"] == "object" and t["description"] for t in tools)
+    assert request("ping")["result"] == {}
+
+
+def test_answers_as_text_and_data() -> None:
+    result = call("exacly_show", record="REQ-001")
+    assert result["content"][0]["text"].startswith("REQ-001 Requirement: Remind before due date")
+    assert result["structuredContent"]["record"]["id"] == "REQ-001"
+    assert "isError" not in result
+    assert call("exacly_trace", record="APP-001")["structuredContent"]["why"]["id"] == "APP-001"
+    assert call("exacly_impact", records=["INF-003"])["structuredContent"]["outcomes"] == ["OUT-001"]
+    assert call("exacly_gaps")["structuredContent"]["result"] == "conforms"
+
+
+def test_a_question_the_model_cant_answer_is_a_tool_error() -> None:
+    assert call("exacly_show", record="REQ-404")["isError"] is True
+    assert call("exacly_show")["content"][0]["text"] == "show needs a record ID"
+    assert "record IDs or a base revision" in call("exacly_impact")["content"][0]["text"]
+
+
+def test_protocol_errors() -> None:
+    assert request("tools/call", {"name": "exacly_delete"})["error"]["code"] == -32602
+    assert request("resources/list")["error"]["code"] == -32601
+
+
+def test_serve_reads_and_writes_one_message_per_line() -> None:
+    incoming = io.StringIO(
+        "\n".join(
+            [
+                json.dumps({"jsonrpc": "2.0", "id": 1, "method": "ping"}),
+                "",
+                json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+                "{not json",
+                json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}),
+            ]
+        )
+    )
+    outgoing = io.StringIO()
+    mcp.serve(SERVER, incoming, outgoing)
+    responses = [json.loads(line) for line in outgoing.getvalue().splitlines()]
+    assert [r["id"] for r in responses] == [1, None, 2]
+    assert responses[1]["error"]["code"] == -32700
+
+
+def test_the_exacly_mcp_command() -> None:
+    messages = [
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}},
+        {"jsonrpc": "2.0", "method": "notifications/initialized"},
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "exacly_gaps", "arguments": {}}},
+    ]
+    done = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; from exacly_validate.cli import exacly_main; sys.exit(exacly_main())",
+            "mcp",
+            "-m",
+            str(EXAMPLE),
+        ],
+        input="".join(json.dumps(m) + "\n" for m in messages),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    responses = [json.loads(line) for line in done.stdout.splitlines()]
+    assert [r["id"] for r in responses] == [1, 2]
+    assert responses[1]["result"]["structuredContent"]["result"] == "conforms"

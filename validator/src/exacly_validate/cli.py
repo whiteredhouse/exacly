@@ -2,7 +2,8 @@
 
 exacly-validate PATH... [--revision REV] [--date YYYY-MM-DD] [--json]
 exacly-refresh PATH... --context CONTEXT --state FILE [--junit FILE...] [--distribution] [run options]
-exacly show|trace|impact|gaps [-m PATH]... [--json] ...; exacly validate|refresh ... run the commands above
+exacly show|trace|impact|gaps [-m PATH]... [--json] ...; exacly mcp [-m PATH]...
+exacly validate|refresh ... run the commands above
 """
 
 from __future__ import annotations
@@ -14,16 +15,19 @@ import os
 import subprocess
 import sys
 from collections import Counter
+from collections.abc import Iterable
+from importlib import metadata
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from exacly_validate import query
+from exacly_validate import mcp, query
 from exacly_validate.core import is_state, validate_documents
 from exacly_validate.refresh import RefreshError, Run, read_junit, refresh
 
 SUFFIXES = {".yaml", ".yml", ".json"}
+DEFAULT_MODEL = Path("spec/exacly")
 
 
 def wanted(file: Path, folder: Path) -> bool:
@@ -283,6 +287,41 @@ def gaps_text(answer: dict[str, Any]) -> str:
     return "\n".join(lines).rstrip()
 
 
+def ask(
+    command: str,
+    paths: list[Path],
+    record: str | None = None,
+    records: Iterable[str] = (),
+    base: str | None = None,
+) -> tuple[dict[str, Any], str]:
+    """Answer one question about the model at `paths` (show, trace, impact or gaps), as data and as text.
+    Impact takes `records`, or a Git revision as `base`. Raises QueryError when it can't answer."""
+    model = query.load(load(paths))
+    if command in ("show", "trace"):
+        if not record:
+            raise query.QueryError(f"{command} needs a record ID")
+        answer = query.show(model, record) if command == "show" else query.trace(model, record)
+        return answer, (show_text if command == "show" else trace_text)(answer)
+    if command == "impact":
+        records = list(records)
+        if bool(base) == bool(records):
+            raise query.QueryError("impact takes record IDs or a base revision, not both")
+        if base:
+            try:
+                documents = load_at(base, paths)
+            except subprocess.CalledProcessError as error:
+                raise query.QueryError(f"git failed: {error.stderr.strip()}") from error
+            earlier = query.load(documents) if documents else query.empty(model.graph.namespace)
+            answer = query.change_impact(earlier, model)
+        else:
+            answer = query.impact(model, records)
+        return answer, impact_text(answer)
+    if command == "gaps":
+        answer = query.gaps(model)
+        return answer, gaps_text(answer)
+    raise query.QueryError(f"unknown question {command}")
+
+
 def exacly_main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv and argv[0] in ("validate", "refresh"):
@@ -313,33 +352,25 @@ def exacly_main(argv: list[str] | None = None) -> int:
     impact.add_argument("records", nargs="*", metavar="RECORD")
     impact.add_argument("--base", metavar="REV", help="compare with the model at this Git revision instead")
     commands.add_parser("gaps", parents=[common], help="findings, and what is not yet verified, released or observed")
+    commands.add_parser(
+        "mcp", parents=[common], help="answer these questions for coding agents, as an MCP server on stdio"
+    )
     args = parser.parse_args(argv)
-    paths = args.model or [Path("spec/exacly")]
+    if args.command == "mcp":
+        mcp.serve(mcp.Server(args.model or [DEFAULT_MODEL], ask, metadata.version("exacly-validate")))
+        return 0
     try:
-        model = query.load(load(paths))
-        if args.command == "show":
-            answer, text = query.show(model, args.record), show_text
-        elif args.command == "trace":
-            answer, text = query.trace(model, args.record), trace_text
-        elif args.command == "impact":
-            if bool(args.base) == bool(args.records):
-                parser.error("impact takes record IDs or --base, not both")
-            if args.base:
-                documents = load_at(args.base, paths)
-                base = query.load(documents) if documents else query.empty(model.graph.namespace)
-                answer = query.change_impact(base, model)
-            else:
-                answer = query.impact(model, args.records)
-            text = impact_text
-        else:
-            answer, text = query.gaps(model), gaps_text
+        answer, text = ask(
+            args.command,
+            args.model or [DEFAULT_MODEL],
+            record=getattr(args, "record", None),
+            records=getattr(args, "records", ()),
+            base=getattr(args, "base", None),
+        )
     except query.QueryError as error:
         print(f"exacly: {error}", file=sys.stderr)
         return 1
-    except subprocess.CalledProcessError as error:
-        print(f"exacly: git failed: {error.stderr.strip()}", file=sys.stderr)
-        return 1
-    print(json.dumps(answer, indent=2, default=str) if args.json else text(answer))
+    print(json.dumps(answer, indent=2, default=str) if args.json else text)
     return 0
 
 
