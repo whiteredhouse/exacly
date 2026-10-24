@@ -12,6 +12,7 @@ dependencies = [
 [project.scripts]
 exacly-validate = "exacly_validate.cli:main"
 exacly-refresh = "exacly_validate.cli:refresh_main"
+exacly = "exacly_validate.cli:exacly_main"
 
 [dependency-groups]
 dev = [
