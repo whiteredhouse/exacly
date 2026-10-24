@@ -108,6 +108,13 @@ cases:
     findings:
       - { severity: warning, rule: "7.1", record: OUT-001 }
 
+  - description: "7.1: 0.1 retains its lifecycle-independent Measure link rule"
+    base: active
+    patch:
+      - { op: replace, path: /records/8/lifecycle, value: retired }
+    result: conforms
+    findings: []
+
   - description: "7.2: an active Capability must contribute to an Outcome, which also cuts the Requirement's path"
     base: active
     patch:

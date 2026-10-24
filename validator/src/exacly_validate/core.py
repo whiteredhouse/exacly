@@ -371,6 +371,12 @@ def reachable_infrastructure(g: Graph, apps: set[str]) -> set[str]:
 def check_traceability(g: Graph, assessments: list[Doc], report: Report) -> None:
     """Section 7. Gaps in active records are errors; gaps in proposed records are warnings."""
     outcomes = set(g.of_type("Outcome"))
+    # Rule 7.1 excludes retired Measures from 0.2; keep the 0.1 link rule unchanged.
+    measures = {
+        rid
+        for rid, r in g.records.items()
+        if r["type"] == "Measure" and (minor_version(version_of(report.doc)) == "0.1" or r["lifecycle"] != "retired")
+    }
     capabilities = {c for c in g.of_type("Capability") if any(t in outcomes for t in g.out(c, "contributes_to"))}
     processes = {p for p in g.of_type("Process") if any(c in capabilities for c in g.out(p, "uses_capability"))}
     business = outcomes | capabilities | processes
@@ -381,7 +387,7 @@ def check_traceability(g: Graph, assessments: list[Doc], report: Report) -> None
     for rid, r in g.records.items():
         if r["lifecycle"] == "retired":
             continue
-        gap = traceability_gap(g, rid, r["type"], capabilities, requirements, apps, infrastructure)
+        gap = traceability_gap(g, rid, r["type"], measures, capabilities, requirements, apps, infrastructure)
         if gap:
             rule, message = gap
             if r["lifecycle"] == "active":
@@ -402,14 +408,15 @@ def traceability_gap(
     g: Graph,
     rid: str,
     record_type: str,
+    measures: set[str],
     capabilities: set[str],
     requirements: set[str],
     apps: set[str],
     infrastructure: set[str],
 ) -> tuple[str, str] | None:
     """The section 7 rule a record breaks, with the reason, or None."""
-    if record_type == "Outcome" and not any(g.type_of(m) == "Measure" for m in g.into(rid, "evaluates")):
-        return "7.1", "no Measure evaluates this Outcome"
+    if record_type == "Outcome" and not any(m in measures for m in g.into(rid, "evaluates")):
+        return "7.1", "no eligible Measure evaluates this Outcome"
     if record_type == "Capability" and rid not in capabilities:
         return "7.2", "does not contribute_to an Outcome"
     if record_type == "Process" and not any(g.type_of(c) == "Capability" for c in g.out(rid, "uses_capability")):
