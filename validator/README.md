@@ -51,7 +51,7 @@ exacly gaps                  # findings, and Requirements not yet verified, rele
 ```
 
 - **Why and how.** Trace follows `supports`, `uses_capability`, `contributes_to`, `implements`, `evaluates` and `stores` toward the reason a record exists, and `uses`, `reads`, `writes`, `depends_on` and `contains` from the reason to what serves it. Information's reason is the Application that reads or writes it, and Infrastructure that stores it serves it. A record reached twice is marked rather than repeated.
-- **Impact** lists each affected record with the shortest path from a changed one. With `--base`, a record is changed when any authored field differs, and records at either end of an added or removed relationship count as changed. A removed record's impact is traced in the earlier model.
+- **Impact** lists each affected record with the shortest path from a changed one. With `--base`, a record or relationship is changed when any authored field differs, such as a dependency's conditions or a storage role; relationships to other models count too. A relationship added, changed or removed affects the record that relies on the other end, such as the Requirement that gains an implementer or the Application that reads new Information. A removed record's impact is traced in the earlier model. The model may be given by a relative or absolute path inside its Git repository.
 - **Gaps** go beyond conformance (section 10's coverage view): a conforming model can still have Requirements that no context has verified or released.
 
 ### For coding agents
