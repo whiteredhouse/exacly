@@ -30,7 +30,8 @@ jobs:
       - name: Validate Exacly's own model with the action that other repositories use
         uses: ./
         with:
-          model: spec/exacly
+          # The config with the state this run refreshed, not the state committed for an earlier revision.
+          model: spec/exacly/*.yaml reports/state/main.json
 
   plan:
     # The change plan (section 10's change impact view) as a comment on the pull request, kept up to date.

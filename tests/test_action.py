@@ -86,6 +86,9 @@ def test_validating_a_model_reports_to_the_summary_and_fails_when_it_does_not_co
         assert done.returncode == 0, done.stderr
         assert "conforms" in done.stdout
         assert (temp / "summary.md").read_text().startswith("### Exacly validation\n")
+        patterns = run("Validate the model", repo, temp, MODEL="model/*.yaml")
+        assert patterns.returncode == 0, patterns.stderr
+        assert "Documents: model/billing.yaml, model/model.yaml" in patterns.stdout
         (repo / "model" / "billing.yaml").write_text("exacly: 0.2.0\nrecords: [{id: OUT-001}]\n")
         assert run("Validate the model", repo, temp, MODEL="model").returncode == 1
 

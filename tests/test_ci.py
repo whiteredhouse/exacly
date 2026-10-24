@@ -90,5 +90,7 @@ def test_the_plan_is_commented_only_on_pull_requests_from_this_repository() -> N
 
 
 def test_the_action_is_checked_on_exacly_itself() -> None:
-    assert any(step.get("uses") == "./" for step in JOBS["check"]["steps"])
+    action = next(step for step in JOBS["check"]["steps"] if step.get("uses") == "./")
+    # The state committed for an earlier revision can name records this change removed.
+    assert action["with"]["model"] == "spec/exacly/*.yaml reports/state/main.json"
     assert "action.yml" in WORKFLOW[True]["pull_request"]["paths"]

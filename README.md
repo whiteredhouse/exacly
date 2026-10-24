@@ -90,7 +90,7 @@ jobs:
           model: spec/exacly
 ```
 
-`model` takes files or folders, one per line or separated by spaces. `plan` compares with the pull request's base branch, or with `base` when given. A pull request from a fork gets a read-only token, so its plan stays in the job summary. The action runs on Linux and macOS runners.
+`model` takes files, folders or patterns such as `spec/exacly/*.yaml`, one per line or separated by spaces. `plan` compares with the pull request's base branch, or with `base` when given. A pull request from a fork gets a read-only token, so its plan stays in the job summary. The action runs on Linux and macOS runners.
 
 ## Development
 
