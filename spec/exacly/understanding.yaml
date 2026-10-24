@@ -1,0 +1,87 @@
+# Exacly's own model: understanding a model, for the people and agents who change the product.
+# Config: records, relationships and bindings, authored by people and agents (section 9).
+exacly: "0.2.0"
+
+records:
+  - id: CAP-003
+    type: Capability
+    name: Understand a model
+    description: Answer questions about a model from its config and state, for people and agents alike.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-24"
+    scope: >-
+      Reading a model: what a record is, why it exists, what realizes it, what a change affects and what is
+      missing. Excludes changing config or state.
+
+  - id: PROC-003
+    type: Process
+    name: Look into a record before changing it
+    description: How a person or an agent learns what a change touches before making it, and checks it after.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-24"
+    perspective: business
+    actors: [Developer, Coding agent]
+    trigger: A task names a record, or a change touches code that a record points at
+    steps:
+      - Show the record, with its relationships, state and findings
+      - Trace why it exists and what realizes it
+      - Make the change on a branch
+      - Ask what the change affects, against the main-line revision, and check those Requirements again
+    completion: The change names the records it affects, and their verification is checked again
+    exceptions:
+      - The model doesn't load (fix the config first)
+
+  - id: REQ-012
+    type: Requirement
+    name: Answer questions from config and state
+    description: The same answers for people (as text) and agents (as JSON), computed from the model.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-24"
+    statement: >-
+      Given a model's config and state, show a record with its relationships, state and findings; trace why it
+      exists up to Outcomes and how it is realized; list what a change to records, or between two revisions,
+      affects; and list the model's gaps beyond conformance.
+    acceptance_criteria:
+      - Show gives the record, its document, its relationships in both directions, its state and pending work by context, and the findings that name it.
+      - An unknown record is an error that suggests close IDs; a reference qualified with the model's namespace works.
+      - Trace follows supports, uses_capability, contributes_to, implements, evaluates and stores up, and uses, reads, writes, depends_on and contains the other way, marking a record reached twice instead of repeating its branches.
+      - Impact lists every record that relies on the changed ones with the shortest path, the Outcomes reached, and the Requirements to check again with their bindings.
+      - Impact against a Git revision lists records and relationships added, changed (with the fields) and removed, including relationships to other models, and traces removals in the earlier model.
+      - A relationship added, changed or removed affects the record that relies on the other end, in both its earlier and its later version.
+      - Impact against a Git revision works with a relative or absolute model path, and with file names Git would quote.
+      - Gaps lists the validator's findings, Requirements not verified or not released in any context, Requirements without a binding, proposed Measures and pending work.
+      - Every answer is available as JSON.
+    verification_method: Query tests in CI.
+    observe:
+      tests:
+        workflow: .github/workflows/spec.yml
+        cases:
+          - "validator/tests/test_query.py::*"
+
+  - id: APP-003
+    type: Application
+    name: Query
+    description: The exacly command's show, trace, impact and gaps, and the query core behind them.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-24"
+    responsibility: Answer questions about a model from its config and state.
+    interfaces: [exacly command, exacly_validate.query Python API]
+    implementation_ref: { locator: validator/src/exacly_validate/query.py }
+
+relationships:
+  - { source: CAP-003, type: contributes_to, target: OUT-001 }
+  - { source: PROC-003, type: uses_capability, target: CAP-003 }
+  - { source: PROC-003, type: uses, target: APP-003 }
+  - { source: REQ-012, type: supports, target: PROC-003 }
+  - { source: APP-003, type: implements, target: REQ-012 }
+  - { source: APP-003, type: reads, target: INFO-001 }
+  - { source: APP-003, type: reads, target: INFO-002 }
+  - { source: APP-003, type: depends_on, target: APP-001, conditions: Uses the validator to load the model and for findings. }

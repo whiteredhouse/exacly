@@ -14,6 +14,7 @@ Exacly models itself, following the layout in section 13 of the specification. I
 
 - [`validation.yaml`](validation.yaml) covers checking a model. The validator, CI and the repository exist today, so these records are active.
 - [`observation.yaml`](observation.yaml) covers observing a model's reality: `exacly-refresh` and the CI job that runs it on main are active, and the measure they feed is proposed.
+- [`understanding.yaml`](understanding.yaml) covers answering questions about a model: the `exacly` command's show, trace, impact and gaps.
 
 ## State
 

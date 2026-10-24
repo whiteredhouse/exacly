@@ -38,6 +38,24 @@ exacly-refresh spec/exacly --context main --state spec/exacly/state/main.json --
 - **Earlier state.** An existing state file is read first. Its lineage is kept and its serial increases by one. A write replaces only the assessments of the dimensions it observed: refreshing verification keeps an earlier release, other evidence, and records it did not observe, such as a binding for another workflow. Observations and pending work for records or relationships that left the config are dropped. State for another model or context is refused.
 - **GitHub Actions.** There, the revision, workflow, job, run link and source link default to the current run.
 
+## Questions
+
+`exacly` answers questions about a model from its config and state, as text for people or JSON (`--json`) for agents and other tools. It reads `spec/exacly` unless `-m PATH` names other documents or folders.
+
+```sh
+exacly show REQ-010          # the record, its relationships both ways, its state by context, and its findings
+exacly trace APP-002         # why it exists, up to Outcomes, and how it is realized, down to what runs it
+exacly impact INF-001        # every record that relies on it, with the path, and the Requirements to check again
+exacly impact --base main    # the same for every change since a Git revision: records added, changed and removed
+exacly gaps                  # findings, and Requirements not yet verified, released or observed
+```
+
+- **Why and how.** Trace follows `supports`, `uses_capability`, `contributes_to`, `implements`, `evaluates` and `stores` toward the reason a record exists, and `uses`, `reads`, `writes`, `depends_on` and `contains` from the reason to what serves it. Information's reason is the Application that reads or writes it, and Infrastructure that stores it serves it. A record reached twice is marked rather than repeated.
+- **Impact** lists each affected record with the shortest path from a changed one. With `--base`, a record or relationship is changed when any authored field differs, such as a dependency's conditions or a storage role; relationships to other models count too. A relationship added, changed or removed affects the record that relies on the other end, before and after the change, such as the Requirement that gains an implementer or the Application that reads new Information. A removed record's impact is traced in the earlier model. The model may be given by a relative or absolute path inside its Git repository.
+- **Gaps** go beyond conformance (section 10's coverage view): a conforming model can still have Requirements that no context has verified or released.
+
+`exacly validate` and `exacly refresh` run `exacly-validate` and `exacly-refresh`. In Python, `exacly_validate.query` gives the same answers as data: `load(documents)`, then `show`, `trace`, `impact`, `gaps`, `changes` and `change_impact`.
+
 ## What it checks
 
 1. **Documents.** Each document must match the JSON Schema for its spec version and kind, which is the latest dated iteration in `spec/schema/0.1/`, `spec/schema/0.2/config/` or `spec/schema/0.2/state/`. In 0.2, every document must declare the same spec version (`11.version-mismatch`), and exactly one config document must declare the model boundary (`11.model-boundary`). If any of this fails, the report lists the errors and skips the other checks. Authored evidence that should be observed is a schema error, because the config schema allows only `research` and `decision` evidence.
