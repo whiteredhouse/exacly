@@ -39,6 +39,9 @@ jobs:
     concurrency:
       group: exacly-state
       cancel-in-progress: false
+      # Keep every pending state job: by default a newer pending job replaces an older one, so an older
+      # revision whose checks finish late would cancel the newest revision's state job.
+      queue: max
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2

@@ -55,6 +55,9 @@ def test_state_is_written_only_from_main_after_the_checks_pass() -> None:
     assert state["needs"] == "check"
     assert state["if"] == "github.event_name == 'push' && github.ref == 'refs/heads/main'"
     assert state["concurrency"]["cancel-in-progress"] is False
+    # Without a queue, a later job replaces the pending one, so an older revision whose checks finish
+    # late could cancel the newest revision's state job.
+    assert state["concurrency"]["queue"] == "max"
 
 
 def test_the_state_job_commits_only_state_and_skips_ci() -> None:
