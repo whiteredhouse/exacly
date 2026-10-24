@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "exacly": {
+      "command": "uv",
+      "args": ["run", "--locked", "exacly", "mcp"]
+    }
+  }
+}

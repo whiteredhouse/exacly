@@ -243,8 +243,8 @@ class TestCommand:
         assert code == 1 and "REQ-404 is not a record" in err
 
     def test_impact_needs_records_or_a_base(self) -> None:
-        with pytest.raises(SystemExit):
-            run("impact", "-m", str(EXAMPLE))
+        code, _, err = run("impact", "-m", str(EXAMPLE))
+        assert code == 1 and "impact takes record IDs or a base revision" in err
 
     def test_validate_runs_the_validator(self) -> None:
         code, out, _ = run("validate", str(EXAMPLE))

@@ -62,6 +62,30 @@ records:
         cases:
           - "validator/tests/test_query.py::*"
 
+  - id: REQ-013
+    type: Requirement
+    name: Answer coding agents over MCP
+    description: Agents ask the model the same questions as people, through the Model Context Protocol.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-24"
+    statement: >-
+      Serve show, trace, impact and gaps as MCP tools over stdio, reading the model again on each call, with the
+      text answer as content and the JSON answer as structured content.
+    acceptance_criteria:
+      - Initialize agrees on the client's protocol version when supported, and otherwise offers the newest.
+      - Tools are listed with descriptions and input schemas, one per question.
+      - A question the model can't answer, such as an unknown record, is a tool result marked as an error.
+      - An unknown tool is an invalid-params error; an unknown method is a method-not-found error; a line that is not JSON is a parse error.
+      - Notifications get no response.
+    verification_method: MCP server tests in CI.
+    observe:
+      tests:
+        workflow: .github/workflows/spec.yml
+        cases:
+          - "validator/tests/test_mcp.py::*"
+
   - id: APP-003
     type: Application
     name: Query
@@ -74,6 +98,18 @@ records:
     interfaces: [exacly command, exacly_validate.query Python API]
     implementation_ref: { locator: validator/src/exacly_validate/query.py }
 
+  - id: APP-004
+    type: Application
+    name: MCP server
+    description: The exacly mcp command, which coding agents start, and the skill that tells them when to ask.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-24"
+    responsibility: Answer coding agents' questions about a model over the Model Context Protocol.
+    interfaces: [exacly mcp command (MCP over stdio), skills/exacly/SKILL.md]
+    implementation_ref: { locator: validator/src/exacly_validate/mcp.py }
+
 relationships:
   - { source: CAP-003, type: contributes_to, target: OUT-001 }
   - { source: PROC-003, type: uses_capability, target: CAP-003 }
@@ -83,3 +119,7 @@ relationships:
   - { source: APP-003, type: reads, target: INFO-001 }
   - { source: APP-003, type: reads, target: INFO-002 }
   - { source: APP-003, type: depends_on, target: APP-001, conditions: Uses the validator to load the model and for findings. }
+  - { source: REQ-013, type: supports, target: PROC-003 }
+  - { source: APP-004, type: implements, target: REQ-013 }
+  - { source: PROC-003, type: uses, target: APP-004 }
+  - { source: APP-004, type: depends_on, target: APP-003, conditions: Every tool is a question the query core answers. }
