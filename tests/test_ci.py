@@ -77,6 +77,11 @@ def test_reports_and_computed_state_are_not_committed() -> None:
 def test_the_plan_is_commented_only_on_pull_requests_from_this_repository() -> None:
     plan = JOBS["plan"]
     assert plan["permissions"] == {"contents": "read", "pull-requests": "write"}
+    # A newer push replaces a plan still being written, so two runs can't both add a comment.
+    assert plan["concurrency"] == {
+        "group": "exacly-plan-${{ github.event.pull_request.number }}",
+        "cancel-in-progress": True,
+    }
     assert plan["if"] == (
         "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository"
     )

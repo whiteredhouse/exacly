@@ -35,6 +35,10 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+    concurrency:
+      # A newer push replaces a plan still being written, so two runs can't both add a comment.
+      group: exacly-plan-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
