@@ -1,0 +1,107 @@
+# Exacly for other repositories' workflows: `uses: whiteredhouse/exacly@<tag or commit>`.
+# It installs the validator from this action's own files with uv and uv.lock, so nothing comes from PyPI.
+name: Exacly
+description: Validate an Exacly model, or comment a pull request's change plan.
+author: whiteredhouse
+branding:
+  icon: check-square
+  color: blue
+
+inputs:
+  mode:
+    description: >-
+      check: validate the model and fail when it doesn't conform. plan: write the change plan against the pull
+      request's base branch to the job summary and, for pull requests from the same repository, as a comment
+      that each run replaces (needs pull-requests: write).
+    default: check
+  model:
+    description: The model's config and state, as files or folders, one per line or separated by spaces.
+    default: spec/exacly
+  base:
+    description: "plan: the branch the change is against. Default: the pull request's base branch."
+    default: ""
+  token:
+    description: >-
+      plan: the token that comments. It needs pull-requests: write. The earlier comment is found as
+      github-actions[bot]'s, so with another token each run adds a comment.
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install the validator
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        MODE: ${{ inputs.mode }}
+      run: |
+        set -euo pipefail
+        case "$MODE" in
+          check | plan) ;;
+          *) echo "::error::mode is check or plan, not $MODE"; exit 1 ;;
+        esac
+        if ! command -v uv > /dev/null; then
+          pipx install --quiet "uv==0.11.32"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+        fi
+        uv sync --project "$ACTION_PATH" --locked --no-dev --quiet
+
+    - name: Validate the model
+      if: inputs.mode == 'check'
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        MODEL: ${{ inputs.model }}
+      run: |
+        set -euo pipefail
+        IFS=$' \t\n' read -r -d '' -a paths <<< "$MODEL" || true
+        report="$RUNNER_TEMP/exacly-report.txt"
+        status=0
+        uv run --project "$ACTION_PATH" --no-dev --no-sync exacly validate "${paths[@]}" > "$report" || status=$?
+        cat "$report"
+        { echo '### Exacly validation'; echo; echo '```'; cat "$report"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+        exit "$status"
+
+    - name: Write the plan
+      if: inputs.mode == 'plan'
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        MODEL: ${{ inputs.model }}
+        BASE: ${{ inputs.base || github.base_ref }}
+      run: |
+        set -euo pipefail
+        if [ -z "$BASE" ]; then
+          echo "::error::plan needs a base branch: run it on pull_request, or set the base input"
+          exit 1
+        fi
+        # The base branch as it is now, even from a shallow checkout.
+        git fetch --no-tags --depth=1 origin "+refs/heads/$BASE:refs/remotes/origin/$BASE"
+        IFS=$' \t\n' read -r -d '' -a paths <<< "$MODEL" || true
+        models=()
+        for path in "${paths[@]}"; do models+=(-m "$path"); done
+        uv run --project "$ACTION_PATH" --no-dev --no-sync \
+          exacly view plan --base "origin/$BASE" "${models[@]}" > "$RUNNER_TEMP/exacly-plan.md"
+        cat "$RUNNER_TEMP/exacly-plan.md" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Comment the plan, replacing the earlier one
+      # A pull request from a fork gets a read-only token, so the plan stays in the job summary.
+      if: >-
+        inputs.mode == 'plan' && github.event_name == 'pull_request'
+        && github.event.pull_request.head.repo.full_name == github.repository
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        PR: ${{ github.event.pull_request.number }}
+      run: |
+        set -euo pipefail
+        plan="$RUNNER_TEMP/exacly-plan.md"
+        comment="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+          --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- exacly-plan -->"))) | .id' \
+          | head -n 1)"
+        if [ -n "$comment" ]; then
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$comment" -F "body=@$plan" > /dev/null
+        else
+          gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F "body=@$plan" > /dev/null
+        fi

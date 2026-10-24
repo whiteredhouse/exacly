@@ -42,6 +42,7 @@ Its ideas come from established practice:
 | [`spec/`](spec/README.md) | Specification versions, JSON Schemas, worked examples and data-driven test cases |
 | [`validator/`](validator/README.md) | `exacly-validate`, the Python validator |
 | [`skills/`](skills/exacly/SKILL.md) | The skill that tells coding agents how to work with a model |
+| [`action.yml`](action.yml) | The GitHub Action that checks a model and comments the plan in other repositories |
 | [`docs/`](docs/) | Research and pilot notes |
 
 ## Quick start
@@ -54,6 +55,42 @@ exacly-validate spec/examples/0.2/invoice-reminders
 ```
 
 In your own project, keep config in `spec/exacly/` and pass the commit it was validated at with `--revision "$(git rev-parse HEAD)"`.
+
+## In CI
+
+Other repositories run Exacly with the [action](action.yml) at this repository's root. `check` validates the model and fails the job when it doesn't conform. `plan` comments the change plan on each pull request, replacing its earlier comment. Both write their report to the job summary. The action installs the validator from its own files with uv and `uv.lock`, so it needs no PyPI package.
+
+```yaml
+# .github/workflows/exacly.yml
+name: Exacly
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: whiteredhouse/exacly@main # Pin a commit SHA. Version tags come with the first release.
+        with:
+          model: spec/exacly
+  plan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    concurrency:
+      group: exacly-plan-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: whiteredhouse/exacly@main
+        with:
+          mode: plan
+          model: spec/exacly
+```
+
+`model` takes files or folders, one per line or separated by spaces. `plan` compares with the pull request's base branch, or with `base` when given. A pull request from a fork gets a read-only token, so its plan stays in the job summary. The action runs on Linux and macOS runners.
 
 ## Development
 

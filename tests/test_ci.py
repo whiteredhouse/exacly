@@ -85,8 +85,10 @@ def test_the_plan_is_commented_only_on_pull_requests_from_this_repository() -> N
     assert plan["if"] == (
         "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository"
     )
-    script = run_steps("plan")
-    assert 'exacly view plan --base "origin/$BASE"' in script
-    # The base branch's name reaches the script through the environment, never pasted into it.
-    assert "${{" not in script
-    assert "<!-- exacly-plan -->" in script
+    # The plan is written and commented by the action that other repositories use (tests/test_action.py).
+    assert {"uses": "./", "with": {"mode": "plan"}} in plan["steps"]
+
+
+def test_the_action_is_checked_on_exacly_itself() -> None:
+    assert any(step.get("uses") == "./" for step in JOBS["check"]["steps"])
+    assert "action.yml" in WORKFLOW[True]["pull_request"]["paths"]
