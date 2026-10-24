@@ -155,6 +155,77 @@ cases:
     findings:
       - { severity: error, rule: "7.1", record: OUT-001, document: billing }
 
+  - description: "7.1: an active Outcome cannot rely only on a retired Measure"
+    base: active
+    patch:
+      - { op: replace, path: /billing/records/9/lifecycle, value: retired }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "7.1", record: OUT-001, document: billing }
+
+  - description: "7.1: a proposed Measure still justifies an active Outcome"
+    base: active
+    patch:
+      - { op: replace, path: /billing/records/9/lifecycle, value: proposed }
+    result: conforms
+    findings: []
+
+  - description: "7.1: a proposed replacement Measure satisfies the rule beside a retired Measure"
+    base: active
+    patch:
+      - { op: replace, path: /billing/records/9/lifecycle, value: retired }
+      - { op: copy, from: /billing/records/9, path: /billing/records/- }
+      - { op: replace, path: /billing/records/10/id, value: MEAS-002 }
+      - { op: replace, path: /billing/records/10/lifecycle, value: proposed }
+      - { op: add, path: /billing/relationships/-, value: { source: MEAS-002, type: evaluates, target: OUT-001 } }
+    result: conforms
+    findings: []
+
+  - description: "7.1: an active replacement Measure satisfies the rule beside a retired Measure"
+    base: active
+    patch:
+      - { op: replace, path: /billing/records/9/lifecycle, value: retired }
+      - { op: copy, from: /billing/records/9, path: /billing/records/- }
+      - { op: replace, path: /billing/records/10/id, value: MEAS-002 }
+      - { op: replace, path: /billing/records/10/lifecycle, value: active }
+      - { op: add, path: /billing/relationships/-, value: { source: MEAS-002, type: evaluates, target: OUT-001 } }
+    result: conforms
+    findings: []
+
+  - description: "7.1: a proposed Outcome linked only to a retired Measure has a warning"
+    base: proposed
+    patch:
+      - { op: replace, path: /billing/records/9/lifecycle, value: retired }
+    result: conforms
+    findings:
+      - { severity: warning, rule: "7.1", record: OUT-001, document: billing }
+
+  - description: "7.1: a retired Outcome and its retired Measure remain available historically"
+    base: proposed
+    patch:
+      - { op: replace, path: /billing/records/0/lifecycle, value: retired }
+      - { op: replace, path: /billing/records/1/lifecycle, value: retired }
+      - { op: replace, path: /billing/records/2/lifecycle, value: retired }
+      - { op: replace, path: /billing/records/3/lifecycle, value: retired }
+      - { op: replace, path: /billing/records/4/lifecycle, value: retired }
+      - { op: replace, path: /billing/records/5/lifecycle, value: retired }
+      - { op: replace, path: /billing/records/6/lifecycle, value: retired }
+      - { op: replace, path: /billing/records/7/lifecycle, value: retired }
+      - { op: replace, path: /billing/records/8/lifecycle, value: retired }
+      - { op: replace, path: /billing/records/9/lifecycle, value: retired }
+    result: conforms
+    findings: []
+
+  - description: "7.1: an exception can waive the lack of a proposed or active Measure"
+    base: active
+    patch:
+      - { op: replace, path: /billing/records/9/lifecycle, value: retired }
+      - { op: add, path: /billing/exceptions, value: [{ rule: "7.1", record: OUT-001, reason: Replacement Measure is being defined, owner: billing-team, expires_at: "2027-03-01" }] }
+    result: conforms with exceptions
+    findings: []
+    waived:
+      - { rule: "7.1", record: OUT-001 }
+
   - description: Only Infrastructure stores Information
     base: active
     patch:
