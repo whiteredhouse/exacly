@@ -109,6 +109,7 @@ records:
       - The plan starts with a marker, so CI replaces its earlier comment instead of adding another.
       - The site has an index and a page per record, every local link resolves, and pages have no scripts.
       - Text from the model is escaped.
+      - Record pages are named so that no ID can write outside the records folder or onto another page, only http and https evidence is a link, and regenerating removes pages of records no longer in the model.
       - CI comments the plan on pull requests from the repository itself, with no permission beyond reading the code and writing pull request comments.
     verification_method: View tests and workflow tests in CI.
     observe:

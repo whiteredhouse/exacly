@@ -4,6 +4,7 @@ Run with `mise run test`, or from the repository root: uv run pytest validator/t
 """
 
 import contextlib
+import copy
 import io
 import tempfile
 from html.parser import HTMLParser
@@ -107,6 +108,53 @@ class TestSite:
         billing["records"][0]["name"] = "<script>alert(1)</script>"
         page = views.record_page(query.load(docs), "OUT-001")
         assert "<script>" not in page and "&lt;script&gt;" in page
+
+    def test_record_ids_cannot_write_outside_the_records_folder(self) -> None:
+        docs = documents()
+        billing = next(d for name, d in docs.items() if name.endswith("billing.yaml"))
+        out_001 = next(r for r in billing["records"] if r["id"] == "OUT-001")
+        billing["records"] += [{**copy.deepcopy(out_001), "id": rid} for rid in ("../../outside", "../index", "a/b")]
+        with tempfile.TemporaryDirectory() as folder:
+            out = Path(folder) / "site"
+            written = views.site(query.load(docs), out)
+            assert all(path.parent == out / "records" for path in written[1:])
+            assert len(set(written)) == len(written) == len(query.load(docs).records) + 1
+            assert sorted(p.relative_to(folder).as_posix() for p in Path(folder).rglob("*") if p.is_file()) == sorted(
+                p.relative_to(folder).as_posix() for p in written
+            )
+            assert "<h1>Freelancer invoicing</h1>" in (out / "index.html").read_text()
+            index = (out / "index.html").read_text()
+            for href in links(index):
+                if href.startswith("records/"):
+                    assert (out / href).exists(), href
+            assert f'href="records/{views.page_name("../index")}"' in index
+
+    def test_only_web_evidence_is_a_link(self) -> None:
+        docs = documents()
+        evidence = docs["state/production.json"]["records"]["REQ-001"]["assessments"][0]["evidence"]
+        evidence += [
+            {**evidence[0], "locator": "javascript:alert(document.domain)", "claim": "Script"},
+            {**evidence[0], "locator": " JavaScript:alert(1)", "claim": "Spaced"},
+            {**evidence[0], "locator": "validator/tests/test_views.py", "claim": "A file"},
+        ]
+        page = views.record_page(query.load(docs), "REQ-001")
+        assert all(href.startswith("https://") or ":" not in href for href in links(page)), links(page)
+        assert "Script <code>javascript:alert(document.domain)</code>" in page
+        assert "A file <code>validator/tests/test_views.py</code>" in page
+        assert '<a href="https://ci.example/runs/7">' in page
+
+    def test_regenerating_removes_pages_of_deleted_records(self) -> None:
+        docs = documents()
+        with tempfile.TemporaryDirectory() as folder:
+            out = Path(folder)
+            views.site(query.load(docs), out)
+            (out / "notes.html").write_text("kept")
+            billing = next(d for name, d in docs.items() if name.endswith("billing.yaml"))
+            billing["records"] = [r for r in billing["records"] if r["id"] != "OUT-001"]
+            written = views.site(query.load(docs), out)
+            assert not (out / "records" / "OUT-001.html").exists()
+            assert sorted((out / "records").iterdir()) == sorted(written[1:])
+            assert (out / "notes.html").read_text() == "kept"
 
 
 def test_the_view_command() -> None:

@@ -7,9 +7,12 @@ Both are derived from the query core's answers, so they say what `exacly impact`
 
 from __future__ import annotations
 
+import hashlib
 import html
+import re
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from exacly_validate import query
 
@@ -25,6 +28,8 @@ TYPES = {
     "Application": "Applications",
     "Infrastructure": "Infrastructure",
 }
+SAFE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
+LINKED_SCHEMES = {"http", "https"}
 GOOD = {"passed", "released", "healthy", "target_met"}
 BAD = {"failed", "withdrawn", "unavailable", "degraded", "target_not_met"}
 
@@ -169,8 +174,24 @@ def chips(status: dict[str, dict[str, str]]) -> str:
     return "".join(chip(d, s, c) for c, dims in sorted(status.items()) for d, s in sorted(dims.items()))
 
 
+def page_name(rid: str) -> str:
+    """The file name of a record's page. IDs that are not plain names, such as ../index, get a name made of their
+    safe characters and a hash, so that no ID can write outside the records folder or onto another page."""
+    if SAFE_NAME.fullmatch(rid):
+        return f"{rid}.html"
+    return f"{re.sub(r'[^A-Za-z0-9_-]', '_', rid)}-{hashlib.sha256(rid.encode()).hexdigest()[:12]}.html"
+
+
 def link(node: Doc, prefix: str = "") -> str:
-    return f'<a href="{prefix}{e(node["id"])}.html"><code>{e(node["id"])}</code></a> {e(node["name"])}'
+    return f'<a href="{prefix}{e(page_name(node["id"]))}"><code>{e(node["id"])}</code></a> {e(node["name"])}'
+
+
+def evidence(ev: Doc) -> str:
+    """A link for web evidence; any other locator, such as javascript: or a file path, is shown as text."""
+    locator = str(ev["locator"])
+    if urlsplit(locator).scheme.lower() in LINKED_SCHEMES:
+        return f'<a href="{e(locator)}">{e(ev["claim"])}</a>'
+    return f"{e(ev['claim'])} <code>{e(locator)}</code>"
 
 
 def tree_html(node: Doc) -> str:
@@ -200,7 +221,7 @@ def record_page(model: query.Model, rid: str) -> str:
     for context, observed in sorted(shown["state"].items()):
         rows = "".join(
             f"<tr><td>{chip(a['dimension'], a['state'])}</td><td>{e(a.get('reason', ''))}</td><td>"
-            + "<br>".join(f'<a href="{e(ev["locator"])}">{e(ev["claim"])}</a>' for ev in a["evidence"])
+            + "<br>".join(evidence(ev) for ev in a["evidence"])
             + f'</td><td class="mono">{e(a["at"])}</td></tr>'
             for a in observed.get("assessments", [])
         )
@@ -289,12 +310,16 @@ def index_page(model: query.Model) -> str:
 
 
 def site(model: query.Model, out: Path) -> list[Path]:
-    """Write the site into `out`: index.html, and records/<ID>.html for each record. Returns the files written."""
-    (out / "records").mkdir(parents=True, exist_ok=True)
+    """Write the site into `out`: index.html, and a page in records/ for each record, removing pages there of
+    records no longer in the model. Returns the files written."""
+    records = out / "records"
+    records.mkdir(parents=True, exist_ok=True)
     written = [out / "index.html"]
     written[0].write_text(index_page(model))
     for rid in sorted(model.records):
-        path = out / "records" / f"{rid}.html"
+        path = records / page_name(rid)
         path.write_text(record_page(model, rid))
         written.append(path)
+    for stale in set(records.glob("*.html")) - set(written):
+        stale.unlink()
     return written
