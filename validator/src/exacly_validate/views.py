@@ -51,14 +51,14 @@ def plan(change: Doc, gaps: Doc, base: str) -> str:
     records, relationships, impact = change["records"], change["relationships"], change["impact"]
     counts = {kind: len(records[kind]) for kind in ("added", "changed", "removed")}
     lines = [MARKER, "### Exacly plan", ""]
-    if not any(counts.values()) and not relationships["added"] and not relationships["removed"]:
+    if not any(counts.values()) and not any(relationships.values()):
         lines.append(f"No change to the model since `{base}`.")
     else:
         summary = ", ".join(f"{n} {kind}" for kind, n in counts.items() if n) or "no records changed"
-        rels = len(relationships["added"]) + len(relationships["removed"])
+        rels = sum(len(found) for found in relationships.values())
         lines.append(
             f"Against `{base}`: {summary}"
-            + (f", {rels} relationship{'s' * (rels != 1)} added or removed" if rels else "")
+            + (f", {rels} relationship{'s' * (rels != 1)} added, changed or removed" if rels else "")
             + f". It affects {len(impact['affected'])} other record{'s' * (len(impact['affected']) != 1)}"
             + (f" and reaches {', '.join(impact['outcomes'])}." if impact["outcomes"] else ".")
         )
@@ -67,8 +67,12 @@ def plan(change: Doc, gaps: Doc, base: str) -> str:
             for r in records[kind]:
                 fields = ", ".join(f"`{f}`" for f in r.get("fields", []))
                 lines.append(f"| {sign} | `{r['id']}` | {r['type']} | {cell(r['name'])} | {fields} |")
-        for kind, sign in (("added", "+"), ("removed", "-")):
-            lines += [f"| {sign} | | relationship | `{cell(rel)}` | |" for rel in relationships[kind]]
+        lines += [f"| + | | relationship | `{cell(rel)}` | |" for rel in relationships["added"]]
+        lines += [
+            f"| ~ | | relationship | `{cell(r['relationship'])}` | {', '.join(f'`{f}`' for f in r['fields'])} |"
+            for r in relationships["changed"]
+        ]
+        lines += [f"| - | | relationship | `{cell(rel)}` | |" for rel in relationships["removed"]]
         if impact["affected"]:
             lines += ["", "<details><summary>Affected records</summary>", ""]
             lines += [

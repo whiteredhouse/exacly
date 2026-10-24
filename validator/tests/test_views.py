@@ -34,13 +34,23 @@ class TestPlan:
         change = query.change_impact(model(), TestChanges().edited())
         text = views.plan(change, query.gaps(model()), "main")
         assert text.startswith(views.MARKER + "\n### Exacly plan\n")
-        assert "Against `main`: 1 changed, 1 removed, 1 relationship added or removed." in text
+        assert "Against `main`: 1 changed, 1 removed, 1 relationship added, changed or removed." in text
         assert "| ~ | `INF-001` | Infrastructure |" in text and "`description`" in text
         assert "| - | `INF-002` | Infrastructure |" in text
         assert "| - | | relationship | `APP-001 --depends_on--> INF-002` | |" in text
         assert "- `APP-001` Reminder service, its relationships changed" in text
         assert "- `REQ-001` Remind before due date: the job's result in `ci.yml`" in text
         assert "Validation: **conforms**, 0 errors," in text
+
+    def test_a_change_to_a_relationship_alone(self) -> None:
+        docs = documents()
+        billing = next(d for name, d in docs.items() if name.endswith("billing.yaml"))
+        next(r for r in billing["relationships"] if r["type"] == "stores")["role"] = "replica"
+        changed = query.load(docs)
+        text = views.plan(query.change_impact(model(), changed), query.gaps(changed), "main")
+        assert "Against `main`: no records changed, 1 relationship added, changed or removed." in text
+        assert "| ~ | | relationship | `INF-003 --stores--> INFO-001` | `role` |" in text
+        assert "- `INFO-001` Invoice, its relationships changed" in text
 
     def test_no_change(self) -> None:
         text = views.plan(query.change_impact(model(), model()), query.gaps(model()), "abc123")

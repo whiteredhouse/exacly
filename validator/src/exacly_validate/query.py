@@ -42,6 +42,7 @@ class Model:
     graph: Graph
     report: Report
     states: dict[str, Doc] = field(default_factory=dict)
+    relationships: list[Doc] = field(default_factory=list)  # As authored, including references to other models
 
     @property
     def records(self) -> dict[str, Doc]:
@@ -109,7 +110,7 @@ def load(documents: Mapping[str, Any], date: dt.date | None = None, revision: st
     graph = Graph(merged, Report(merged, report.date), sources)
     read = {s["document"] for s in report.states}
     states = {d["context"]: d for n, d in documents.items() if n in read}
-    return Model(graph, report, states)
+    return Model(graph, report, states, merged["relationships"])
 
 
 def finding(f: Any) -> Doc:
@@ -264,10 +265,7 @@ def changes(base: Model, head: Model) -> Doc:
     removed = sorted(set(before) - set(after))
     changed = sorted(rid for rid in set(before) & set(after) if before[rid] != after[rid])
 
-    def edges(model: Model) -> dict[tuple[str, str, str], Edge]:
-        return {(e.source, e.type, e.target): e for e in model.graph.edges}
-
-    old, new = edges(base), edges(head)
+    old, new = authored(base), authored(head)
     return {
         "records": {
             "added": [head.summary(rid) for rid in added],
@@ -283,36 +281,61 @@ def changes(base: Model, head: Model) -> Doc:
             "removed": [base.summary(rid) for rid in removed],
         },
         "relationships": {
-            "added": [new[k].label for k in sorted(set(new) - set(old))],
-            "removed": [old[k].label for k in sorted(set(old) - set(new))],
+            "added": [label(new[k]) for k in sorted(new.keys() - old.keys())],
+            "changed": [
+                {"relationship": label(new[k]), "fields": differing(old[k], new[k])}
+                for k in sorted(new.keys() & old.keys())
+                if differing(old[k], new[k])
+            ],
+            "removed": [label(old[k]) for k in sorted(old.keys() - new.keys())],
         },
     }
 
 
-def reliant(e: Edge) -> set[str]:
-    """The end of a relationship that relies on the other: the reason end, or both when neither is."""
-    if e.type in WHY_IS_TARGET:
-        return {e.target}
-    if e.type in WHY_IS_SOURCE:
-        return {e.source}
-    return {e.source, e.target}
+def authored(model: Model) -> dict[tuple[str, str, str], Doc]:
+    """The model's relationships as authored, by identity (section 6), with endpoints in this model made local.
+    A relationship with an `id` is identified by it; any other by its source, type and target."""
+    found = {}
+    for rel in model.relationships:
+        local = {**rel, "source": model.graph.key(rel)[0], "target": model.graph.key(rel)[2]}
+        found[("id", rel["id"], "") if "id" in rel else model.graph.key(rel)] = local
+    return found
+
+
+def label(rel: Doc) -> str:
+    return f"{rel['source']} --{rel['type']}--> {rel['target']}"
+
+
+def differing(old: Doc, new: Doc) -> list[str]:
+    return sorted(k for k in old.keys() | new.keys() if old.get(k) != new.get(k))
+
+
+def reliant(model: Model, rel: Doc) -> set[str]:
+    """The records in `model` at the end of a relationship that relies on the other: the reason end, or both
+    when neither is. An end in another model is left out."""
+    if rel["type"] in WHY_IS_TARGET:
+        ends = {rel["target"]}
+    elif rel["type"] in WHY_IS_SOURCE:
+        ends = {rel["source"]}
+    else:
+        ends = {rel["source"], rel["target"]}
+    return {end for end in ends if end in model.records}
 
 
 def change_impact(base: Model, head: Model) -> Doc:
     """The changes from `base` to `head`, and what they affect. Added and changed records are traced in `head`;
-    removed ones in `base`, keeping only what still exists in `head`. An added or removed relationship changes
-    the record that relies on the other end: a Requirement that gains an implementer, or an Application that
-    reads new Information, but not the Information itself."""
+    removed ones in `base`, keeping only what still exists in `head`. A relationship added, changed or removed
+    changes the record that relies on the other end: a Requirement that gains an implementer, or an Application
+    that reads new Information, but not the Information itself."""
     diff = changes(base, head)
     touched = {r["id"] for kind in ("added", "changed") for r in diff["records"][kind]}
     removed = {r["id"] for r in diff["records"]["removed"]}
-    for e in head.graph.edges:
-        if e.label in diff["relationships"]["added"]:
-            touched |= reliant(e)
-    for e in base.graph.edges:
-        if e.label in diff["relationships"]["removed"]:
-            for rid in reliant(e):
-                (touched if rid in head.records else removed).add(rid)
+    old, new = authored(base), authored(head)
+    for key in new.keys() - old.keys() | {k for k in new.keys() & old.keys() if differing(old[k], new[k])}:
+        touched |= reliant(head, new[key])
+    for key in old.keys() - new.keys():
+        for rid in reliant(base, old[key]):
+            (touched if rid in head.records else removed).add(rid)
     result = impact(head, touched)
     # A record whose relationships changed, but not its fields, is affected rather than changed.
     edited = {r["id"] for kind in ("added", "changed") for r in diff["records"][kind]}

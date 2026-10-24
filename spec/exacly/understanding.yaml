@@ -52,7 +52,9 @@ records:
       - An unknown record is an error that suggests close IDs; a reference qualified with the model's namespace works.
       - Trace follows supports, uses_capability, contributes_to, implements, evaluates and stores up, and uses, reads, writes, depends_on and contains the other way, marking a record reached twice instead of repeating its branches.
       - Impact lists every record that relies on the changed ones with the shortest path, the Outcomes reached, and the Requirements to check again with their bindings.
-      - Impact against a Git revision lists records added, changed (with the fields) and removed, and relationships added and removed, and traces removals in the earlier model.
+      - Impact against a Git revision lists records and relationships added, changed (with the fields) and removed, including relationships to other models, and traces removals in the earlier model.
+      - A relationship added, changed or removed affects the record that relies on the other end.
+      - Impact against a Git revision works with a relative or absolute model path.
       - Gaps lists the validator's findings, Requirements not verified or not released in any context, Requirements without a binding, proposed Measures and pending work.
       - Every answer is available as JSON.
     verification_method: Query tests in CI.
