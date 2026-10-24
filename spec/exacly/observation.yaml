@@ -1,5 +1,5 @@
-# Exacly's own model: observing a model's reality. The refresh command exists; running
-# it on main, and the measure it feeds, are proposed.
+# Exacly's own model: observing a model's reality. Refresh runs in CI and commits state
+# from main; the measure it feeds is proposed.
 # Config: records, relationships and bindings, authored by people and agents (section 9).
 exacly: "0.2.0"
 
@@ -9,14 +9,14 @@ records:
     name: Observe a model's reality
     description: Record what the product's tests, deployments and measures show, as state.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence:
       - locator: "https://github.com/whiteredhouse/exacly/pull/5"
         kind: decision
         claim: Config and state are split; state is written only by tooling and committed by CI on main.
         observed_at: "2026-10-23"
         applies_to: spec 0.2.0
-    last_reviewed_at: "2026-10-23"
+    last_reviewed_at: "2026-10-24"
     scope: Writing state from the sources a model's bindings name; excludes changing the product.
 
   - id: PROC-002
@@ -24,9 +24,9 @@ records:
     name: Refresh state on main
     description: How state follows main after each change is adopted.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-23"
+    last_reviewed_at: "2026-10-24"
     perspective: business
     actors: [CI]
     trigger: A push to main that changes the product or its model
@@ -35,9 +35,10 @@ records:
       - Refresh reads the bindings and the results, and writes state
       - Validation checks the new state against the config
       - CI commits the state to main
-    completion: State on main describes the latest commit
+    completion: State on main describes the latest checked commit
     exceptions:
-      - Results cannot be read (state records the assessment as unknown, with the reason)
+      - A check fails (state is not written, and the earlier state stays, naming its earlier revision)
+      - main moved on before the commit (the state is dropped; the next push refreshes it)
 
   - id: REQ-010
     type: Requirement
@@ -63,7 +64,6 @@ records:
     observe:
       tests:
         workflow: .github/workflows/spec.yml
-        job: check
         cases:
           - "validator/tests/test_refresh.py::*"
 

@@ -22,5 +22,32 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
-      - name: Test, lint, type-check and validate the examples
+      - name: Test, lint, type-check, validate the examples, and refresh and validate Exacly's own state
         run: mise run check
+
+  state:
+    # State is written only by tooling and committed only from main (spec section 9).
+    # This job reruns the checks rather than reusing the check job's reports, so that only
+    # it holds a token that can write, and only on main.
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: exacly-state
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
+      - name: Refresh Exacly's own state
+        run: mise run model
+      - name: Commit the state to main
+        run: |
+          mkdir -p spec/exacly/state
+          cp reports/state/main.json spec/exacly/state/main.json
+          git add spec/exacly/state/main.json
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "Refresh Exacly's own state for ${GITHUB_SHA::7} [skip ci]"
+          # If main moved on meanwhile, this state is already stale: drop it, and the next push refreshes.
+          git push origin HEAD:refs/heads/main || echo "::notice::main moved on; the next push to main refreshes the state"

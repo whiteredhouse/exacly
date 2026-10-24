@@ -11,7 +11,8 @@ run = "uv sync --locked"
 [tasks.test]
 description = "Run the schema and validator test cases"
 depends = ["sync"]
-run = "uv run --locked pytest spec/tests validator/tests"
+# Each test case's result goes to reports/junit.xml, which the model task reads.
+run = "uv run --locked pytest spec/tests validator/tests --junitxml=reports/junit.xml"
 
 [tasks.lint]
 description = "Check style and formatting with Ruff"
@@ -29,10 +30,20 @@ depends = ["sync"]
 run = 'for f in spec/examples/0.1/*.yaml spec/examples/0.2/*/; do uv run --locked exacly-validate "$f" || exit 1; done'
 
 [tasks.model]
-description = "Validate Exacly's own model against the current commit"
-depends = ["sync"]
-run = 'uv run --locked exacly-validate spec/exacly --revision "$(git rev-parse HEAD)"'
+description = "Refresh Exacly's own state from the test results into reports/state/, and validate it with the config"
+# It runs only once every other check has passed, so the job status it reports is success.
+depends = ["test", "lint", "typecheck", "examples"]
+run = """
+set -e
+revision="$(git rev-parse HEAD)"
+mkdir -p reports/state
+rm -f reports/state/main.json
+if [ -f spec/exacly/state/main.json ]; then cp spec/exacly/state/main.json reports/state/main.json; fi
+uv run --locked exacly-refresh spec/exacly/*.yaml --context main --state reports/state/main.json \
+  --junit reports/junit.xml --distribution --job-status success --revision "$revision"
+uv run --locked exacly-validate spec/exacly/*.yaml reports/state/main.json --revision "$revision"
+"""
 
 [tasks.check]
 description = "Everything CI runs"
-depends = ["test", "lint", "typecheck", "examples", "model"]
+depends = ["model"]

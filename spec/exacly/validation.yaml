@@ -1,7 +1,7 @@
 # Exacly's own model: checking a model, which exists today.
 # Config: records, relationships and bindings, authored by people and agents (section 9).
-# A `tests` binding names the CI workflow and job, and, optionally, the test cases
-# that verify the record as glob patterns over case IDs `<cases file>::<description>`.
+# A `tests` binding names the CI workflow (and may name its job) and, optionally, the
+# test cases that verify the record as glob patterns over case IDs `<cases file>::<description>`.
 # Without `cases`, the job's own result is the evidence.
 exacly: "0.2.0"
 
@@ -66,7 +66,6 @@ records:
     observe:
       tests:
         workflow: .github/workflows/spec.yml
-        job: check
         cases:
           - "spec/tests/*/cases.yaml::*"
           - "validator/tests/*/cases.yaml::*fails*schema*"
@@ -89,7 +88,6 @@ records:
     observe:
       tests:
         workflow: .github/workflows/spec.yml
-        job: check
         cases:
           - "validator/tests/*/cases.yaml::Duplicate*"
           - "validator/tests/*/cases.yaml::IDs must be unique*"
@@ -118,7 +116,6 @@ records:
     observe:
       tests:
         workflow: .github/workflows/spec.yml
-        job: check
         cases:
           - "validator/tests/*/cases.yaml::7.*"
           - "validator/tests/*/cases.yaml::The worked example*"
@@ -141,7 +138,6 @@ records:
     observe:
       tests:
         workflow: .github/workflows/spec.yml
-        job: check
         cases:
           - "validator/tests/*/cases.yaml::*specification version*"
           - "validator/tests/*/cases.yaml::*model boundary*"
@@ -164,7 +160,6 @@ records:
     observe:
       tests:
         workflow: .github/workflows/spec.yml
-        job: check
         cases:
           - "validator/tests/*/cases.yaml::State *"
           - "validator/tests/*/cases.yaml::Pending work*"
@@ -188,7 +183,6 @@ records:
     observe:
       tests:
         workflow: .github/workflows/spec.yml
-        job: check
         cases:
           - "validator/tests/*/cases.yaml::*exception*"
 
@@ -209,7 +203,6 @@ records:
     observe:
       tests:
         workflow: .github/workflows/spec.yml
-        job: check
         cases:
           - "validator/tests/*/cases.yaml::*findings*"
           - "validator/tests/*/cases.yaml::Findings*"
@@ -232,7 +225,6 @@ records:
     observe:
       tests:
         workflow: .github/workflows/spec.yml
-        job: check
         cases:
           - "validator/tests/*/cases.yaml::*reviewed*"
           - "validator/tests/*/cases.yaml::An unknown baseline*"
@@ -250,9 +242,9 @@ records:
     acceptance_criteria:
       - The check job runs `mise run check` on pull requests and pushes to main.
       - The job fails when any test, lint rule, type check or validation fails.
-    verification_method: The check job's result on main.
+    verification_method: The checks' result in the workflow run on main.
     observe:
-      tests: { workflow: .github/workflows/spec.yml, job: check }
+      tests: { workflow: .github/workflows/spec.yml }
 
   - id: REQ-011
     type: Requirement
