@@ -202,13 +202,48 @@ class TestChanges:
         assert diff["records"]["added"] == []
         assert diff["records"]["changed"] == [{**query.Model.summary(model(), "INF-001"), "fields": ["description"]}]
         assert ids(diff["records"]["removed"]) == ["INF-002"]
-        assert diff["relationships"] == {"added": [], "removed": ["APP-001 --depends_on--> INF-002"]}
+        assert diff["relationships"] == {"added": [], "changed": [], "removed": ["APP-001 --depends_on--> INF-002"]}
 
     def test_the_impact_of_a_removal_is_traced_in_the_base(self) -> None:
         answer = query.change_impact(model(), self.edited())["impact"]
-        assert ids(answer["changed"]) == ["APP-001", "INF-001"]  # APP-001 lost a relationship.
+        assert ids(answer["changed"]) == ["INF-001"]
+        # APP-001 relied on the removed INF-002: losing that relationship affects it, though its fields didn't change.
+        assert answer["affected"][0] == {**query.Model.summary(model(), "APP-001"), "path": ["APP-001"]}
         assert "OUT-001" in answer["outcomes"]
         assert ids(answer["recheck"]) == ["REQ-001"]
+
+    def test_relationship_fields_and_external_references(self) -> None:
+        docs = documents()
+        billing = next(d for name, d in docs.items() if name.endswith("billing.yaml"))
+        rels = billing["relationships"]
+        next(r for r in rels if r["target"] == "INF-001")["conditions"] = "Also for retries."
+        next(r for r in rels if r["type"] == "stores")["role"] = "replica"
+        rels.append({"source": "APP-001", "type": "depends_on", "target": "mail:SMTP-1"})
+        diff = query.changes(model(), query.load(docs))
+        assert diff["records"] == {"added": [], "changed": [], "removed": []}
+        assert diff["relationships"] == {
+            "added": ["APP-001 --depends_on--> mail:SMTP-1"],
+            "changed": [
+                {"relationship": "APP-001 --depends_on--> INF-001", "fields": ["conditions"]},
+                {"relationship": "INF-003 --stores--> INFO-001", "fields": ["role"]},
+            ],
+            "removed": [],
+        }
+
+    def test_a_changed_relationship_affects_the_record_that_relies_on_it(self) -> None:
+        docs = documents()
+        billing = next(d for name, d in docs.items() if name.endswith("billing.yaml"))
+        next(r for r in billing["relationships"] if r["type"] == "stores")["role"] = "replica"
+        answer = query.change_impact(model(), query.load(docs))["impact"]
+        # Information is why its storage exists, so the Information relies on the stores relationship.
+        assert answer["affected"][0] == {**query.Model.summary(model(), "INFO-001"), "path": ["INFO-001"]}
+        assert "APP-001" in ids(answer["affected"])
+
+    def test_a_qualified_reference_to_the_model_itself_is_the_same_relationship(self) -> None:
+        docs = documents()
+        billing = next(d for name, d in docs.items() if name.endswith("billing.yaml"))
+        next(r for r in billing["relationships"] if r["type"] == "evaluates")["target"] = "invoicing:OUT-001"
+        assert query.changes(model(), query.load(docs))["relationships"] == {"added": [], "changed": [], "removed": []}
 
     def test_from_an_empty_base(self) -> None:
         diff = query.change_impact(query.empty("invoicing"), model())
@@ -251,7 +286,7 @@ class TestCommand:
         assert code == 0 and "conforms" in out
 
     def test_impact_against_a_git_revision(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        with tempfile.TemporaryDirectory() as folder:
+        with tempfile.TemporaryDirectory() as folder, tempfile.TemporaryDirectory() as folder_outside:
             repo = Path(folder)
             model_dir = repo / "spec" / "exacly"
             model_dir.mkdir(parents=True)
@@ -276,3 +311,10 @@ class TestCommand:
             assert json.loads(out)["impact"]["recheck"][0]["id"] == "REQ-001"
             code, _, err = run("impact", "--base", "no-such-revision")
             assert code == 1 and "git failed" in err
+            # An absolute model path, from inside the repository and from outside it.
+            assert run("impact", "--base", "HEAD", "-m", str(model_dir))[1].startswith("~ INF-003 Infrastructure: ")
+            monkeypatch.chdir(folder_outside)
+            assert run("impact", "--base", "HEAD", "-m", str(model_dir))[1].startswith("~ INF-003 Infrastructure: ")
+            assert run(
+                "impact", "--base", "HEAD", "-m", str(model_dir / "billing.yaml"), "-m", str(model_dir / "model.yaml")
+            )[1].startswith("~ INF-003 Infrastructure: ")

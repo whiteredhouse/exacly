@@ -43,17 +43,24 @@ def load(paths: list[Path]) -> dict[str, Any]:
 
 
 def load_at(revision: str, paths: list[Path]) -> dict[str, Any]:
-    """As `load`, but the files as they were at a Git revision."""
+    """As `load`, but the files as they were at a Git revision. Paths may be relative or absolute, inside the
+    repository that holds them; documents are named by their path in that repository."""
 
-    def git(*args: str) -> str:
-        return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
+    def git(where: Path, *args: str) -> str:
+        return subprocess.run(["git", "-C", str(where), *args], check=True, capture_output=True, text=True).stdout
 
     documents = {}
     for path in paths:
-        for name in git("ls-tree", "-r", "--name-only", revision, "--", str(path)).splitlines():
+        path = path.resolve()
+        top = Path(git(path if path.is_dir() else path.parent, "rev-parse", "--show-toplevel").strip()).resolve()
+        try:
+            inside = path.relative_to(top)
+        except ValueError as error:
+            raise query.QueryError(f"{path} is not in the Git repository at {top}") from error
+        for name in git(top, "ls-tree", "-r", "--name-only", revision, "--", str(inside)).splitlines():
             file = Path(name)
-            if file == path or wanted(file, path):
-                documents[name] = yaml.safe_load(git("show", f"{revision}:./{name}"))
+            if file == inside or wanted(file, inside):
+                documents[name] = yaml.safe_load(git(top, "show", f"{revision}:{name}"))
     return documents
 
 
@@ -236,8 +243,9 @@ def impact_text(answer: dict[str, Any]) -> str:
             for r in answer["records"][kind]:
                 fields = f" ({', '.join(r['fields'])})" if r.get("fields") else ""
                 lines.append(f"{sign} {r['id']} {r['type']}: {r['name']}{fields}")
-        for kind, sign in (("added", "+"), ("removed", "-")):
-            lines += [f"{sign} {rel}" for rel in answer["relationships"][kind]]
+        lines += [f"+ {rel}" for rel in answer["relationships"]["added"]]
+        lines += [f"~ {r['relationship']} ({', '.join(r['fields'])})" for r in answer["relationships"]["changed"]]
+        lines += [f"- {rel}" for rel in answer["relationships"]["removed"]]
         if not lines:
             return "No changes to the model."
         lines.append("")
