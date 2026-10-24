@@ -163,6 +163,20 @@ def test_a_model_that_does_not_parse_is_a_tool_error() -> None:
         )
 
 
+def test_a_value_yaml_cant_construct_is_a_tool_error() -> None:
+    with tempfile.TemporaryDirectory() as folder:
+        broken = Path(folder)
+        for name in ("model.yaml", "billing.yaml"):
+            (broken / name).write_text((EXAMPLE / name).read_text())
+        billing = (broken / "billing.yaml").read_text()
+        billing = billing.replace("last_reviewed_at: null", "last_reviewed_at: 2026-13-24", 1)
+        (broken / "billing.yaml").write_text(billing)
+        result = mcp.Server([broken], ask).call("exacly_gaps", {})
+        assert result["isError"] is True
+        problem = "line 15, column 23: '2026-13-24' is not a valid timestamp: month must be in 1..12"
+        assert result["content"][0]["text"] == f"{broken / 'billing.yaml'} is not valid YAML at {problem}"
+
+
 def test_arguments_that_are_not_an_object_are_rejected() -> None:
     wrongs: list[Any] = [False, 0, [], ""]
     for wrong in wrongs:

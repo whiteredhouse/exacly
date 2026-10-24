@@ -57,6 +57,7 @@ records:
       - Impact against a Git revision works with a relative or absolute model path, and with file names Git would quote.
       - Gaps lists the validator's findings, Requirements not verified or not released in any context, Requirements without a binding, proposed Measures and pending work.
       - Every answer is available as JSON.
+      - A config file that doesn't parse, or holds a value YAML can't construct, is an error naming the file and line, not a traceback.
     verification_method: Query tests in CI.
     observe:
       tests:
@@ -78,7 +79,7 @@ records:
     acceptance_criteria:
       - Initialize agrees on the client's protocol version when supported, and otherwise offers the newest.
       - Tools are listed with descriptions and input schemas, one per question.
-      - A question the model can't answer, such as an unknown record or a config file that doesn't parse, is a tool result marked as an error, naming the file and line where it can.
+      - A question the model can't answer, such as an unknown record, a config file that doesn't parse or a value YAML can't construct (like the date 2026-13-24), is a tool result marked as an error, naming the file and line where it can.
       - An unknown tool is an invalid-params error; an unknown method is a method-not-found error; a line that is not JSON is a parse error.
       - Notifications get no response.
       - Tools are marked read-only, idempotent and closed-world, and arguments that don't match a tool's input schema, including arguments that aren't an object, are a tool result marked as an error.

@@ -55,9 +55,22 @@ def read(file: Path) -> Any:
     return parse(text, str(file))
 
 
+class Loader(yaml.SafeLoader):
+    """PyYAML's safe loader, but a scalar that matches a type without being one, such as the unquoted date
+    2026-13-24, is a ConstructorError that says where, not a bare ValueError."""
+
+    def construct_object(self, node: yaml.Node, deep: bool = False) -> Any:
+        try:
+            return super().construct_object(node, deep)
+        except ValueError as error:
+            kind = node.tag.rsplit(":", 1)[-1]
+            problem = f"{node.value!r} is not a valid {kind}: {error}"
+            raise yaml.constructor.ConstructorError(None, None, problem, node.start_mark) from error
+
+
 def parse(text: str, name: str) -> Any:
     try:
-        return yaml.safe_load(text)
+        return yaml.load(text, Loader)
     except yaml.YAMLError as error:
         where = getattr(error, "problem_mark", None)
         at = f" at line {where.line + 1}, column {where.column + 1}" if where else ""
