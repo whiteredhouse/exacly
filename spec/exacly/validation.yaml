@@ -285,9 +285,9 @@ records:
       - check validates the given files or folders, writes the report to the job summary, and fails the step when the model doesn't conform.
       - plan writes the change plan against the pull request's base branch, or a given one, to the job summary, fetching that branch even from a shallow checkout.
       - plan comments only on pull requests from the same repository, replacing its earlier comment.
-      - The validator is installed with uv from uv.lock, without development tools; an unknown mode is an error.
+      - The validator is installed with a pinned uv version from uv.lock, without development tools; an unknown mode is an error.
       - Inputs reach the scripts only through the environment.
-      - Exacly's own CI runs the action, so every pull request tests it.
+      - Exacly's own CI runs the action on Linux and macOS, checking valid and invalid consumer models, so every pull request tests it.
     verification_method: Tests that read the action and run its scripts on a model in a temporary repository, in CI.
     observe:
       tests:

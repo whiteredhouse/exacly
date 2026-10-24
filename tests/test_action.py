@@ -67,13 +67,18 @@ def test_inputs_and_modes() -> None:
 
 
 def test_inputs_reach_scripts_only_through_the_environment() -> None:
-    for step in ACTION["runs"]["steps"]:
+    for step in STEPS.values():
+        if "run" not in step:
+            continue
         assert "${{" not in step["run"], step["name"]
-        assert step["shell"] == "bash" and step["run"].startswith("set -euo pipefail\n")
+        assert step["shell"] == "bash"
+    for script in (ROOT / "scripts" / "action").glob("*.sh"):
+        assert "${{" not in script.read_text()
+        assert script.read_text().startswith("#!/usr/bin/env bash\nset -euo pipefail\n")
 
 
 def test_the_validator_is_installed_from_the_lock_without_development_tools() -> None:
-    script = STEPS["Install the validator"]["run"]
+    script = (ROOT / "scripts" / "action" / "install.sh").read_text()
     assert 'uv sync --project "$ACTION_PATH" --locked --no-dev' in script
     assert "check | plan" in script
 
@@ -118,3 +123,38 @@ def test_patterns_are_matched_against_each_revision() -> None:
         assert run("Write the plan", repo, temp, MODEL="model", BASE="main").returncode == 0
         assert plan == (temp / "exacly-plan.md").read_text()
         assert "| - | `REQ-001` |" in plan
+
+
+def test_an_unknown_mode_fails_before_installing_the_validator() -> None:
+    with tempfile.TemporaryDirectory() as folder:
+        temp = Path(folder)
+        # Execute the real install script while pointing its project at a nonexistent checkout.
+        done = subprocess.run(
+            ["bash", str(ROOT / "scripts" / "action" / "install.sh")],
+            cwd=temp,
+            env={**os.environ, "MODE": "unknown", "ACTION_PATH": str(temp)},
+            capture_output=True,
+            text=True,
+        )
+        assert done.returncode == 1
+        assert "mode is check or plan" in done.stdout
+
+
+def test_installing_the_validator_does_not_install_development_tools() -> None:
+    with tempfile.TemporaryDirectory() as folder:
+        temp = Path(folder)
+        venv = temp / "venv"
+        done = run("Install the validator", temp, temp, MODE="check", UV_PROJECT_ENVIRONMENT=str(venv))
+        assert done.returncode == 0, done.stderr
+        installed = subprocess.run(
+            [
+                str(venv / "bin" / "python"),
+                "-c",
+                "import exacly_validate, jsonschema, yaml; "
+                "from importlib.util import find_spec; assert find_spec('pytest') is None",
+            ],
+            cwd=temp,
+            capture_output=True,
+            text=True,
+        )
+        assert installed.returncode == 0, installed.stderr
