@@ -50,9 +50,12 @@ def static_part(path: Path) -> Path:
 
 
 def matches(name: str, pattern: str) -> bool:
-    """Whether a path matches a pattern part by part, as the shell's * and ? do: neither crosses a /."""
+    """Whether a path matches a pattern part by part, as `glob` does: * and ? don't cross a /, and a hidden
+    name, starting with a dot, matches only a part that starts with a dot too."""
     names, patterns = PurePosixPath(name).parts, PurePosixPath(pattern).parts
-    return len(names) == len(patterns) and all(fnmatchcase(n, p) for n, p in zip(names, patterns, strict=True))
+    return len(names) == len(patterns) and all(
+        fnmatchcase(n, p) and (p.startswith(".") or not n.startswith(".")) for n, p in zip(names, patterns, strict=True)
+    )
 
 
 def load(paths: list[Path]) -> dict[str, Any]:
@@ -116,7 +119,14 @@ def load_at(revision: str, paths: list[Path]) -> dict[str, Any]:
     documents = {}
     for given in paths:
         pattern = is_pattern(given)
-        path = Path(os.path.normpath(Path.cwd().resolve() / given)) if pattern else given.resolve()
+        if pattern:
+            # Resolve the folder the pattern starts in, so that it compares with the repository's real path through
+            # symbolic links, such as macOS's /var for /private/var.
+            path = Path(os.path.normpath(Path.cwd() / given))
+            folder = static_part(path)
+            path = folder.resolve() / path.relative_to(folder)
+        else:
+            path = given.resolve()
         start = static_part(path) if pattern else path if path.is_dir() else path.parent
         while not start.is_dir():  # A folder the change deleted, which held files at the revision.
             start = start.parent

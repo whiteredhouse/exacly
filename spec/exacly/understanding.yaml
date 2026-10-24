@@ -54,7 +54,7 @@ records:
       - Impact lists every record that relies on the changed ones with the shortest path, the Outcomes reached, and the Requirements to check again with their bindings.
       - Impact against a Git revision lists records and relationships added, changed (with the fields) and removed, including relationships to other models, and traces removals in the earlier model.
       - A relationship added, changed or removed affects the record that relies on the other end, in both its earlier and its later version.
-      - Impact against a Git revision works with a relative or absolute model path or pattern, matching a pattern against each revision's files, and with file names Git would quote.
+      - Impact against a Git revision works with a relative or absolute model path or pattern, matching a pattern against each revision's files by the same rules, hidden files left out, and with file names Git would quote.
       - Gaps lists the validator's findings, Requirements not verified or not released in any context, Requirements without a binding, proposed Measures and pending work.
       - Every answer is available as JSON.
       - A config file that doesn't parse, or holds a value YAML can't construct, is an error naming the file and line, not a traceback.
