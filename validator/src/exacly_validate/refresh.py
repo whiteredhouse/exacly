@@ -180,7 +180,16 @@ def refresh(
     namespace = models[0]["namespace"]
     version = version_of(next(d for d in configs if "model" in d))
     records = {r["id"]: r for d in configs for r in d.get("records", [])}
-    relationships = [rel for d in configs for rel in d.get("relationships", [])]
+
+    def local(ref: str) -> str:
+        return ref.removeprefix(f"{namespace}:")
+
+    # Endpoints qualified with the model's own namespace name local records.
+    relationships = [
+        {**rel, "source": local(rel["source"]), "target": local(rel["target"])}
+        for d in configs
+        for rel in d.get("relationships", [])
+    ]
 
     if previous is not None:
         if previous.get("namespace") != namespace or previous.get("context") != run.context:
@@ -193,16 +202,13 @@ def refresh(
         lineage, serial = str(uuid.uuid4()), 1
     earlier = previous or {}
 
-    def local(ref: str) -> str:
-        return ref.removeprefix(f"{namespace}:")
-
     # Earlier observations stay unless their record or relationship has left the config.
     observed: Doc = {}
     for ref, entry in earlier.get("records", {}).items():
         if local(ref) in records:
             observed[local(ref)] = copy.deepcopy(entry)
     ids = {rel["id"] for rel in relationships if "id" in rel}
-    keys = {(local(rel["source"]), rel["type"], local(rel["target"])) for rel in relationships}
+    keys = {(rel["source"], rel["type"], rel["target"]) for rel in relationships}
     kept_relationships = [
         rel
         for rel in earlier.get("relationships", [])
@@ -212,21 +218,26 @@ def refresh(
 
     for rid, record in records.items():
         binding = record.get("observe", {}).get("tests")
-        fresh = []
+        fresh, dimensions = [], set()
         if binding and observes(binding, run):
             fresh.append(verification(binding, results, run))
+            dimensions.add("verification")
         if distribution and record["type"] == "Requirement":
+            # Delivery is observed either way: without a present implementer, an earlier release no longer holds.
+            dimensions.add("delivery")
             released = delivery(rid, records, relationships, run, root)
             if released:
                 fresh.append(released)
-        if fresh:
-            # Replace only the dimensions this run observed; other assessments and evidence stay.
-            entry = observed.setdefault(rid, {})
-            dimensions = {a["dimension"] for a in fresh}
-            entry["assessments"] = [
-                *(a for a in entry.get("assessments", []) if a["dimension"] not in dimensions),
-                *fresh,
-            ]
+        if not dimensions or (rid not in observed and not fresh):
+            continue
+        # Replace only the dimensions this run observed; other assessments and evidence stay.
+        entry = observed.setdefault(rid, {})
+        entry["assessments"] = [
+            *(a for a in entry.get("assessments", []) if a["dimension"] not in dimensions),
+            *fresh,
+        ]
+        if not entry["assessments"] and not entry.get("evidence"):
+            del observed[rid]
 
     state: Doc = {
         "exacly": version,
