@@ -20,6 +20,24 @@ It exits 0 when the model conforms, with or without exceptions, and 1 when it do
 
 Conformance does not establish measurement readiness or observation completeness. An active Outcome linked to a proposed Measure can conform, as can config without state. The validator checks supplied documents; it does not execute observation bindings. [Measurement coverage acceptance criteria](../docs/measurement-coverage-acceptance-criteria.md) describe planned findings beyond these checks.
 
+## Refresh
+
+`exacly-refresh` writes a model's state for one context from what its bindings observe (section 9). It reads test results as JUnit XML reports from one CI run. For each record with a `tests` binding, it writes a verification assessment for the observed config revision:
+- **passed** when every selected test case passed;
+- **failed** when any selected case failed, naming the failing cases in the reason;
+- **inconclusive** when no selected case ran, with the reason.
+
+A binding without `cases` takes the job's status from `--job-status` instead. A record without a binding gets no verification assessment, because a missing binding says nothing about whether the record is tested.
+
+```sh
+exacly-refresh spec/exacly --context main --state spec/exacly/state/main.json --junit junit.xml --distribution
+```
+
+- **Case IDs.** A test case's ID is its `exacly-case` property in the report, or `<file>::<name>`.
+- **Releases.** With `--distribution`, the context is how the product is distributed, for example when users install from main. A Requirement whose active implementer's `implementation_ref` or `operational_ref` exists at the revision is then also assessed as released there, with the reference as implementation evidence.
+- **Earlier state.** An existing state file is read first. Its lineage is kept and its serial increases by one. Records this run did not observe keep their earlier entries, so a binding for another workflow is left alone. State for another model or context is refused.
+- **GitHub Actions.** There, the revision, workflow, job, run link and source link default to the current run.
+
 ## What it checks
 
 1. **Documents.** Each document must match the JSON Schema for its spec version and kind, which is the latest dated iteration in `spec/schema/0.1/`, `spec/schema/0.2/config/` or `spec/schema/0.2/state/`. In 0.2, every document must declare the same spec version (`11.version-mismatch`), and exactly one config document must declare the model boundary (`11.model-boundary`). If any of this fails, the report lists the errors and skips the other checks. Authored evidence that should be observed is a schema error, because the config schema allows only `research` and `decision` evidence.
@@ -71,7 +89,7 @@ The repository uses [mise](https://mise.jdx.dev/) for its tools (Python and uv) 
 | Task | What it does |
 |---|---|
 | `mise run sync` | Installs the validator and development tools into `.venv` from `uv.lock` |
-| `mise run test` | Runs the schema and validator test cases |
+| `mise run test` | Runs the schema, validator and refresh tests with pytest |
 | `mise run lint` | Checks style and formatting with Ruff |
 | `mise run typecheck` | Type-checks with mypy in strict mode |
 | `mise run examples` | Validates every example in `spec/examples/`: each 0.1 map and each 0.2 folder |

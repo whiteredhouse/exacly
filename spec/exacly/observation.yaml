@@ -1,4 +1,5 @@
-# Exacly's own model: observing a model's reality, which is proposed and not built yet.
+# Exacly's own model: observing a model's reality. The refresh command exists; running
+# it on main, and the measure it feeds, are proposed.
 # Config: records, relationships and bindings, authored by people and agents (section 9).
 exacly: "0.2.0"
 
@@ -43,9 +44,9 @@ records:
     name: Write state from CI results
     description: Verification assessments come from observed test results, never from people.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-23"
+    last_reviewed_at: "2026-10-24"
     statement: >-
       For each record with a tests binding, write a verification assessment for
       the observed commit from the test cases the binding selects, with the run
@@ -53,21 +54,30 @@ records:
     acceptance_criteria:
       - Every selected case passing gives passed; any failing gives failed, with the failing cases as the reason.
       - A binding that selects no case gives inconclusive, with the reason.
+      - A binding without cases takes the job's result.
       - A record without a binding gets no verification assessment.
-      - The serial increases by one on each write, and the lineage stays the same.
-    verification_method: Refresh test cases in CI.
+      - In a distribution context, a Requirement whose active implementer's reference exists at the revision is assessed as released there.
+      - The serial increases by one on each write, and the lineage stays the same; earlier state for another model or context is refused.
+      - The state written is accepted by the validator.
+    verification_method: Refresh tests in CI.
+    observe:
+      tests:
+        workflow: .github/workflows/spec.yml
+        job: check
+        cases:
+          - "validator/tests/test_refresh.py::*"
 
   - id: APP-002
     type: Application
     name: Refresh
-    description: The exacly refresh command.
+    description: The exacly-refresh command.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-23"
+    last_reviewed_at: "2026-10-24"
     responsibility: Observe the sources a model's bindings name and write state.
-    interfaces: [exacly refresh command]
-    implementation_ref: { locator: refresh, planned: true }
+    interfaces: [exacly-refresh command, exacly_validate.refresh Python API]
+    implementation_ref: { locator: validator/src/exacly_validate/refresh.py }
 
   - id: MEAS-001
     type: Measure

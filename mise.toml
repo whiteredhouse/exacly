@@ -11,10 +11,7 @@ run = "uv sync --locked"
 [tasks.test]
 description = "Run the schema and validator test cases"
 depends = ["sync"]
-run = [
-    "uv run --locked python -m unittest discover -s spec/tests",
-    "uv run --locked python -m unittest discover -s validator/tests",
-]
+run = "uv run --locked pytest spec/tests validator/tests"
 
 [tasks.lint]
 description = "Check style and formatting with Ruff"
