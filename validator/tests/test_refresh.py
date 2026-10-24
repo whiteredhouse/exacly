@@ -317,3 +317,23 @@ def test_observations_of_removed_records_and_relationships_leave_state() -> None
     assert later["relationships"] == earlier["relationships"][:1]
     assert later["pending"] == earlier["pending"][:1]
     conforms(docs, later)
+
+
+def test_a_release_that_no_longer_holds_is_cleared() -> None:
+    docs = {"config": config(requirement("REQ-1", CI))}
+    first = refresh(docs, RESULTS, RUN, distribution=True, root=ROOT)
+    assert assessment(first, "REQ-1", "delivery")["state"] == "released"
+    moved = {"config": config(requirement("REQ-1", CI), app_ref="validator/src/moved")}
+    second = valid_state(refresh(moved, RESULTS, RUN, previous=first, distribution=True, root=ROOT))
+    assert [a["dimension"] for a in second["records"]["REQ-1"]["assessments"]] == ["verification"]
+
+
+def test_references_qualified_with_the_model_namespace_find_the_implementer() -> None:
+    cfg = config(requirement("REQ-1", CI))
+    for rel in cfg["relationships"]:
+        if rel["type"] == "implements":
+            rel["source"], rel["target"] = f"demo:{rel['source']}", f"demo:{rel['target']}"
+    docs = {"config": cfg}
+    state = refresh(docs, RESULTS, RUN, distribution=True, root=ROOT)
+    assert assessment(state, "REQ-1", "delivery")["state"] == "released"
+    conforms(docs, state)
