@@ -7,11 +7,14 @@ distributed (for example, users install from main), so a Requirement whose
 implementer's reference exists at the revision is also assessed as released there.
 
 State is rebuilt by observing again, never edited: each write increases the serial
-and keeps the lineage. Records this run did not observe keep their earlier entries.
+and keeps the lineage. An observation replaces only the assessments of the dimensions
+it observed; other assessments and evidence stay, unless their record or relationship
+has left the config, and so does pending work.
 """
 
 from __future__ import annotations
 
+import copy
 import datetime as dt
 import fnmatch
 import uuid
@@ -93,7 +96,7 @@ def verification(binding: Doc, results: Mapping[str, str], run: Run) -> Doc:
     job = f"job {binding['job']}" if binding.get("job") else "job"
     if not patterns:
         if run.job_status is None:
-            return {**assessment, "state": "inconclusive", "evidence": [], "reason": "The job's result was not given."}
+            return {**assessment, "state": "not_checked", "evidence": [], "reason": "The job's result was not given."}
         if run.job_status == "success":
             claim = f"The {job} succeeded"
             return {**assessment, "state": "passed", "evidence": [{**evidence, "claim": claim}]}
@@ -105,10 +108,11 @@ def verification(binding: Doc, results: Mapping[str, str], run: Run) -> Doc:
     failed = sorted(cid for cid, outcome in selected.items() if outcome == "failed")
     ran = [cid for cid, outcome in selected.items() if outcome != "skipped"]
     if not ran:
+        # Nothing was checked, so there is no result to cite; the reason says why (section 8).
         reason = (
             "The binding selects no test case that ran." if not selected else "Every selected test case was skipped."
         )
-        return {**assessment, "state": "inconclusive", "evidence": [], "reason": reason}
+        return {**assessment, "state": "not_checked", "evidence": [], "reason": reason}
     if failed:
         named = ", ".join(failed[:MAX_NAMED_FAILURES])
         more = f" and {len(failed) - MAX_NAMED_FAILURES} more" if len(failed) > MAX_NAMED_FAILURES else ""
@@ -185,21 +189,44 @@ def refresh(
                 f"not {namespace} in {run.context}"
             )
         lineage, serial = previous["lineage"], previous["serial"] + 1
-        observed: Doc = {rid: entry for rid, entry in previous.get("records", {}).items() if rid in records}
     else:
-        lineage, serial, observed = str(uuid.uuid4()), 1, {}
+        lineage, serial = str(uuid.uuid4()), 1
+    earlier = previous or {}
+
+    def local(ref: str) -> str:
+        return ref.removeprefix(f"{namespace}:")
+
+    # Earlier observations stay unless their record or relationship has left the config.
+    observed: Doc = {}
+    for ref, entry in earlier.get("records", {}).items():
+        if local(ref) in records:
+            observed[local(ref)] = copy.deepcopy(entry)
+    ids = {rel["id"] for rel in relationships if "id" in rel}
+    keys = {(local(rel["source"]), rel["type"], local(rel["target"])) for rel in relationships}
+    kept_relationships = [
+        rel
+        for rel in earlier.get("relationships", [])
+        if (rel["id"] in ids if "id" in rel else (local(rel["source"]), rel["type"], local(rel["target"])) in keys)
+    ]
+    kept_pending = [work for work in earlier.get("pending", []) if local(work["record"]) in records]
 
     for rid, record in records.items():
         binding = record.get("observe", {}).get("tests")
-        assessments = []
+        fresh = []
         if binding and observes(binding, run):
-            assessments.append(verification(binding, results, run))
+            fresh.append(verification(binding, results, run))
         if distribution and record["type"] == "Requirement":
             released = delivery(rid, records, relationships, run, root)
             if released:
-                assessments.append(released)
-        if assessments:
-            observed[rid] = {"assessments": assessments}
+                fresh.append(released)
+        if fresh:
+            # Replace only the dimensions this run observed; other assessments and evidence stay.
+            entry = observed.setdefault(rid, {})
+            dimensions = {a["dimension"] for a in fresh}
+            entry["assessments"] = [
+                *(a for a in entry.get("assessments", []) if a["dimension"] not in dimensions),
+                *fresh,
+            ]
 
     state: Doc = {
         "exacly": version,
@@ -211,8 +238,8 @@ def refresh(
         "written_at": timestamp(run),
         "records": dict(sorted(observed.items())),
     }
-    if previous is not None:
-        for key in ("relationships", "pending"):
-            if previous.get(key):
-                state[key] = previous[key]
+    if kept_relationships:
+        state["relationships"] = copy.deepcopy(kept_relationships)
+    if kept_pending:
+        state["pending"] = copy.deepcopy(kept_pending)
     return state

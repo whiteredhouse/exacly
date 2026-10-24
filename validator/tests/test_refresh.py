@@ -12,9 +12,11 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+import jsonschema
 import pytest
 from exacly_validate import validate_documents
 from exacly_validate.cli import refresh_main
+from exacly_validate.core import schema_for
 from exacly_validate.refresh import RefreshError, Run, read_junit, refresh
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -100,6 +102,12 @@ def assessment(state: dict[str, Any], rid: str, dimension: str = "verification")
     return found[0]
 
 
+def valid_state(state: dict[str, Any]) -> dict[str, Any]:
+    """The state, after checking it against the state schema."""
+    jsonschema.validate(state, schema_for(state["exacly"], "state"), format_checker=jsonschema.FormatChecker())
+    return state
+
+
 def conforms(docs: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
     report = validate_documents({**docs, "state": state}, WHEN.date(), RUN.revision).as_dict()
     assert report["errors"] == [], report["errors"]
@@ -128,7 +136,7 @@ def test_selected_cases_that_all_pass_verify_the_record() -> None:
 
 def test_a_failing_case_fails_the_record_and_names_it() -> None:
     docs = {"config": config(requirement("REQ-1", {**CI, "cases": ["tests/cases.yaml::*"]}))}
-    a = assessment(refresh(docs, RESULTS, RUN), "REQ-1")
+    a = assessment(valid_state(refresh(docs, RESULTS, RUN)), "REQ-1")
     assert a["state"] == "failed"
     assert a["reason"] == "Failed: tests/cases.yaml::schema: broken."
     assert a["evidence"][0]["claim"] == "1 of 3 selected test cases failed"
@@ -147,20 +155,20 @@ def test_many_failures_are_counted_rather_than_all_named() -> None:
         (["tests/cases.yaml::7.3*"], "Every selected test case was skipped."),
     ],
 )
-def test_nothing_run_is_inconclusive_with_a_reason(cases: list[str], reason: str) -> None:
+def test_nothing_run_is_not_checked_with_a_reason(cases: list[str], reason: str) -> None:
     docs = {"config": config(requirement("REQ-1", {**CI, "cases": cases}))}
-    a = assessment(refresh(docs, RESULTS, RUN), "REQ-1")
-    assert (a["state"], a["reason"], a["evidence"]) == ("inconclusive", reason, [])
+    a = assessment(valid_state(refresh(docs, RESULTS, RUN)), "REQ-1")
+    assert (a["state"], a["reason"], a["evidence"]) == ("not_checked", reason, [])
 
 
 @pytest.mark.parametrize(
     ("status", "expected"),
-    [("success", "passed"), ("failure", "failed"), ("cancelled", "failed"), (None, "inconclusive")],
+    [("success", "passed"), ("failure", "failed"), ("cancelled", "failed"), (None, "not_checked")],
 )
 def test_a_binding_without_cases_uses_the_job_result(status: str | None, expected: str) -> None:
     docs = {"config": config(requirement("REQ-1", CI))}
     run = Run(**{**RUN.__dict__, "job_status": status})
-    a = assessment(refresh(docs, RESULTS, run), "REQ-1")
+    a = assessment(valid_state(refresh(docs, RESULTS, run)), "REQ-1")
     assert a["state"] == expected
     assert ("reason" in a) == (expected != "passed")
 
@@ -272,3 +280,40 @@ def test_cli_writes_state_the_validator_accepts(monkeypatch: pytest.MonkeyPatch)
     released = assessment(state, "REQ-1", "delivery")["evidence"][0]["locator"]
     assert released == "https://github.com/acme/demo/blob/0b6ad3b/validator/src/exacly_validate"
     conforms(docs, state)
+
+
+def test_refreshing_one_dimension_keeps_the_others() -> None:
+    docs = {"config": config(requirement("REQ-1", CI))}
+    first = refresh(docs, RESULTS, RUN, distribution=True, root=ROOT)
+    first["records"]["REQ-1"]["evidence"] = [
+        {"locator": "traces/1", "kind": "runtime_observation", "claim": "Seen", "observed_at": "2026-10-23",
+         "applies_to": "main"}
+    ]  # fmt: skip
+    later_run = Run(**{**RUN.__dict__, "revision": "1c2d3e4"})
+    second = valid_state(refresh(docs, RESULTS, later_run, previous=first))
+    assert assessment(second, "REQ-1", "delivery") == assessment(first, "REQ-1", "delivery")
+    assert assessment(second, "REQ-1")["context"] == "1c2d3e4"
+    assert second["records"]["REQ-1"]["evidence"] == first["records"]["REQ-1"]["evidence"]
+    conforms(docs, second)
+
+
+def test_observations_of_removed_records_and_relationships_leave_state() -> None:
+    before = config(requirement("REQ-1", CI), requirement("REQ-2", CI))
+    earlier = refresh({"config": before}, RESULTS, RUN)
+    seen = {"locator": "traces/1", "kind": "runtime_observation", "claim": "Seen", "observed_at": "2026-10-23",
+            "applies_to": "main"}  # fmt: skip
+    earlier["relationships"] = [
+        {"source": "REQ-1", "type": "supports", "target": "PROC-1", "evidence": [seen]},
+        {"source": "demo:REQ-2", "type": "supports", "target": "PROC-1", "evidence": [seen]},
+        {"id": "REL-GONE", "evidence": [seen]},
+    ]
+    earlier["pending"] = [
+        {"record": "REQ-1", "task": "issues/1", "opened_at": "2026-10-23T10:00:00Z"},
+        {"record": "demo:REQ-2", "task": "issues/2", "opened_at": "2026-10-23T10:00:00Z"},
+    ]
+    docs = {"config": config(requirement("REQ-1", CI))}
+    later = valid_state(refresh(docs, RESULTS, RUN, previous=earlier, distribution=True, root=ROOT))
+    assert list(later["records"]) == ["REQ-1"]
+    assert later["relationships"] == earlier["relationships"][:1]
+    assert later["pending"] == earlier["pending"][:1]
+    conforms(docs, later)

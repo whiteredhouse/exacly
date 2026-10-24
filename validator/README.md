@@ -25,9 +25,9 @@ Conformance does not establish measurement readiness or observation completeness
 `exacly-refresh` writes a model's state for one context from what its bindings observe (section 9). It reads test results as JUnit XML reports from one CI run. For each record with a `tests` binding, it writes a verification assessment for the observed config revision:
 - **passed** when every selected test case passed;
 - **failed** when any selected case failed, naming the failing cases in the reason;
-- **inconclusive** when no selected case ran, with the reason.
+- **not checked** when no selected case ran, with the reason.
 
-A binding without `cases` takes the job's status from `--job-status` instead. A record without a binding gets no verification assessment, because a missing binding says nothing about whether the record is tested.
+A binding without `cases` takes the job's status from `--job-status` instead, and is not checked without it. A record without a binding gets no verification assessment, because a missing binding says nothing about whether the record is tested.
 
 ```sh
 exacly-refresh spec/exacly --context main --state spec/exacly/state/main.json --junit junit.xml --distribution
@@ -35,7 +35,7 @@ exacly-refresh spec/exacly --context main --state spec/exacly/state/main.json --
 
 - **Case IDs.** A test case's ID is its `exacly-case` property in the report, or `<file>::<name>`.
 - **Releases.** With `--distribution`, the context is how the product is distributed, for example when users install from main. A Requirement whose active implementer's `implementation_ref` or `operational_ref` exists at the revision is then also assessed as released there, with the reference as implementation evidence.
-- **Earlier state.** An existing state file is read first. Its lineage is kept and its serial increases by one. Records this run did not observe keep their earlier entries, so a binding for another workflow is left alone. State for another model or context is refused.
+- **Earlier state.** An existing state file is read first. Its lineage is kept and its serial increases by one. A write replaces only the assessments of the dimensions it observed: refreshing verification keeps an earlier release, other evidence, and records it did not observe, such as a binding for another workflow. Observations and pending work for records or relationships that left the config are dropped. State for another model or context is refused.
 - **GitHub Actions.** There, the revision, workflow, job, run link and source link default to the current run.
 
 ## What it checks

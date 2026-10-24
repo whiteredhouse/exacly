@@ -1,0 +1,385 @@
+{
+  "exacly": "0.2.0",
+  "namespace": "exacly",
+  "context": "main",
+  "config_revision": "2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+  "serial": 1,
+  "lineage": "ae72f6ee-ff2d-4395-9099-1b845b17c338",
+  "written_at": "2026-10-24T09:07:39Z",
+  "records": {
+    "REQ-001": {
+      "assessments": [
+        {
+          "dimension": "verification",
+          "state": "passed",
+          "context": "2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+          "at": "2026-10-24T09:07:39Z",
+          "evidence": [
+            {
+              "locator": "test results",
+              "kind": "test",
+              "observed_at": "2026-10-24",
+              "applies_to": "2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+              "claim": "All 62 selected test cases passed"
+            }
+          ]
+        },
+        {
+          "dimension": "delivery",
+          "state": "released",
+          "context": "main",
+          "at": "2026-10-24T09:07:39Z",
+          "evidence": [
+            {
+              "locator": "validator/src/exacly_validate",
+              "kind": "implementation",
+              "claim": "Validator (APP-001) is at validator/src/exacly_validate in revision 2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+              "observed_at": "2026-10-24",
+              "applies_to": "main"
+            }
+          ]
+        }
+      ]
+    },
+    "REQ-002": {
+      "assessments": [
+        {
+          "dimension": "verification",
+          "state": "passed",
+          "context": "2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+          "at": "2026-10-24T09:07:39Z",
+          "evidence": [
+            {
+              "locator": "test results",
+              "kind": "test",
+              "observed_at": "2026-10-24",
+              "applies_to": "2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+              "claim": "All 12 selected test cases passed"
+            }
+          ]
+        },
+        {
+          "dimension": "delivery",
+          "state": "released",
+          "context": "main",
+          "at": "2026-10-24T09:07:39Z",
+          "evidence": [
+            {
+              "locator": "validator/src/exacly_validate",
+              "kind": "implementation",
+              "claim": "Validator (APP-001) is at validator/src/exacly_validate in revision 2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+              "observed_at": "2026-10-24",
+              "applies_to": "main"
+            }
+          ]
+        }
+      ]
+    },
+    "REQ-003": {
+      "assessments": [
+        {
+          "dimension": "verification",
+          "state": "passed",
+          "context": "2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+          "at": "2026-10-24T09:07:39Z",
+          "evidence": [
+            {
+              "locator": "test results",
+              "kind": "test",
+              "observed_at": "2026-10-24",
+              "applies_to": "2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+              "claim": "All 37 selected test cases passed"
+            }
+          ]
+        },
+        {
+          "dimension": "delivery",
+          "state": "released",
+          "context": "main",
+          "at": "2026-10-24T09:07:39Z",
+          "evidence": [
+            {
+              "locator": "validator/src/exacly_validate",
+              "kind": "implementation",
+              "claim": "Validator (APP-001) is at validator/src/exacly_validate in revision 2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+              "observed_at": "2026-10-24",
+              "applies_to": "main"
+            }
+          ]
+        }
+      ]
+    },
+    "REQ-004": {
+      "assessments": [
+        {
+          "dimension": "verification",
+          "state": "passed",
+          "context": "2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+          "at": "2026-10-24T09:07:39Z",
+          "evidence": [
+            {
+              "locator": "test results",
+              "kind": "test",
+              "observed_at": "2026-10-24",
+              "applies_to": "2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+              "claim": "All 9 selected test cases passed"
+            }
+          ]
+        },
+        {
+          "dimension": "delivery",
+          "state": "released",
+          "context": "main",
+          "at": "2026-10-24T09:07:39Z",
+          "evidence": [
+            {
+              "locator": "validator/src/exacly_validate",
+              "kind": "implementation",
+              "claim": "Validator (APP-001) is at validator/src/exacly_validate in revision 2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+              "observed_at": "2026-10-24",
+              "applies_to": "main"
+            }
+          ]
+        }
+      ]
+    },
+    "REQ-005": {
+      "assessments": [
+        {
+          "dimension": "verification",
+          "state": "passed",
+          "context": "2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+          "at": "2026-10-24T09:07:39Z",
+          "evidence": [
+            {
+              "locator": "test results",
+              "kind": "test",
+              "observed_at": "2026-10-24",
+              "applies_to": "2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+              "claim": "All 12 selected test cases passed"
+            }
+          ]
+        },
+        {
+          "dimension": "delivery",
+          "state": "released",
+          "context": "main",
+          "at": "2026-10-24T09:07:39Z",
+          "evidence": [
+            {
+              "locator": "validator/src/exacly_validate",
+              "kind": "implementation",
+              "claim": "Validator (APP-001) is at validator/src/exacly_validate in revision 2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+              "observed_at": "2026-10-24",
+              "applies_to": "main"
+            }
+          ]
+        }
+      ]
+    },
+    "REQ-006": {
+      "assessments": [
+        {
+          "dimension": "verification",
+          "state": "passed",
+          "context": "2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+          "at": "2026-10-24T09:07:39Z",
+          "evidence": [
+            {
+              "locator": "test results",
+              "kind": "test",
+              "observed_at": "2026-10-24",
+              "applies_to": "2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+              "claim": "All 10 selected test cases passed"
+            }
+          ]
+        },
+        {
+          "dimension": "delivery",
+          "state": "released",
+          "context": "main",
+          "at": "2026-10-24T09:07:39Z",
+          "evidence": [
+            {
+              "locator": "validator/src/exacly_validate",
+              "kind": "implementation",
+              "claim": "Validator (APP-001) is at validator/src/exacly_validate in revision 2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+              "observed_at": "2026-10-24",
+              "applies_to": "main"
+            }
+          ]
+        }
+      ]
+    },
+    "REQ-007": {
+      "assessments": [
+        {
+          "dimension": "verification",
+          "state": "passed",
+          "context": "2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+          "at": "2026-10-24T09:07:39Z",
+          "evidence": [
+            {
+              "locator": "test results",
+              "kind": "test",
+              "observed_at": "2026-10-24",
+              "applies_to": "2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+              "claim": "All 10 selected test cases passed"
+            }
+          ]
+        },
+        {
+          "dimension": "delivery",
+          "state": "released",
+          "context": "main",
+          "at": "2026-10-24T09:07:39Z",
+          "evidence": [
+            {
+              "locator": "validator/src/exacly_validate",
+              "kind": "implementation",
+              "claim": "Validator (APP-001) is at validator/src/exacly_validate in revision 2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+              "observed_at": "2026-10-24",
+              "applies_to": "main"
+            }
+          ]
+        }
+      ]
+    },
+    "REQ-008": {
+      "assessments": [
+        {
+          "dimension": "verification",
+          "state": "passed",
+          "context": "2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+          "at": "2026-10-24T09:07:39Z",
+          "evidence": [
+            {
+              "locator": "test results",
+              "kind": "test",
+              "observed_at": "2026-10-24",
+              "applies_to": "2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+              "claim": "All 9 selected test cases passed"
+            }
+          ]
+        },
+        {
+          "dimension": "delivery",
+          "state": "released",
+          "context": "main",
+          "at": "2026-10-24T09:07:39Z",
+          "evidence": [
+            {
+              "locator": "validator/src/exacly_validate",
+              "kind": "implementation",
+              "claim": "Validator (APP-001) is at validator/src/exacly_validate in revision 2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+              "observed_at": "2026-10-24",
+              "applies_to": "main"
+            }
+          ]
+        }
+      ]
+    },
+    "REQ-009": {
+      "assessments": [
+        {
+          "dimension": "verification",
+          "state": "passed",
+          "context": "2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+          "at": "2026-10-24T09:07:39Z",
+          "evidence": [
+            {
+              "locator": "test results",
+              "kind": "test",
+              "observed_at": "2026-10-24",
+              "applies_to": "2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+              "claim": "The job succeeded"
+            }
+          ]
+        },
+        {
+          "dimension": "delivery",
+          "state": "released",
+          "context": "main",
+          "at": "2026-10-24T09:07:39Z",
+          "evidence": [
+            {
+              "locator": ".github/workflows/spec.yml",
+              "kind": "implementation",
+              "claim": "GitHub Actions (INF-001) is at .github/workflows/spec.yml in revision 2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+              "observed_at": "2026-10-24",
+              "applies_to": "main"
+            }
+          ]
+        }
+      ]
+    },
+    "REQ-010": {
+      "assessments": [
+        {
+          "dimension": "verification",
+          "state": "passed",
+          "context": "2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+          "at": "2026-10-24T09:07:39Z",
+          "evidence": [
+            {
+              "locator": "test results",
+              "kind": "test",
+              "observed_at": "2026-10-24",
+              "applies_to": "2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+              "claim": "All 20 selected test cases passed"
+            }
+          ]
+        },
+        {
+          "dimension": "delivery",
+          "state": "released",
+          "context": "main",
+          "at": "2026-10-24T09:07:39Z",
+          "evidence": [
+            {
+              "locator": "validator/src/exacly_validate/refresh.py",
+              "kind": "implementation",
+              "claim": "Refresh (APP-002) is at validator/src/exacly_validate/refresh.py in revision 2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+              "observed_at": "2026-10-24",
+              "applies_to": "main"
+            }
+          ]
+        }
+      ]
+    },
+    "REQ-011": {
+      "assessments": [
+        {
+          "dimension": "verification",
+          "state": "passed",
+          "context": "2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+          "at": "2026-10-24T09:07:39Z",
+          "evidence": [
+            {
+              "locator": "test results",
+              "kind": "test",
+              "observed_at": "2026-10-24",
+              "applies_to": "2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+              "claim": "All 6 selected test cases passed"
+            }
+          ]
+        },
+        {
+          "dimension": "delivery",
+          "state": "released",
+          "context": "main",
+          "at": "2026-10-24T09:07:39Z",
+          "evidence": [
+            {
+              "locator": ".github/workflows/spec.yml",
+              "kind": "implementation",
+              "claim": "GitHub Actions (INF-001) is at .github/workflows/spec.yml in revision 2eb7ca46b42743fe8cbf165579cf21024d66c7ec",
+              "observed_at": "2026-10-24",
+              "applies_to": "main"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
