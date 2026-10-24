@@ -94,6 +94,8 @@ jobs:
 
 `model` takes files, folders or patterns such as `spec/exacly/*.yaml`, one per line or separated by spaces. `plan` compares with the pull request's base branch, or with `base` when given. A pull request from a fork gets a read-only token, so its plan stays in the job summary. CI exercises `check` on GitHub-hosted Linux and macOS runners, and `plan` on Linux. It sets up uv itself; self-hosted runners also need Git, Bash and, for commenting, the GitHub CLI (`gh`).
 
+In private repositories, `plan` needs Git authentication to fetch the base branch: keep checkout's default `persist-credentials: true`, or configure Git authentication separately. The action's `token` input authenticates comment API calls only.
+
 ## Development
 
 The repository uses [mise](https://mise.jdx.dev/) for Python, uv and tasks. Run what CI runs (tests, Ruff, mypy and every example) with:

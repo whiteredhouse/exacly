@@ -4,9 +4,11 @@ runner would, on a model in a temporary Git repository.
 Run with `mise run test`, or from the repository root: uv run pytest tests
 """
 
+import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -158,3 +160,44 @@ def test_installing_the_validator_does_not_install_development_tools() -> None:
             text=True,
         )
         assert installed.returncode == 0, installed.stderr
+
+
+def test_comment_lookup_drains_paginated_duplicates_before_updating_the_first() -> None:
+    with tempfile.TemporaryDirectory() as folder:
+        temp = Path(folder)
+        plan = temp / "exacly-plan.md"
+        plan.write_text("<!-- exacly-plan -->\nUpdated plan\n")
+        api_log = temp / "api.json"
+        gh = temp / "gh"
+        # Replace only the network boundary. A response larger than the pipe buffer makes an early close
+        # deliver SIGPIPE, as gh can receive when head stops reading a paginated response.
+        gh.write_text(
+            f"#!{sys.executable}\n"
+            "import json, os, signal, sys\n"
+            "from pathlib import Path\n"
+            "if sys.argv[1:3] == ['api', '--paginate']:\n"
+            "    signal.signal(signal.SIGPIPE, signal.SIG_DFL)\n"
+            "    sys.stdout.write('42\\n' + '43\\n' * 100000)\n"
+            "    sys.stdout.flush()\n"
+            "else:\n"
+            "    Path(os.environ['EXACLY_TEST_API_LOG']).write_text(json.dumps(sys.argv[1:]))\n"
+        )
+        gh.chmod(0o755)
+        done = run(
+            "Comment the plan, replacing the earlier one",
+            temp,
+            temp,
+            PATH=f"{temp}{os.pathsep}{os.environ['PATH']}",
+            GITHUB_REPOSITORY="owner/repo",
+            PR="17",
+            EXACLY_TEST_API_LOG=str(api_log),
+        )
+        assert done.returncode == 0, done.stderr
+        assert json.loads(api_log.read_text()) == [
+            "api",
+            "-X",
+            "PATCH",
+            "repos/owner/repo/issues/comments/42",
+            "-F",
+            f"body=@{plan}",
+        ]
