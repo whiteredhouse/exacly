@@ -108,6 +108,14 @@ cases:
     findings:
       - { severity: warning, rule: "7.1", record: OUT-001 }
 
+  - description: "7.1: a retired Measure does not count"
+    base: active
+    patch:
+      - { op: replace, path: /records/8/lifecycle, value: retired }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "7.1", record: OUT-001 }
+
   - description: "7.2: an active Capability must contribute to an Outcome, which also cuts the Requirement's path"
     base: active
     patch:

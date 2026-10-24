@@ -408,8 +408,10 @@ def traceability_gap(
     infrastructure: set[str],
 ) -> tuple[str, str] | None:
     """The section 7 rule a record breaks, with the reason, or None."""
-    if record_type == "Outcome" and not any(g.type_of(m) == "Measure" for m in g.into(rid, "evaluates")):
-        return "7.1", "no Measure evaluates this Outcome"
+    if record_type == "Outcome" and not any(
+        g.type_of(m) == "Measure" and g.records[m]["lifecycle"] != "retired" for m in g.into(rid, "evaluates")
+    ):
+        return "7.1", "no proposed or active Measure evaluates this Outcome"
     if record_type == "Capability" and rid not in capabilities:
         return "7.2", "does not contribute_to an Outcome"
     if record_type == "Process" and not any(g.type_of(c) == "Capability" for c in g.out(rid, "uses_capability")):

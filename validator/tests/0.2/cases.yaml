@@ -155,6 +155,21 @@ cases:
     findings:
       - { severity: error, rule: "7.1", record: OUT-001, document: billing }
 
+  - description: "7.1: a retired Measure does not count"
+    base: active
+    patch:
+      - { op: replace, path: /billing/records/9/lifecycle, value: retired }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "7.1", record: OUT-001, document: billing }
+
+  - description: "7.1: a proposed Measure counts for an active Outcome"
+    base: active
+    patch:
+      - { op: replace, path: /billing/records/9/lifecycle, value: proposed }
+    result: conforms
+    findings: []
+
   - description: Only Infrastructure stores Information
     base: active
     patch:
