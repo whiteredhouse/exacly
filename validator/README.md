@@ -54,6 +54,17 @@ exacly gaps                  # findings, and Requirements not yet verified, rele
 - **Impact** lists each affected record with the shortest path from a changed one. With `--base`, a record or relationship is changed when any authored field differs, such as a dependency's conditions or a storage role; relationships to other models count too. A relationship added, changed or removed affects the record that relies on the other end, before and after the change, such as the Requirement that gains an implementer or the Application that reads new Information. A removed record's impact is traced in the earlier model. The model may be given by a relative or absolute path inside its Git repository.
 - **Gaps** go beyond conformance (section 10's coverage view): a conforming model can still have Requirements that no context has verified or released.
 
+### Views
+
+`exacly view` draws section 10's views for people from the same answers:
+
+```sh
+exacly view plan --base main   # Markdown for a pull request: what changed, what it affects, what to check again
+exacly view site --out site    # HTML pages: coverage and every record, then a page per record
+```
+
+On each pull request from this repository, CI comments the plan and replaces its earlier comment, so the review shows what the change does to the model. The site has no scripts or outside files, so any static host can serve it.
+
 ### For coding agents
 
 `exacly mcp` answers the same questions as an [MCP](https://modelcontextprotocol.io) server on stdio, with one tool per question: `exacly_show`, `exacly_trace`, `exacly_impact` and `exacly_gaps`. Each result has the text answer as content and the JSON answer as structured content. Every call reads the model again, so an agent sees its own edits. In Claude Code, from the repository that holds the model:
