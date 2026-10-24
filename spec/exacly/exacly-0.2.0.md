@@ -92,6 +92,8 @@ Active means the record is currently adopted in the selected model state. It doe
 
 A binding names an observation source and how to select from it. Each key under `observe` is a source kind: `tests`, `deployments`, `runtime`, or `measurement`, or an extension source as `<extension>:<name>`. Its value identifies what to observe, for example a CI workflow and a test path, or a service name and environments. The fields of a binding are defined by the tool that reads it. Bindings are the only link between a record and its reality that observation cannot rediscover, so they MUST be authored rather than inferred. Outcomes and Capabilities usually have no bindings; their status comes from linked Measures and records.
 
+A binding configures observation; its presence does not establish that an observer supports it, that its source is reachable, or that evidence has been collected. Schema validation checks the binding's shape, while the observing tool interprets its selector and records what it can establish. A missing binding means automated observation is not configured for that source; it does not establish that the underlying activity or data is absent.
+
 All records MUST be attributable to a model revision. A revision may be a Git commit or an equivalent immutable version. The storage format MAY carry revision information at the document or snapshot level instead of repeating it on each record.
 
 ## 6. Relationships
@@ -129,7 +131,7 @@ External systems MUST be represented by a local boundary record with an external
 
 Within each model state:
 
-1. Every active Outcome MUST have at least one linked Measure.
+1. Every active Outcome MUST have at least one linked Measure whose lifecycle is `proposed` or `active`. Retired Measures remain available historically but do not satisfy this rule.
 2. Every active Capability MUST have a `contributes_to` relationship to an Outcome.
 3. Every active Process MUST have a `uses_capability` relationship to a Capability.
 4. Every active Requirement MUST have at least one `supports` relationship and a path through those business relationships to an Outcome.
@@ -138,6 +140,8 @@ Within each model state:
 7. Every active Information record MUST have a linked Application that reads or writes it. Projects with information used only by humans MUST declare an extension for Process-to-Information access.
 8. A requirement claimed to be delivered MUST have an identified implementer and delivery evidence. A requirement claimed to be verified MUST additionally have verification evidence. Claims and their evidence are assessments in state, and each claim needs evidence for its own context.
 9. Every active Information record SHOULD have exactly one `stores` relationship with role `system_of_record`.
+
+Rule 7.1 establishes a link to a proposed or active measurement definition, not readiness to collect data or availability of an evaluation result. A linked Measure may be proposed, and the rule does not require state to exist. Adopting a Measure records agreement on its definition; collection and evaluation still need evidence. A coverage view can expose these distinctions without changing the baseline's conformance result (sections 10 and 11).
 
 Proposed records MAY be incomplete; validation reports MUST show their gaps. An active record that cannot meet a rule MUST have a documented exception identifying the rule, record, reason, accountable owner, and review or expiry date. Exceptions MUST remain visible in validation reports.
 
@@ -163,6 +167,8 @@ The following dimensions MUST remain independent:
 These states are contextual assessments, not a single field on every record. Assessments are stored in state, under the record they assess. An assessment MUST name its dimension, state, context, timestamp or period, and supporting evidence, and MAY give a reason. Unknown, not-checked, and not-evaluated assessments may have no supporting evidence. An assessment whose state is negative, inconclusive, or not yet known (withdrawn, failed, inconclusive, unknown, not checked, degraded, unavailable, not evaluated, or target not met) MUST give a reason, for example that a test failed, no binding exists, or the source could not be reached. Assessments MUST NOT silently carry forward to a new revision or environment.
 
 A closed ticket is not evidence of deployment. Deployment is not evidence of correct behavior. Passing tests are evidence only within their coverage. Improved metrics do not by themselves prove that a particular feature caused the improvement.
+
+For distributed software such as a CLI or library, observing publication of an identified package can support a released delivery assessment in the distribution context. Record this as `implementation` evidence for the published implementation artifact: the claim identifies publication, the package version and artifact digest, and the applicable source revision or a reference establishing that linkage. For a Requirement's delivery claim, the artifact is linked to its identified implementer. A registry entry without the artifact linkage is insufficient. This use of `implementation` evidence establishes distribution-level delivery, not verified behavior. Publication alone establishes neither installation in a named environment nor healthy operation. Installation or deployment evidence identifies the artifact present in that environment; runtime observations concern executions there during the stated period. Each assessment is limited to what its evidence establishes.
 
 ## 9. Config, state, and history
 
@@ -192,6 +198,8 @@ Work handed to people or agents to bring reality in line with config MAY be reco
 
 For software and infrastructure, promotion to an operational baseline MUST reference deployment evidence for the named environment. For business definitions and goals, promotion MUST reference the accountable owner's adoption decision. Partial deployment MUST be represented explicitly through environment-specific baselines or scoped assessments.
 
+A package release marks a distribution event, rather than adoption of an operational baseline in every consumer environment. For a CLI or library, an operational baseline concerns a named installation or execution environment; publishing the package alone does not satisfy that environment's deployment-evidence requirement.
+
 Rollback restores the applicable prior state and records the rollback event. Historical records and evidence MUST NOT be rewritten to imply that a withdrawn change was never deployed.
 
 ## 10. Views and detailed diagrams
@@ -206,6 +214,10 @@ Views SHOULD answer a specific question:
 | Change impact | Changed elements, their affected relationships, and relevant business paths |
 | Coverage | Missing justification, implementation, verification, ownership, or measurement |
 | Release comparison | Added, changed, and retired elements between named revisions |
+
+Derived views select and compute information from the model and, where relevant, state for the selected revision and context. Tags are one selection mechanism alongside record types, IDs, relationship traversal, validation findings, and revision differences. A view's selection and layout can be authored while its model content remains derived. Filtering can omit related records, so the selection rules explain whether dependencies and business paths outside the initial selection are included or left out.
+
+A measurement coverage view distinguishes a linked definition, evidence that collection works, and an evaluation supported by measurements for the declared population and period. A proposed Measure, unconfirmed collection, a missing required baseline, an evaluation window still open, and overdue or stale results describe different situations. Missing observations establish uncertainty, rather than proving that collection is impossible. An open evaluation window can be expected; it does not by itself indicate a coverage gap.
 
 UML sequence diagrams MAY describe interactions, activity diagrams MAY describe workflows, and state diagrams MAY describe lifecycles. Diagrams MUST identify the model revision and relevant record IDs.
 
@@ -225,6 +237,8 @@ Validation MAY be manual initially. Each report MUST identify the model revision
 An expired exception no longer satisfies the waived rule. Unreachable external evidence MUST be reported as unavailable, not assumed valid. A project MAY retain a snapshot to preserve the evidence.
 
 Structural validation does not establish truth. A human owner must review business intent, and tests or observations must substantiate behavioral and operational claims.
+
+Conformance does not establish observation completeness or outcome evaluability. In particular, a conforming model can have an active Outcome linked to a proposed Measure, or have no observed state. Additional coverage findings can describe readiness and evidence gaps separately; they do not introduce new section 7 requirements or change the meaning of conformance.
 
 A baseline conforms to this draft when it satisfies its required rules or explicitly reports valid exceptions. A report MUST distinguish “conforms” from “conforms with exceptions.”
 
@@ -326,6 +340,7 @@ This version changes the document format, which 0.x allows (see the versioning p
 
 | Change | Migration |
 | --- | --- |
+| Rule 7.1 excludes retired Measures from current traceability. This is breaking for active Outcomes whose only linked Measures are retired | Link a proposed or active replacement Measure, retire the Outcome if it is no longer adopted, or record an explicit rule 7.1 exception. Retain retired Measures and their links for history |
 | One product map becomes config documents plus state documents (section 9) | Keep `model`, `records`, `relationships`, and `exceptions` in config. Drop `state`, `revision`, `base_revision`, `environment`, and `adopted_at`; source control and the state document carry them |
 | Assessments move to state, under the record they assess | Move each assessment into the state document for its context, without its `subject` |
 | An assessment whose state is negative, inconclusive, or not yet known MUST give a `reason` (section 8). This is breaking: such 0.1 assessments are invalid in 0.2 without one | Add a `reason` when migrating. Where none was recorded, say so, for example "Not recorded in 0.1; carried over unchanged", and replace it at the next observation |
