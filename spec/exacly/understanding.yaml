@@ -86,6 +86,33 @@ records:
         cases:
           - "validator/tests/test_mcp.py::*"
 
+  - id: REQ-014
+    type: Requirement
+    name: Show the model to people
+    description: Section 10 views, derived from the same answers as the command.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-24"
+    statement: >-
+      Write a pull request's change plan as Markdown, and the model as static HTML pages: an index of coverage,
+      findings and records with their state, and a page per record with why it exists, how it is realized, its
+      state with evidence, its findings and its config.
+    acceptance_criteria:
+      - The plan lists records added, changed (with the fields) and removed, and relationships added and removed, against a named base.
+      - The plan lists the affected records with their paths, the Outcomes reached, the Requirements to check again with their tests, and the validation result with any errors.
+      - The plan starts with a marker, so CI replaces its earlier comment instead of adding another.
+      - The site has an index and a page per record, every local link resolves, and pages have no scripts.
+      - Text from the model is escaped.
+      - CI comments the plan on pull requests from the repository itself, with no permission beyond reading the code and writing pull request comments.
+    verification_method: View tests and workflow tests in CI.
+    observe:
+      tests:
+        workflow: .github/workflows/spec.yml
+        cases:
+          - "validator/tests/test_views.py::*"
+          - "tests/test_ci.py::test_the_plan_is_commented_*"
+
   - id: APP-003
     type: Application
     name: Query
@@ -110,6 +137,18 @@ records:
     interfaces: [exacly mcp command (MCP over stdio), skills/exacly/SKILL.md]
     implementation_ref: { locator: validator/src/exacly_validate/mcp.py }
 
+  - id: APP-005
+    type: Application
+    name: Views
+    description: The exacly view command's plan and site.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-24"
+    responsibility: Show a model to people, as a pull request plan and as static pages.
+    interfaces: [exacly view plan, exacly view site, pull request comment from CI]
+    implementation_ref: { locator: validator/src/exacly_validate/views.py }
+
 relationships:
   - { source: CAP-003, type: contributes_to, target: OUT-001 }
   - { source: PROC-003, type: uses_capability, target: CAP-003 }
@@ -123,3 +162,10 @@ relationships:
   - { source: APP-004, type: implements, target: REQ-013 }
   - { source: PROC-003, type: uses, target: APP-004 }
   - { source: APP-004, type: depends_on, target: APP-003, conditions: Every tool is a question the query core answers. }
+  - { source: REQ-014, type: supports, target: PROC-003 }
+  - { source: REQ-014, type: supports, target: PROC-001 }
+  - { source: APP-005, type: implements, target: REQ-014 }
+  - { source: PROC-001, type: uses, target: APP-005 }
+  - { source: PROC-003, type: uses, target: APP-005 }
+  - { source: APP-005, type: depends_on, target: APP-003, conditions: Every view is drawn from the query core's answers. }
+  - { source: INF-001, type: implements, target: REQ-014 }

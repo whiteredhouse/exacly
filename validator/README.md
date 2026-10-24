@@ -51,8 +51,19 @@ exacly gaps                  # findings, and Requirements not yet verified, rele
 ```
 
 - **Why and how.** Trace follows `supports`, `uses_capability`, `contributes_to`, `implements`, `evaluates` and `stores` toward the reason a record exists, and `uses`, `reads`, `writes`, `depends_on` and `contains` from the reason to what serves it. Information's reason is the Application that reads or writes it, and Infrastructure that stores it serves it. A record reached twice is marked rather than repeated.
-- **Impact** lists each affected record with the shortest path from a changed one. With `--base`, a record is changed when any authored field differs, and records at either end of an added or removed relationship count as changed. A removed record's impact is traced in the earlier model.
+- **Impact** lists each affected record with the shortest path from a changed one. With `--base`, a record is changed when any authored field differs, and an added or removed relationship changes the record that relies on the other end, such as the Requirement that gains an implementer or the Application that reads new Information. A removed record's impact is traced in the earlier model.
 - **Gaps** go beyond conformance (section 10's coverage view): a conforming model can still have Requirements that no context has verified or released.
+
+### Views
+
+`exacly view` draws section 10's views for people from the same answers:
+
+```sh
+exacly view plan --base main   # Markdown for a pull request: what changed, what it affects, what to check again
+exacly view site --out site    # HTML pages: coverage and every record, then a page per record
+```
+
+On each pull request from this repository, CI comments the plan and replaces its earlier comment, so the review shows what the change does to the model. The site has no scripts or outside files, so any static host can serve it.
 
 ### For coding agents
 
