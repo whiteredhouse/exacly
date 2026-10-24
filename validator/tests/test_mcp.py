@@ -7,6 +7,7 @@ import io
 import json
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -145,3 +146,27 @@ def test_an_unexpected_failure_is_an_internal_error_and_the_server_keeps_serving
     first, second = (json.loads(line) for line in outgoing.getvalue().splitlines())
     assert first["error"] == {"code": -32603, "message": "internal error: disk on fire"}
     assert second == {"jsonrpc": "2.0", "id": 2, "result": {}}
+
+
+def test_a_model_that_does_not_parse_is_a_tool_error() -> None:
+    with tempfile.TemporaryDirectory() as folder:
+        broken = Path(folder)
+        for name in ("model.yaml", "billing.yaml"):
+            (broken / name).write_text((EXAMPLE / name).read_text())
+        (broken / "billing.yaml").write_text("records: [unclosed\n")
+        result = mcp.Server([broken], ask).call("exacly_gaps", {})
+        assert result["isError"] is True
+        problem = "expected ',' or ']', but got '<stream end>'"
+        assert (
+            result["content"][0]["text"]
+            == f"{broken / 'billing.yaml'} is not valid YAML at line 2, column 1: {problem}"
+        )
+
+
+def test_arguments_that_are_not_an_object_are_rejected() -> None:
+    wrongs: list[Any] = [False, 0, [], ""]
+    for wrong in wrongs:
+        result = request("tools/call", {"name": "exacly_gaps", "arguments": wrong})["result"]
+        assert result["isError"] is True, wrong
+        assert result["content"][0]["text"].startswith("Invalid arguments: ")
+    assert "isError" not in request("tools/call", {"name": "exacly_gaps"})["result"]

@@ -44,7 +44,25 @@ def load(paths: list[Path]) -> dict[str, Any]:
             files += sorted(f for f in path.rglob("*") if f.is_file() and wanted(f, path))
         else:
             files.append(path)
-    return {str(f): yaml.safe_load(f.read_text()) for f in files}
+    return {str(f): read(f) for f in files}
+
+
+def read(file: Path) -> Any:
+    """One document, parsed. Raises QueryError, saying which file and where, when it can't be read or parsed."""
+    try:
+        text = file.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise query.QueryError(f"{file} can't be read: {error}") from error
+    return parse(text, str(file))
+
+
+def parse(text: str, name: str) -> Any:
+    try:
+        return yaml.safe_load(text)
+    except yaml.YAMLError as error:
+        where = getattr(error, "problem_mark", None)
+        at = f" at line {where.line + 1}, column {where.column + 1}" if where else ""
+        raise query.QueryError(f"{name} is not valid YAML{at}: {getattr(error, 'problem', None) or error}") from error
 
 
 def load_at(revision: str, paths: list[Path]) -> dict[str, Any]:
@@ -70,7 +88,7 @@ def load_at(revision: str, paths: list[Path]) -> dict[str, Any]:
                 continue
             file = Path(name)
             if file == inside or wanted(file, inside):
-                documents[name] = yaml.safe_load(git(top, "show", f"{revision}:{name}"))
+                documents[name] = parse(git(top, "show", f"{revision}:{name}"), f"{name} at {revision}")
     return documents
 
 
@@ -95,7 +113,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--json", action="store_true", help="print the report as JSON")
     args = parser.parse_args(argv)
-    documents = load(args.paths)
+    try:
+        documents = load(args.paths)
+    except query.QueryError as error:
+        print(f"exacly-validate: {error}", file=sys.stderr)
+        return 1
     if not documents:
         parser.error("no YAML or JSON documents found")
     report = validate_documents(documents, args.date, args.revision)
@@ -149,7 +171,11 @@ def refresh_main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if not args.revision:
         parser.error("--revision is required outside GitHub Actions")
-    documents = {name: doc for name, doc in load(args.paths).items() if not is_state(doc)}
+    try:
+        documents = {name: doc for name, doc in load(args.paths).items() if not is_state(doc)}
+    except query.QueryError as error:
+        print(f"exacly-refresh: {error}", file=sys.stderr)
+        return 1
     previous = json.loads(args.state.read_text()) if args.state.exists() else None
     run = Run(
         revision=args.revision,
