@@ -61,7 +61,7 @@ def test_answers_as_text_and_data() -> None:
 
 def test_a_question_the_model_cant_answer_is_a_tool_error() -> None:
     assert call("exacly_show", record="REQ-404")["isError"] is True
-    assert call("exacly_show")["content"][0]["text"] == "show needs a record ID"
+    assert call("exacly_show")["content"][0]["text"] == "Invalid arguments: 'record' is a required property"
     assert "record IDs or a base revision" in call("exacly_impact")["content"][0]["text"]
 
 
@@ -112,3 +112,36 @@ def test_the_exacly_mcp_command() -> None:
     responses = [json.loads(line) for line in done.stdout.splitlines()]
     assert [r["id"] for r in responses] == [1, 2]
     assert responses[1]["result"]["structuredContent"]["result"] == "conforms"
+
+
+def test_tools_say_they_only_read() -> None:
+    for tool in request("tools/list")["result"]["tools"]:
+        assert tool["title"]
+        assert tool["annotations"] == {"readOnlyHint": True, "idempotentHint": True, "openWorldHint": False}
+        assert tool["inputSchema"]["additionalProperties"] is False
+
+
+def test_arguments_are_checked_against_the_input_schema() -> None:
+    wrong = call("exacly_show", record=123)
+    assert wrong["isError"] is True
+    assert wrong["content"][0]["text"].startswith("Invalid arguments: 123 is not of type 'string'")
+    assert call("exacly_impact", records="INF-003")["isError"] is True
+    assert call("exacly_gaps", extra=True)["isError"] is True
+
+
+def test_an_unexpected_failure_is_an_internal_error_and_the_server_keeps_serving() -> None:
+    def broken(*args: Any, **kwargs: Any) -> tuple[dict[str, Any], str]:
+        raise RuntimeError("disk on fire")
+
+    server = mcp.Server([EXAMPLE], broken)
+    incoming = io.StringIO(
+        json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "exacly_gaps"}})
+        + "\n"
+        + json.dumps({"jsonrpc": "2.0", "id": 2, "method": "ping"})
+        + "\n"
+    )
+    outgoing = io.StringIO()
+    mcp.serve(server, incoming, outgoing)
+    first, second = (json.loads(line) for line in outgoing.getvalue().splitlines())
+    assert first["error"] == {"code": -32603, "message": "internal error: disk on fire"}
+    assert second == {"jsonrpc": "2.0", "id": 2, "result": {}}
