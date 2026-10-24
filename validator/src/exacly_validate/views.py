@@ -325,12 +325,15 @@ def site(model: query.Model, out: Path) -> list[Path]:
         raise query.QueryError(f"record IDs that differ only in case can't each have a page: {'; '.join(clashes)}")
     records = out / "records"
     records.mkdir(parents=True, exist_ok=True)
+    # Remove other pages first, comparing names as they are on disk: after a rename that only changes case,
+    # writing would otherwise keep the old name on a file system that ignores case, and then remove the page.
+    pages = {page_name(rid): rid for rid in model.records}
+    for stale in [p for p in records.iterdir() if p.suffix == ".html" and p.name not in pages]:
+        stale.unlink()
     written = [out / "index.html"]
     written[0].write_text(index_page(model))
-    for rid in sorted(model.records):
-        path = records / page_name(rid)
+    for name, rid in sorted(pages.items(), key=lambda item: item[1]):
+        path = records / name
         path.write_text(record_page(model, rid))
         written.append(path)
-    for stale in set(records.glob("*.html")) - set(written):
-        stale.unlink()
     return written

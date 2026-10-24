@@ -179,6 +179,30 @@ class TestSite:
             assert sorted((out / "records").iterdir()) == sorted(written[1:])
             assert (out / "notes.html").read_text() == "kept"
 
+    def test_a_case_only_rename_keeps_the_new_page(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        docs = documents()
+        with tempfile.TemporaryDirectory() as folder:
+            out = Path(folder)
+            views.site(query.load(docs), out)
+            billing = next(d for name, d in docs.items() if name.endswith("billing.yaml"))
+            for record in billing["records"]:
+                if record["id"] == "OUT-001":
+                    record["id"] = "out-001"
+            renamed = query.load(docs)
+            # A file system that ignores case keeps the old name when the new one is written, so the old page
+            # must be gone before anything is written.
+            write_text = Path.write_text
+
+            def write(path: Path, text: str) -> int:
+                assert not (out / "records" / "OUT-001.html").exists(), f"{path.name} written before cleanup"
+                return write_text(path, text)
+
+            monkeypatch.setattr(Path, "write_text", write)
+            views.site(renamed, out)
+            assert sorted(
+                p.name for p in (out / "records").iterdir() if "001" in p.name and "OUT" in p.name.upper()
+            ) == ["out-001.html"]
+
 
 def test_the_view_command() -> None:
     from test_query import EXAMPLE
