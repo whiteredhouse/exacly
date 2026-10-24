@@ -257,9 +257,12 @@ records:
   - id: REQ-011
     type: Requirement
     name: Keep config and state in version control
-    description: Config and state history is the repository's history.
+    description: >-
+      Config and state history is the repository's history. Proposed until CI
+      commits state from main and a test can verify it, so that every active
+      Requirement can be verified.
     owner: exacly-maintainers
-    lifecycle: active
+    lifecycle: proposed
     evidence: []
     last_reviewed_at: "2026-10-23"
     statement: Keep config and state in the repository, so main is the current baseline, branches are proposed changes, and tags are historical baselines.
