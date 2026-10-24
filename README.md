@@ -18,7 +18,7 @@ Exacly borrows the plan and apply loop from infrastructure as code, and the spec
 | **Describe** | Author config in YAML: records, relationships, exceptions and how each record can be observed. Start from a description (greenfield) or from an existing repo and documents (brownfield). | Spec 0.2 |
 | **Validate** | Check config against the schema, the relationship rules and the traceability rules. | [`exacly-validate`](validator/README.md), 0.1 and 0.2 |
 | **Refresh** | Observe the real system and write state: assessments per environment and the evidence behind them. | [`exacly-refresh`](validator/README.md#refresh), from test results |
-| **Ask** | Show a record, trace why it exists and what realizes it, list what a change affects and what the model is missing. | [`exacly`](validator/README.md#questions) show, trace, impact and gaps |
+| **Ask** | Show a record, trace why it exists and what realizes it, list what a change affects and what the model is missing. | [`exacly`](validator/README.md#questions) show, trace, impact and gaps, and an [MCP server and skill](validator/README.md#for-coding-agents) for agents |
 | **Plan** | Compare config with state and list the work needed to make them agree. | Planned |
 | **Apply** | Turn the plan into tasks for people or agents. The next refresh closes them. | Planned |
 
@@ -41,6 +41,7 @@ Its ideas come from established practice:
 | --- | --- |
 | [`spec/`](spec/README.md) | Specification versions, JSON Schemas, worked examples and data-driven test cases |
 | [`validator/`](validator/README.md) | `exacly-validate`, the Python validator |
+| [`skills/`](skills/exacly/SKILL.md) | The skill that tells coding agents how to work with a model |
 | [`docs/`](docs/) | Research and pilot notes |
 
 ## Quick start

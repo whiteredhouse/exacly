@@ -2,7 +2,8 @@
 
 exacly-validate PATH... [--revision REV] [--date YYYY-MM-DD] [--json]
 exacly-refresh PATH... --context CONTEXT --state FILE [--junit FILE...] [--distribution] [run options]
-exacly show|trace|impact|gaps [-m PATH]... [--json] ...; exacly validate|refresh ... run the commands above
+exacly show|trace|impact|gaps [-m PATH]... [--json] ...; exacly mcp [-m PATH]...
+exacly validate|refresh ... run the commands above
 """
 
 from __future__ import annotations
@@ -14,16 +15,19 @@ import os
 import subprocess
 import sys
 from collections import Counter
+from collections.abc import Iterable
+from importlib import metadata
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from exacly_validate import query
+from exacly_validate import mcp, query
 from exacly_validate.core import is_state, validate_documents
 from exacly_validate.refresh import RefreshError, Run, read_junit, refresh
 
 SUFFIXES = {".yaml", ".yml", ".json"}
+DEFAULT_MODEL = Path("spec/exacly")
 
 
 def wanted(file: Path, folder: Path) -> bool:
@@ -39,7 +43,38 @@ def load(paths: list[Path]) -> dict[str, Any]:
             files += sorted(f for f in path.rglob("*") if f.is_file() and wanted(f, path))
         else:
             files.append(path)
-    return {str(f): yaml.safe_load(f.read_text()) for f in files}
+    return {str(f): read(f) for f in files}
+
+
+def read(file: Path) -> Any:
+    """One document, parsed. Raises QueryError, saying which file and where, when it can't be read or parsed."""
+    try:
+        text = file.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise query.QueryError(f"{file} can't be read: {error}") from error
+    return parse(text, str(file))
+
+
+class Loader(yaml.SafeLoader):
+    """PyYAML's safe loader, but a scalar that matches a type without being one, such as the unquoted date
+    2026-13-24, is a ConstructorError that says where, not a bare ValueError."""
+
+    def construct_object(self, node: yaml.Node, deep: bool = False) -> Any:
+        try:
+            return super().construct_object(node, deep)
+        except ValueError as error:
+            kind = node.tag.rsplit(":", 1)[-1]
+            problem = f"{node.value!r} is not a valid {kind}: {error}"
+            raise yaml.constructor.ConstructorError(None, None, problem, node.start_mark) from error
+
+
+def parse(text: str, name: str) -> Any:
+    try:
+        return yaml.load(text, Loader)
+    except yaml.YAMLError as error:
+        where = getattr(error, "problem_mark", None)
+        at = f" at line {where.line + 1}, column {where.column + 1}" if where else ""
+        raise query.QueryError(f"{name} is not valid YAML{at}: {getattr(error, 'problem', None) or error}") from error
 
 
 def load_at(revision: str, paths: list[Path]) -> dict[str, Any]:
@@ -65,7 +100,7 @@ def load_at(revision: str, paths: list[Path]) -> dict[str, Any]:
                 continue
             file = Path(name)
             if file == inside or wanted(file, inside):
-                documents[name] = yaml.safe_load(git(top, "show", f"{revision}:{name}"))
+                documents[name] = parse(git(top, "show", f"{revision}:{name}"), f"{name} at {revision}")
     return documents
 
 
@@ -90,7 +125,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--json", action="store_true", help="print the report as JSON")
     args = parser.parse_args(argv)
-    documents = load(args.paths)
+    try:
+        documents = load(args.paths)
+    except query.QueryError as error:
+        print(f"exacly-validate: {error}", file=sys.stderr)
+        return 1
     if not documents:
         parser.error("no YAML or JSON documents found")
     report = validate_documents(documents, args.date, args.revision)
@@ -144,7 +183,11 @@ def refresh_main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if not args.revision:
         parser.error("--revision is required outside GitHub Actions")
-    documents = {name: doc for name, doc in load(args.paths).items() if not is_state(doc)}
+    try:
+        documents = {name: doc for name, doc in load(args.paths).items() if not is_state(doc)}
+    except query.QueryError as error:
+        print(f"exacly-refresh: {error}", file=sys.stderr)
+        return 1
     previous = json.loads(args.state.read_text()) if args.state.exists() else None
     run = Run(
         revision=args.revision,
@@ -296,6 +339,41 @@ def gaps_text(answer: dict[str, Any]) -> str:
     return "\n".join(lines).rstrip()
 
 
+def ask(
+    command: str,
+    paths: list[Path],
+    record: str | None = None,
+    records: Iterable[str] = (),
+    base: str | None = None,
+) -> tuple[dict[str, Any], str]:
+    """Answer one question about the model at `paths` (show, trace, impact or gaps), as data and as text.
+    Impact takes `records`, or a Git revision as `base`. Raises QueryError when it can't answer."""
+    model = query.load(load(paths))
+    if command in ("show", "trace"):
+        if not record:
+            raise query.QueryError(f"{command} needs a record ID")
+        answer = query.show(model, record) if command == "show" else query.trace(model, record)
+        return answer, (show_text if command == "show" else trace_text)(answer)
+    if command == "impact":
+        records = list(records)
+        if bool(base) == bool(records):
+            raise query.QueryError("impact takes record IDs or a base revision, not both")
+        if base:
+            try:
+                documents = load_at(base, paths)
+            except subprocess.CalledProcessError as error:
+                raise query.QueryError(f"git failed: {error.stderr.strip()}") from error
+            earlier = query.load(documents) if documents else query.empty(model.graph.namespace)
+            answer = query.change_impact(earlier, model)
+        else:
+            answer = query.impact(model, records)
+        return answer, impact_text(answer)
+    if command == "gaps":
+        answer = query.gaps(model)
+        return answer, gaps_text(answer)
+    raise query.QueryError(f"unknown question {command}")
+
+
 def exacly_main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv and argv[0] in ("validate", "refresh"):
@@ -326,33 +404,25 @@ def exacly_main(argv: list[str] | None = None) -> int:
     impact.add_argument("records", nargs="*", metavar="RECORD")
     impact.add_argument("--base", metavar="REV", help="compare with the model at this Git revision instead")
     commands.add_parser("gaps", parents=[common], help="findings, and what is not yet verified, released or observed")
+    commands.add_parser(
+        "mcp", parents=[common], help="answer these questions for coding agents, as an MCP server on stdio"
+    )
     args = parser.parse_args(argv)
-    paths = args.model or [Path("spec/exacly")]
+    if args.command == "mcp":
+        mcp.serve(mcp.Server(args.model or [DEFAULT_MODEL], ask, metadata.version("exacly-validate")))
+        return 0
     try:
-        model = query.load(load(paths))
-        if args.command == "show":
-            answer, text = query.show(model, args.record), show_text
-        elif args.command == "trace":
-            answer, text = query.trace(model, args.record), trace_text
-        elif args.command == "impact":
-            if bool(args.base) == bool(args.records):
-                parser.error("impact takes record IDs or --base, not both")
-            if args.base:
-                documents = load_at(args.base, paths)
-                base = query.load(documents) if documents else query.empty(model.graph.namespace)
-                answer = query.change_impact(base, model)
-            else:
-                answer = query.impact(model, args.records)
-            text = impact_text
-        else:
-            answer, text = query.gaps(model), gaps_text
+        answer, text = ask(
+            args.command,
+            args.model or [DEFAULT_MODEL],
+            record=getattr(args, "record", None),
+            records=getattr(args, "records", ()),
+            base=getattr(args, "base", None),
+        )
     except query.QueryError as error:
         print(f"exacly: {error}", file=sys.stderr)
         return 1
-    except subprocess.CalledProcessError as error:
-        print(f"exacly: git failed: {error.stderr.strip()}", file=sys.stderr)
-        return 1
-    print(json.dumps(answer, indent=2, default=str) if args.json else text(answer))
+    print(json.dumps(answer, indent=2, default=str) if args.json else text)
     return 0
 
 

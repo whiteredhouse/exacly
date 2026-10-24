@@ -296,12 +296,24 @@ class TestCommand:
         assert code == 1 and "REQ-404 is not a record" in err
 
     def test_impact_needs_records_or_a_base(self) -> None:
-        with pytest.raises(SystemExit):
-            run("impact", "-m", str(EXAMPLE))
+        code, _, err = run("impact", "-m", str(EXAMPLE))
+        assert code == 1 and "impact takes record IDs or a base revision" in err
 
     def test_validate_runs_the_validator(self) -> None:
         code, out, _ = run("validate", str(EXAMPLE))
         assert code == 0 and "conforms" in out
+
+    def test_a_date_that_does_not_exist_fails_with_where_it_is(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            broken = Path(folder) / "model.yaml"
+            broken.write_text("exacly: 0.2.0\nrecords:\n  - id: REQ-001\n    last_reviewed_at: 2026-13-24\n")
+            for argv in (["validate", str(broken)], ["gaps", "-m", str(broken)]):
+                code, out, err = run(*argv)
+                assert code == 1 and not out
+                assert err.strip().endswith(
+                    f"{broken} is not valid YAML at line 4, column 23: '2026-13-24' is not a valid timestamp: "
+                    "month must be in 1..12"
+                )
 
     def test_impact_against_a_git_revision(self, monkeypatch: pytest.MonkeyPatch) -> None:
         with tempfile.TemporaryDirectory() as folder, tempfile.TemporaryDirectory() as folder_outside:
