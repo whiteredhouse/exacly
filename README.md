@@ -60,6 +60,8 @@ In your own project, keep config in `spec/exacly/` and pass the commit it was va
 
 Other repositories run Exacly with the [action](action.yml) at this repository's root. `check` validates the model and fails the job when it doesn't conform. `plan` comments the change plan on each pull request, replacing its earlier comment. Both write their report to the job summary. The action installs Exacly from its own checkout with a pinned uv version and `uv.lock`; it does not require Exacly to be published on PyPI. uv and Python dependencies are downloaded as needed.
 
+Replace `<RELEASE_COMMIT_SHA>` in this workflow template with the full commit SHA of an Exacly release, or a commit on `main` that contains the action. Version tags will be published with the first release.
+
 ```yaml
 # .github/workflows/exacly.yml
 name: Exacly
@@ -71,7 +73,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: whiteredhouse/exacly@6fb064f460100fdc09135fbb4bfcc03990bb7445 # Prerelease; version tags come with the first release.
+      - uses: whiteredhouse/exacly@<RELEASE_COMMIT_SHA>
         with:
           model: spec/exacly
   plan:
@@ -84,13 +86,13 @@ jobs:
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: whiteredhouse/exacly@6fb064f460100fdc09135fbb4bfcc03990bb7445
+      - uses: whiteredhouse/exacly@<RELEASE_COMMIT_SHA>
         with:
           mode: plan
           model: spec/exacly
 ```
 
-`model` takes files, folders or patterns such as `spec/exacly/*.yaml`, one per line or separated by spaces. `plan` compares with the pull request's base branch, or with `base` when given. A pull request from a fork gets a read-only token, so its plan stays in the job summary. The action is tested on GitHub-hosted Linux and macOS runners. It sets up uv itself; self-hosted runners also need Git, Bash and, for commenting, the GitHub CLI (`gh`).
+`model` takes files, folders or patterns such as `spec/exacly/*.yaml`, one per line or separated by spaces. `plan` compares with the pull request's base branch, or with `base` when given. A pull request from a fork gets a read-only token, so its plan stays in the job summary. CI exercises `check` on GitHub-hosted Linux and macOS runners, and `plan` on Linux. It sets up uv itself; self-hosted runners also need Git, Bash and, for commenting, the GitHub CLI (`gh`).
 
 ## Development
 

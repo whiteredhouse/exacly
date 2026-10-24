@@ -287,7 +287,7 @@ records:
       - plan comments only on pull requests from the same repository, replacing its earlier comment.
       - The validator is installed with a pinned uv version from uv.lock, without development tools; an unknown mode is an error.
       - Inputs reach the scripts only through the environment.
-      - Exacly's own CI runs the action on Linux and macOS, checking valid and invalid consumer models, so every pull request tests it.
+      - Exacly's own CI runs check on Linux and macOS with valid and invalid consumer models, and plan on Linux for same-repository pull requests.
     verification_method: Tests that read the action and run its scripts on a model in a temporary repository, in CI.
     observe:
       tests:
@@ -295,6 +295,7 @@ records:
         cases:
           - "tests/test_action.py::*"
           - "tests/test_ci.py::test_the_action_is_checked_on_exacly_itself"
+          - "tests/test_ci.py::test_the_action_checks_valid_and_invalid_consumer_models_on_linux_and_macos"
 
   - id: APP-006
     type: Application
