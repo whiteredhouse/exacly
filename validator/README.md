@@ -75,6 +75,7 @@ The repository uses [mise](https://mise.jdx.dev/) for its tools (Python and uv) 
 | `mise run lint` | Checks style and formatting with Ruff |
 | `mise run typecheck` | Type-checks with mypy in strict mode |
 | `mise run examples` | Validates every example in `spec/examples/`: each 0.1 map and each 0.2 folder |
+| `mise run model` | Validates Exacly's own model in [`spec/exacly/`](../spec/exacly/README.md) against the current commit |
 | `mise run check` | All of the above |
 
 To try a model against your working copy, run `uv run exacly-validate path/to/spec/exacly`.

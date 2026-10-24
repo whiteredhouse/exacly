@@ -1,0 +1,361 @@
+# Exacly's own model: checking a model, which exists today.
+# Config: records, relationships and bindings, authored by people and agents (section 9).
+# A `tests` binding names the CI workflow and job, and, optionally, the test cases
+# that verify the record as glob patterns over case IDs `<cases file>::<description>`.
+# Without `cases`, the job's own result is the evidence.
+exacly: "0.2.0"
+
+records:
+  - id: OUT-001
+    type: Outcome
+    name: Models that match reality
+    description: A team can trust that its product model says what the product does and how it is verified.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-23"
+    beneficiary: Teams building products with coding agents
+    success_criterion: Every active Requirement in Exacly's own model has a passed verification observed on main
+    evaluation_period: Each push to main, from the first state refresh
+
+  - id: CAP-001
+    type: Capability
+    name: Check a model
+    description: Tell whether a model follows the specification, and why not.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-23"
+    scope: Config and state documents of one model; excludes whether the model's claims are true.
+
+  - id: PROC-001
+    type: Process
+    name: Review a model change
+    description: How a change to a model's config is checked and adopted.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-23"
+    perspective: business
+    actors: [Author, Reviewer, CI]
+    trigger: A pull request changes the specification, the validator or a model
+    steps:
+      - Author changes config, code or both on a branch
+      - CI validates the change and runs the test cases
+      - Reviewer reads the validation report and the diff
+      - Reviewer merges the pull request
+    completion: The change is on main with a conforming validation report
+    exceptions:
+      - CI fails (author fixes and pushes again)
+      - A finding is accepted for now (author records an exception)
+
+  - id: REQ-001
+    type: Requirement
+    name: Check document shape
+    description: Each document is checked against the schema for its version and kind.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-23"
+    statement: Check every config and state document against the JSON Schema for its spec version and kind, and skip graph checks when one fails.
+    acceptance_criteria:
+      - The worked examples and every valid schema test case pass.
+      - Every invalid schema test case reports the errors it lists, by location and keyword.
+      - A document that fails its schema is reported with its name, and graph checks are skipped.
+    verification_method: Schema test cases and validator test cases in CI.
+    observe:
+      tests:
+        workflow: .github/workflows/spec.yml
+        job: check
+        cases:
+          - "spec/tests/*/cases.yaml::*"
+          - "validator/tests/*/cases.yaml::*fails*schema*"
+
+  - id: REQ-002
+    type: Requirement
+    name: Check references and relationships
+    description: References resolve, IDs and edges are unique, endpoints are legal, and cycles are found.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-23"
+    statement: Report duplicate IDs and edges, unresolved references, relationship endpoints section 6 does not allow, and containment, replacement and dependency cycles.
+    acceptance_criteria:
+      - Duplicate IDs and duplicate edges are errors.
+      - A reference to a record the model does not contain is an error; a reference to another model is not resolved locally.
+      - An endpoint section 6 does not allow is an error, including stores from anything but Infrastructure.
+      - A containment or replacement cycle is an error; a dependency cycle, including a self-dependency, is a warning.
+    verification_method: Validator test cases in CI.
+    observe:
+      tests:
+        workflow: .github/workflows/spec.yml
+        job: check
+        cases:
+          - "validator/tests/*/cases.yaml::Duplicate*"
+          - "validator/tests/*/cases.yaml::IDs must be unique*"
+          - "validator/tests/*/cases.yaml::A relationship to a record that does not exist"
+          - "validator/tests/*/cases.yaml::A reference to another model*"
+          - "validator/tests/*/cases.yaml::A namespace-qualified reference*"
+          - "validator/tests/*/cases.yaml::A relationship between types*"
+          - "validator/tests/*/cases.yaml::contains must link*"
+          - "validator/tests/*/cases.yaml::Only Infrastructure stores*"
+          - "validator/tests/*/cases.yaml::*cycle*"
+
+  - id: REQ-003
+    type: Requirement
+    name: Check traceability
+    description: The section 7 rules hold for active records and are reported for proposed ones.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-23"
+    statement: Apply rules 7.1 to 7.9, reporting a gap in an active record as an error and in a proposed record as a warning, except 7.9, which is always a warning.
+    acceptance_criteria:
+      - Each section 7 rule has test cases for a gap and for its satisfied form.
+      - Rule 7.8 reads claims from every state document and accepts only unexpired evidence for the claim's own context.
+      - An active relationship to a retired record is an error.
+    verification_method: Validator test cases in CI.
+    observe:
+      tests:
+        workflow: .github/workflows/spec.yml
+        job: check
+        cases:
+          - "validator/tests/*/cases.yaml::7.*"
+          - "validator/tests/*/cases.yaml::The worked example*"
+          - "validator/tests/*/cases.yaml::An active relationship to a retired record*"
+
+  - id: REQ-004
+    type: Requirement
+    name: Read config across documents
+    description: A model's config may span several documents.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-23"
+    statement: Read every YAML and JSON document in a config folder as one model, requiring one spec version and exactly one model boundary.
+    acceptance_criteria:
+      - Documents that declare different spec versions are an error.
+      - No model boundary, or more than one, is an error naming each document that declares one.
+      - A folder's other files, such as a README or the copied specification, are ignored.
+    verification_method: Validator test cases and command line tests in CI.
+    observe:
+      tests:
+        workflow: .github/workflows/spec.yml
+        job: check
+        cases:
+          - "validator/tests/*/cases.yaml::*specification version*"
+          - "validator/tests/*/cases.yaml::*model boundary*"
+          - "validator/tests/test_validator.py::*"
+
+  - id: REQ-005
+    type: Requirement
+    name: Check state against config
+    description: State observes only what config contains, for the config it was computed against.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-23"
+    statement: Report state that names records, relationships or pending work the config does not contain, state for another model or a repeated context, and state computed against another config revision.
+    acceptance_criteria:
+      - Unknown records, relationships and pending work in state are errors.
+      - State for another namespace, or a second state document for one context, is an error and is not read.
+      - State computed against another revision is a warning; only Git hashes match by abbreviation.
+    verification_method: Validator test cases in CI.
+    observe:
+      tests:
+        workflow: .github/workflows/spec.yml
+        job: check
+        cases:
+          - "validator/tests/*/cases.yaml::State *"
+          - "validator/tests/*/cases.yaml::Pending work*"
+          - "validator/tests/*/cases.yaml::Two state documents*"
+          - "validator/tests/*/cases.yaml::*revision*"
+
+  - id: REQ-006
+    type: Requirement
+    name: Apply exceptions
+    description: A documented exception waives the finding it names until it expires.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-23"
+    statement: Waive an error named by a valid exception's rule and record, report it as applied, and warn about exceptions that are expired, expiring within 30 days, or match no finding.
+    acceptance_criteria:
+      - A valid exception turns "does not conform" into "conforms with exceptions".
+      - An expired exception waives nothing.
+      - Unused and expiring exceptions are warnings.
+    verification_method: Validator test cases in CI.
+    observe:
+      tests:
+        workflow: .github/workflows/spec.yml
+        job: check
+        cases:
+          - "validator/tests/*/cases.yaml::*exception*"
+
+  - id: REQ-007
+    type: Requirement
+    name: Report where each finding comes from
+    description: A report names the model, revision and documents, and each finding names its record and document.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-23"
+    statement: Produce a section 11 report, as text or JSON, that names the revision, scope, date, documents and state read, and names for each finding the record and the document that holds it.
+    acceptance_criteria:
+      - A claim finding names the state document; a relationship or exception finding names the config document that holds it.
+      - A report renders even when the model boundary is malformed.
+      - The command exits 1 when the model does not conform and 0 otherwise.
+    verification_method: Validator test cases and command line tests in CI.
+    observe:
+      tests:
+        workflow: .github/workflows/spec.yml
+        job: check
+        cases:
+          - "validator/tests/*/cases.yaml::*findings*"
+          - "validator/tests/*/cases.yaml::Findings*"
+          - "validator/tests/*/cases.yaml::A map with no model*"
+          - "validator/tests/test_validator.py::*"
+
+  - id: REQ-008
+    type: Requirement
+    name: Warn about stale content
+    description: Reviews, baselines and evidence go stale, and the report says so.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-23"
+    statement: Warn about active records not reviewed within the model's interval, unknown baselines, and evidence past its expiry date.
+    acceptance_criteria:
+      - An active record never reviewed, or reviewed longer ago than the interval, is a warning.
+      - Evidence past its expiry date is a warning and supports no claim; it still applies on its expiry date.
+    verification_method: Validator test cases in CI.
+    observe:
+      tests:
+        workflow: .github/workflows/spec.yml
+        job: check
+        cases:
+          - "validator/tests/*/cases.yaml::*reviewed*"
+          - "validator/tests/*/cases.yaml::An unknown baseline*"
+          - "validator/tests/*/cases.yaml::*xpire*"
+
+  - id: REQ-009
+    type: Requirement
+    name: Check every change in CI
+    description: No change to the specification, the validator or a model reaches main unchecked.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-23"
+    statement: Run the test cases, lint, type checks, the examples and Exacly's own model on every pull request and push to main that touches them.
+    acceptance_criteria:
+      - The check job runs `mise run check` on pull requests and pushes to main.
+      - The job fails when any test, lint rule, type check or validation fails.
+    verification_method: The check job's result on main.
+    observe:
+      tests: { workflow: .github/workflows/spec.yml, job: check }
+
+  - id: REQ-011
+    type: Requirement
+    name: Keep config and state in version control
+    description: >-
+      Config and state history is the repository's history. Proposed until CI
+      commits state from main and a test can verify it, so that every active
+      Requirement can be verified.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-23"
+    statement: Keep config and state in the repository, so main is the current baseline, branches are proposed changes, and tags are historical baselines.
+    acceptance_criteria:
+      - Config lives in spec/exacly/ and changes only through pull requests.
+      - State lives in spec/exacly/state/ and is committed only from main.
+    verification_method: Review of the repository's branch protection and history.
+
+  - id: INFO-001
+    type: Information
+    name: Model config
+    description: The records, relationships, exceptions and bindings people and agents author.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-23"
+    definition: The config documents of one model, as section 9 defines them.
+    identifiers: [namespace, document path, record ID, relationship ID or tuple]
+    steward: exacly-maintainers
+
+  - id: INFO-002
+    type: Information
+    name: Model state
+    description: What tooling observed of a model's reality, per context.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-23"
+    definition: The state documents of one model, as section 9 defines them.
+    identifiers: [namespace, context, lineage, serial, config revision]
+    steward: exacly-maintainers
+
+  - id: APP-001
+    type: Application
+    name: Validator
+    description: The exacly-validate package and command.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-23"
+    responsibility: Check a model's config and state against the specification and report the findings.
+    interfaces: [exacly-validate command, exacly_validate Python API]
+    implementation_ref: { locator: validator/src/exacly_validate }
+
+  - id: INF-001
+    type: Infrastructure
+    name: GitHub Actions
+    description: Runs the check job for pull requests and main. Provided by GitHub; exacly-maintainers own the workflow.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-23"
+    kind: CI service
+    purpose: Run the checks on every change.
+    operational_ref: { locator: .github/workflows/spec.yml }
+
+  - id: INF-002
+    type: Infrastructure
+    name: GitHub repository
+    description: whiteredhouse/exacly. Provided by GitHub; exacly-maintainers own the repository.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-23"
+    kind: Source control
+    purpose: Hold config and state with their history.
+    operational_ref: { locator: "https://github.com/whiteredhouse/exacly" }
+
+relationships:
+  - { source: CAP-001, type: contributes_to, target: OUT-001 }
+  - { source: PROC-001, type: uses_capability, target: CAP-001 }
+  - { source: PROC-001, type: uses, target: APP-001 }
+  - { source: REQ-001, type: supports, target: PROC-001 }
+  - { source: REQ-002, type: supports, target: PROC-001 }
+  - { source: REQ-003, type: supports, target: PROC-001 }
+  - { source: REQ-004, type: supports, target: PROC-001 }
+  - { source: REQ-005, type: supports, target: PROC-001 }
+  - { source: REQ-006, type: supports, target: PROC-001 }
+  - { source: REQ-007, type: supports, target: PROC-001 }
+  - { source: REQ-008, type: supports, target: PROC-001 }
+  - { source: REQ-009, type: supports, target: PROC-001 }
+  - { source: REQ-011, type: supports, target: PROC-001 }
+  - { source: APP-001, type: implements, target: REQ-001 }
+  - { source: APP-001, type: implements, target: REQ-002 }
+  - { source: APP-001, type: implements, target: REQ-003 }
+  - { source: APP-001, type: implements, target: REQ-004 }
+  - { source: APP-001, type: implements, target: REQ-005 }
+  - { source: APP-001, type: implements, target: REQ-006 }
+  - { source: APP-001, type: implements, target: REQ-007 }
+  - { source: APP-001, type: implements, target: REQ-008 }
+  - { source: INF-001, type: implements, target: REQ-009 }
+  - { source: INF-002, type: implements, target: REQ-011 }
+  - { source: APP-001, type: reads, target: INFO-001 }
+  - { source: APP-001, type: reads, target: INFO-002 }
+  - { source: INF-002, type: stores, target: INFO-001, role: system_of_record }
+  - { source: INF-002, type: stores, target: INFO-002, role: system_of_record }

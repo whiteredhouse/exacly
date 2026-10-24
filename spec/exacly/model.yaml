@@ -1,0 +1,11 @@
+# Exacly's own model: the model boundary. Config, authored by people and agents (section 9).
+exacly: "0.2.0"
+model:
+  namespace: exacly
+  product: Exacly
+  owner: exacly-maintainers
+  scope:
+    covers: The Exacly specification's schemas, the validator, and the tooling that observes a model's reality
+    excludes: [The specification's prose, Pilot and client models]
+  environment: main
+  review_interval_days: 90

@@ -31,6 +31,11 @@ description = "Validate every example: each 0.1 product map, and each 0.2 config
 depends = ["sync"]
 run = 'for f in spec/examples/0.1/*.yaml spec/examples/0.2/*/; do uv run --locked exacly-validate "$f" || exit 1; done'
 
+[tasks.model]
+description = "Validate Exacly's own model against the current commit"
+depends = ["sync"]
+run = 'uv run --locked exacly-validate spec/exacly --revision "$(git rev-parse HEAD)"'
+
 [tasks.check]
 description = "Everything CI runs"
-depends = ["test", "lint", "typecheck", "examples"]
+depends = ["test", "lint", "typecheck", "examples", "model"]
