@@ -115,10 +115,11 @@ class Server:
         if method == "tools/list":
             return {"tools": TOOLS}
         if method == "tools/call":
-            return self.call(params.get("name", ""), params.get("arguments") or {})
+            # Default only when absent, so that arguments of the wrong type reach validation and are rejected.
+            return self.call(params.get("name", ""), params.get("arguments", {}))
         raise LookupError(f"unknown method {method}")
 
-    def call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    def call(self, name: str, arguments: Any) -> dict[str, Any]:
         tool = next((t for t in TOOLS if t["name"] == name), None)
         if tool is None:
             raise ValueError(f"unknown tool {name}")

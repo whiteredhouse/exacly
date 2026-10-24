@@ -78,10 +78,10 @@ records:
     acceptance_criteria:
       - Initialize agrees on the client's protocol version when supported, and otherwise offers the newest.
       - Tools are listed with descriptions and input schemas, one per question.
-      - A question the model can't answer, such as an unknown record, is a tool result marked as an error.
+      - A question the model can't answer, such as an unknown record or a config file that doesn't parse, is a tool result marked as an error, naming the file and line where it can.
       - An unknown tool is an invalid-params error; an unknown method is a method-not-found error; a line that is not JSON is a parse error.
       - Notifications get no response.
-      - Tools are marked read-only, idempotent and closed-world, and arguments that don't match a tool's input schema are a tool result marked as an error.
+      - Tools are marked read-only, idempotent and closed-world, and arguments that don't match a tool's input schema, including arguments that aren't an object, are a tool result marked as an error.
       - An unexpected failure is an internal error for that request, and the server goes on serving.
     verification_method: MCP server tests in CI.
     observe:
