@@ -16,6 +16,8 @@ Version 0.2 splits the product map into **config**, which people and agents auth
 
 [`examples/0.2/invoice-reminders/`](examples/0.2/invoice-reminders/) is the section 12 worked example as two config documents. It has no state, because every record is still proposed. Section 14 of the spec lists the changes from 0.1 and how to migrate.
 
+The draft distinguishes structural conformance from measurement readiness and observed results. [Measurement coverage acceptance criteria](../docs/measurement-coverage-acceptance-criteria.md) describe proposed coverage tooling; they do not add schema fields or validator rules to 0.2.
+
 ### 0.1
 
 [`schema/0.1/2026-10-23.json`](schema/0.1/2026-10-23.json) is a JSON Schema for a product map that follows any 0.1.x version, in YAML or JSON. It checks one document's shape:
