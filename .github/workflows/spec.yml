@@ -2,16 +2,18 @@ name: Spec
 
 on:
   pull_request:
-    paths: &paths
+    paths:
       - "spec/**"
       - "validator/**"
       - "pyproject.toml"
       - "uv.lock"
       - "mise.toml"
+      - "tests/**"
       - ".github/workflows/spec.yml"
+  # Every push to main runs, whatever it changed, so that the latest main always gets a state job.
+  # The state job's own commits carry [skip ci] and don't start another run.
   push:
     branches: [main]
-    paths: *paths
 
 permissions:
   contents: read
@@ -22,5 +24,46 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
-      - name: Test, lint, type-check and validate the examples
+      - name: Test, lint, type-check, validate the examples, and refresh and validate Exacly's own state
         run: mise run check
+
+  state:
+    # State is written only by tooling and committed only from main (spec section 9).
+    # This job reruns the checks rather than reusing the check job's reports, so that only
+    # it holds a token that can write, and only on main.
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: exacly-state
+      cancel-in-progress: false
+      # Keep every pending state job: by default a newer pending job replaces an older one, so an older
+      # revision whose checks finish late would cancel the newest revision's state job.
+      queue: max
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
+      - name: Refresh Exacly's own state
+        run: mise run model
+      - name: Commit the state to main
+        run: |
+          set -euo pipefail
+          mkdir -p spec/exacly/state
+          cp reports/state/main.json spec/exacly/state/main.json
+          git add spec/exacly/state/main.json
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "Refresh Exacly's own state for ${GITHUB_SHA::7} [skip ci]"
+          if git push origin HEAD:refs/heads/main; then
+            exit 0
+          fi
+          # A rejection is expected only when main moved on: that push started its own run, whose state job
+          # follows this one and refreshes the state for the newer main. Anything else is a failure.
+          git fetch origin main
+          if [ "$(git rev-parse origin/main)" != "$GITHUB_SHA" ]; then
+            echo "::notice::main moved on to $(git rev-parse --short origin/main); its own run refreshes the state"
+            exit 0
+          fi
+          echo "::error::Could not push the state to main, which is still at ${GITHUB_SHA::7}"
+          exit 1

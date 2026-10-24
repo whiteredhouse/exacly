@@ -13,18 +13,13 @@ Exacly models itself, following the layout in section 13 of the specification. I
 ## Config
 
 - [`validation.yaml`](validation.yaml) covers checking a model. The validator, CI and the repository exist today, so these records are active.
-- [`observation.yaml`](observation.yaml) covers observing a model's reality. The `exacly-refresh` command exists, so its requirement and application are active. Running it on main, and the measure it feeds, are still proposed.
+- [`observation.yaml`](observation.yaml) covers observing a model's reality: `exacly-refresh` and the CI job that runs it on main are active, and the measure they feed is proposed.
 
 ## State
 
-`state/` will hold one state document per context, written only by `exacly-refresh` and committed only from main. It stays empty until CI runs refresh on main. To see the state a run would write:
+[`state/main.json`](state/) is the state for main, written only by `exacly-refresh` and committed only from main by CI. On each push to main, the workflow's `state` job reruns the checks, refreshes the state from the test results, validates it with the config, and commits it with `[skip ci]`. It doesn't commit if a check fails. Every push to main starts this job, whatever it changed, so if main moves on before the state is pushed, the newer push's job writes the state instead. Any other push failure, such as branch protection, fails the job.
 
-```sh
-uv run pytest spec/tests validator/tests --junitxml=junit.xml
-uv run exacly-refresh spec/exacly --context main --state /tmp/main.json --junit junit.xml --distribution \
-  --revision "$(git rev-parse HEAD)" --workflow .github/workflows/spec.yml --job check --job-status success
-uv run exacly-validate spec/exacly /tmp/main.json --revision "$(git rev-parse HEAD)"
-```
+`mise run check` runs the same refresh locally and on pull requests, writing to `reports/state/main.json` without committing anything. A proposed change can show its effect on state this way, but never stores it. Validation in CI reads that fresh state rather than the committed one, so a change that removes a record isn't blocked by state from before it.
 
 `--distribution` says that main is how Exacly is distributed, since people install it from the repository. So an implementer present at the revision counts as released there.
 
@@ -36,7 +31,6 @@ A `tests` binding tells refresh which results verify a record:
 observe:
   tests:
     workflow: .github/workflows/spec.yml   # the workflow that runs the tests
-    job: check                             # its job
     cases:                                 # optional: glob patterns over case IDs
       - "validator/tests/*/cases.yaml::7.*"
 ```
@@ -49,4 +43,4 @@ A case ID is `<cases file>::<description>` for a data-driven case, and `<test fi
 mise run model
 ```
 
-This runs `exacly-validate spec/exacly --revision <HEAD>`, and CI runs it on every change as part of `mise run check`.
+This runs the tests, refreshes state into `reports/state/main.json`, and validates the config with that state for the current commit. CI runs it on every change as part of `mise run check`. A binding may also name a `job`; Exacly's don't, because the checks run in both the `check` and `state` jobs.

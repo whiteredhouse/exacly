@@ -45,7 +45,7 @@ target-version = "py312"
 select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF"]
 
 [tool.mypy]
-files = ["validator/src", "validator/tests", "spec/tests"]
+files = ["validator/src", "validator/tests", "spec/tests", "tests"]
 strict = true
 
 # jsonpatch ships no type information; only the tests use it.

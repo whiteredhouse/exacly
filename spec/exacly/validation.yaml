@@ -1,7 +1,7 @@
 # Exacly's own model: checking a model, which exists today.
 # Config: records, relationships and bindings, authored by people and agents (section 9).
-# A `tests` binding names the CI workflow and job, and, optionally, the test cases
-# that verify the record as glob patterns over case IDs `<cases file>::<description>`.
+# A `tests` binding names the CI workflow (and may name its job) and, optionally, the
+# test cases that verify the record as glob patterns over case IDs `<cases file>::<description>`.
 # Without `cases`, the job's own result is the evidence.
 exacly: "0.2.0"
 
@@ -66,7 +66,6 @@ records:
     observe:
       tests:
         workflow: .github/workflows/spec.yml
-        job: check
         cases:
           - "spec/tests/*/cases.yaml::*"
           - "validator/tests/*/cases.yaml::*fails*schema*"
@@ -89,7 +88,6 @@ records:
     observe:
       tests:
         workflow: .github/workflows/spec.yml
-        job: check
         cases:
           - "validator/tests/*/cases.yaml::Duplicate*"
           - "validator/tests/*/cases.yaml::IDs must be unique*"
@@ -118,7 +116,6 @@ records:
     observe:
       tests:
         workflow: .github/workflows/spec.yml
-        job: check
         cases:
           - "validator/tests/*/cases.yaml::7.*"
           - "validator/tests/*/cases.yaml::The worked example*"
@@ -141,7 +138,6 @@ records:
     observe:
       tests:
         workflow: .github/workflows/spec.yml
-        job: check
         cases:
           - "validator/tests/*/cases.yaml::*specification version*"
           - "validator/tests/*/cases.yaml::*model boundary*"
@@ -164,7 +160,6 @@ records:
     observe:
       tests:
         workflow: .github/workflows/spec.yml
-        job: check
         cases:
           - "validator/tests/*/cases.yaml::State *"
           - "validator/tests/*/cases.yaml::Pending work*"
@@ -188,7 +183,6 @@ records:
     observe:
       tests:
         workflow: .github/workflows/spec.yml
-        job: check
         cases:
           - "validator/tests/*/cases.yaml::*exception*"
 
@@ -209,7 +203,6 @@ records:
     observe:
       tests:
         workflow: .github/workflows/spec.yml
-        job: check
         cases:
           - "validator/tests/*/cases.yaml::*findings*"
           - "validator/tests/*/cases.yaml::Findings*"
@@ -232,7 +225,6 @@ records:
     observe:
       tests:
         workflow: .github/workflows/spec.yml
-        job: check
         cases:
           - "validator/tests/*/cases.yaml::*reviewed*"
           - "validator/tests/*/cases.yaml::An unknown baseline*"
@@ -250,26 +242,33 @@ records:
     acceptance_criteria:
       - The check job runs `mise run check` on pull requests and pushes to main.
       - The job fails when any test, lint rule, type check or validation fails.
-    verification_method: The check job's result on main.
+    verification_method: The checks' result in the workflow run on main.
     observe:
-      tests: { workflow: .github/workflows/spec.yml, job: check }
+      tests: { workflow: .github/workflows/spec.yml }
 
   - id: REQ-011
     type: Requirement
     name: Keep config and state in version control
     description: >-
-      Config and state history is the repository's history. Proposed until CI
-      commits state from main and a test can verify it, so that every active
-      Requirement can be verified.
+      Config and state history is the repository's history. Whether main
+      accepts changes only through pull requests is a repository setting on
+      GitHub, outside what the repository itself can verify.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-23"
-    statement: Keep config and state in the repository, so main is the current baseline, branches are proposed changes, and tags are historical baselines.
+    last_reviewed_at: "2026-10-24"
+    statement: Keep config and state in the repository, so main is the current baseline, branches are proposed changes, and tags are historical baselines; only CI writes state, and only from main.
     acceptance_criteria:
-      - Config lives in spec/exacly/ and changes only through pull requests.
-      - State lives in spec/exacly/state/ and is committed only from main.
-    verification_method: Review of the repository's branch protection and history.
+      - Config lives in spec/exacly/ and CI checks every change to it, or to the tooling, on pull requests and on main.
+      - The workflow cannot write by default; only the state job can, and it runs only on pushes to main after the checks pass.
+      - The state job commits only spec/exacly/state/main.json, never force-pushes, and marks its commit so it does not trigger CI.
+      - Test reports and state computed by a check run are not committed.
+    verification_method: Tests that read the workflow and the repository's ignore rules, in CI.
+    observe:
+      tests:
+        workflow: .github/workflows/spec.yml
+        cases:
+          - "tests/test_ci.py::*"
 
   - id: INFO-001
     type: Information
@@ -310,7 +309,7 @@ records:
   - id: INF-001
     type: Infrastructure
     name: GitHub Actions
-    description: Runs the check job for pull requests and main. Provided by GitHub; exacly-maintainers own the workflow.
+    description: Runs the checks for pull requests and main, and commits state from main. Provided by GitHub; exacly-maintainers own the workflow.
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
@@ -355,6 +354,7 @@ relationships:
   - { source: APP-001, type: implements, target: REQ-008 }
   - { source: INF-001, type: implements, target: REQ-009 }
   - { source: INF-002, type: implements, target: REQ-011 }
+  - { source: INF-001, type: implements, target: REQ-011 }
   - { source: APP-001, type: reads, target: INFO-001 }
   - { source: APP-001, type: reads, target: INFO-002 }
   - { source: INF-002, type: stores, target: INFO-001, role: system_of_record }
