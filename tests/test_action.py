@@ -105,3 +105,16 @@ def test_the_plan_is_written_against_the_base_branch_even_when_it_was_not_fetche
         assert "Against `origin/main`" in plan and "`REQ-001`" in plan
         assert (temp / "summary.md").read_text() == plan
         assert run("Write the plan", repo, temp, MODEL="model", BASE="").returncode == 1
+
+
+def test_patterns_are_matched_against_each_revision() -> None:
+    with tempfile.TemporaryDirectory() as folder:
+        temp = Path(folder)
+        repo = consumer(temp)
+        (repo / "model" / "billing.yaml").unlink()
+        by_pattern = run("Write the plan", repo, temp, MODEL="model/*.yaml", BASE="main")
+        assert by_pattern.returncode == 0, by_pattern.stderr
+        plan = (temp / "exacly-plan.md").read_text()
+        assert run("Write the plan", repo, temp, MODEL="model", BASE="main").returncode == 0
+        assert plan == (temp / "exacly-plan.md").read_text()
+        assert "| - | `REQ-001` |" in plan

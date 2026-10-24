@@ -11,14 +11,16 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import glob
 import json
 import os
 import subprocess
 import sys
 from collections import Counter
 from collections.abc import Iterable
+from fnmatch import fnmatchcase
 from importlib import metadata
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import yaml
@@ -36,11 +38,34 @@ def wanted(file: Path, folder: Path) -> bool:
     return file.suffix in SUFFIXES and not any(p.startswith(".") for p in file.relative_to(folder).parts)
 
 
+def is_pattern(path: Path) -> bool:
+    return any(c in str(path) for c in "*?[")
+
+
+def static_part(path: Path) -> Path:
+    """The folder a pattern such as spec/*/model.yaml starts in: its parts before the first one with a wildcard."""
+    parts = path.parts
+    first = next(i for i, part in enumerate(parts) if is_pattern(Path(part)))
+    return Path(*parts[:first]) if first else Path(".")
+
+
+def matches(name: str, pattern: str) -> bool:
+    """Whether a path matches a pattern part by part, as the shell's * and ? do: neither crosses a /."""
+    names, patterns = PurePosixPath(name).parts, PurePosixPath(pattern).parts
+    return len(names) == len(patterns) and all(fnmatchcase(n, p) for n, p in zip(names, patterns, strict=True))
+
+
 def load(paths: list[Path]) -> dict[str, Any]:
-    """Each file given, and every YAML or JSON file under each folder given, by path."""
+    """Each file given, every file a pattern such as spec/exacly/*.yaml matches, and every YAML or JSON file under
+    each folder given, by path."""
     files: list[Path] = []
     for path in paths:
-        if path.is_dir():
+        if is_pattern(path):
+            found = sorted(Path(f) for f in glob.glob(str(path)) if Path(f).is_file())
+            if not found:
+                raise query.QueryError(f"{path} matches no files")
+            files += found
+        elif path.is_dir():
             files += sorted(f for f in path.rglob("*") if f.is_file() and wanted(f, path))
         else:
             files.append(path)
@@ -80,7 +105,8 @@ def parse(text: str, name: str) -> Any:
 
 def load_at(revision: str, paths: list[Path]) -> dict[str, Any]:
     """As `load`, but the files as they were at a Git revision. Paths may be relative or absolute, inside the
-    repository that holds them; documents are named by their path in that repository."""
+    repository that holds them; documents are named by their path in that repository. A pattern is matched
+    against the files at that revision, so a file the change deleted is still compared."""
 
     def git(where: Path, *args: str) -> str:
         return subprocess.run(
@@ -88,19 +114,24 @@ def load_at(revision: str, paths: list[Path]) -> dict[str, Any]:
         ).stdout
 
     documents = {}
-    for path in paths:
-        path = path.resolve()
-        top = Path(git(path if path.is_dir() else path.parent, "rev-parse", "--show-toplevel").strip()).resolve()
+    for given in paths:
+        pattern = is_pattern(given)
+        path = Path(os.path.normpath(Path.cwd().resolve() / given)) if pattern else given.resolve()
+        start = static_part(path) if pattern else path if path.is_dir() else path.parent
+        while not start.is_dir():  # A folder the change deleted, which held files at the revision.
+            start = start.parent
+        top = Path(git(start, "rev-parse", "--show-toplevel").strip()).resolve()
         try:
             inside = path.relative_to(top)
         except ValueError as error:
             raise query.QueryError(f"{path} is not in the Git repository at {top}") from error
+        listed = static_part(inside) if pattern else inside
         # NUL-separated, so Git doesn't quote names with non-ASCII or special characters.
-        for name in git(top, "ls-tree", "-r", "-z", "--name-only", revision, "--", str(inside)).split("\0"):
+        for name in git(top, "ls-tree", "-r", "-z", "--name-only", revision, "--", str(listed)).split("\0"):
             if not name:
                 continue
             file = Path(name)
-            if file == inside or wanted(file, inside):
+            if matches(name, inside.as_posix()) if pattern else file == inside or wanted(file, inside):
                 documents[name] = parse(git(top, "show", f"{revision}:{name}"), f"{name} at {revision}")
     return documents
 
