@@ -52,7 +52,9 @@ def load_at(revision: str, paths: list[Path]) -> dict[str, Any]:
     repository that holds them; documents are named by their path in that repository."""
 
     def git(where: Path, *args: str) -> str:
-        return subprocess.run(["git", "-C", str(where), *args], check=True, capture_output=True, text=True).stdout
+        return subprocess.run(
+            ["git", "-C", str(where), *args], check=True, capture_output=True, encoding="utf-8"
+        ).stdout
 
     documents = {}
     for path in paths:
@@ -62,7 +64,10 @@ def load_at(revision: str, paths: list[Path]) -> dict[str, Any]:
             inside = path.relative_to(top)
         except ValueError as error:
             raise query.QueryError(f"{path} is not in the Git repository at {top}") from error
-        for name in git(top, "ls-tree", "-r", "--name-only", revision, "--", str(inside)).splitlines():
+        # NUL-separated, so Git doesn't quote names with non-ASCII or special characters.
+        for name in git(top, "ls-tree", "-r", "-z", "--name-only", revision, "--", str(inside)).split("\0"):
+            if not name:
+                continue
             file = Path(name)
             if file == inside or wanted(file, inside):
                 documents[name] = yaml.safe_load(git(top, "show", f"{revision}:{name}"))
