@@ -1,6 +1,6 @@
 """Runs every case in 0.1/cases.yaml and 0.2/cases.yaml through the validator and compares the report.
 
-Run with `mise run test`, or from the repository root: uv run python -m unittest discover -s validator/tests
+Run with `mise run test`, or from the repository root: uv run pytest validator/tests
 """
 
 import contextlib
@@ -11,16 +11,19 @@ import json
 import shutil
 import tempfile
 import unittest
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, ClassVar
 
 import jsonpatch
+import pytest
 import yaml
 from exacly_validate import validate, validate_documents
 from exacly_validate.cli import main
 
 TESTS = Path(__file__).resolve().parent
-EXAMPLES = TESTS.parent.parent / "spec" / "examples"
+ROOT = TESTS.parent.parent
+EXAMPLES = ROOT / "spec" / "examples"
 EXAMPLE_0_1 = EXAMPLES / "0.1" / "invoice-reminders.yaml"
 EXAMPLE_0_2 = EXAMPLES / "0.2" / "invoice-reminders"
 
@@ -42,47 +45,42 @@ def finding_key(f: dict[str, Any]) -> tuple[str, str, str]:
     return (f["severity"], f["rule"], str(f["record"]))
 
 
+SUITES = {v: load_suite(TESTS / v / "cases.yaml") for v in ("0.1", "0.2")}
+CASE_LIST = [(v, case) for v, (suite, _) in SUITES.items() for case in suite["cases"]]
+
+
+def check_report(case: dict[str, Any], report: dict[str, Any]) -> None:
+    reported = report["errors"] + report["warnings"]
+    found = sorted(reported, key=lambda f: (*finding_key(f), str(f["document"])))
+    expected = sorted(case["findings"], key=lambda f: (*finding_key(f), str(f.get("document"))))
+    messages = "\n".join(f"{f['document']}: {f['message']}" for f in reported)
+    assert [finding_key(f) for f in found] == [finding_key(f) for f in expected], messages
+    for f, e in zip(found, expected, strict=True):
+        if "document" in e:
+            assert f["document"] == e["document"], f["message"]
+    waived = sorted((f["rule"], f["record"]) for f in report["exceptions_applied"])
+    assert waived == sorted((w["rule"], w["record"]) for w in case.get("waived", []))
+    assert report["result"] == case["result"]
+
+
+@pytest.mark.parametrize(("version", "case"), CASE_LIST, ids=[f"{v}: {c['description']}" for v, c in CASE_LIST])
+def test_case(version: str, case: dict[str, Any], record_property: Callable[[str, object], None]) -> None:
+    # Bindings in spec/exacly select test cases by this ID.
+    record_property("exacly-case", f"{(TESTS / version / 'cases.yaml').relative_to(ROOT)}::{case['description']}")
+    suite, bases = SUITES[version]
+    date = dt.date.fromisoformat(suite["date"])
+    docs = jsonpatch.apply_patch(bases[case["base"]], case["patch"])
+    before = copy.deepcopy(docs)
+    if version == "0.1":
+        report = validate(docs, date).as_dict()
+    else:
+        report = validate_documents(docs, date, case.get("revision", suite["revision"])).as_dict()
+    assert docs == before, "the validator must not change its input"
+    check_report(case, report)
+
+
 class ValidatorTest(unittest.TestCase):
-    suites: ClassVar[dict[str, tuple[dict[str, Any], dict[str, Any]]]]
-
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.suites = {v: load_suite(TESTS / v / "cases.yaml") for v in ("0.1", "0.2")}
-
-    def check_report(self, case: dict[str, Any], report: dict[str, Any]) -> None:
-        reported = report["errors"] + report["warnings"]
-        found = sorted(reported, key=lambda f: (*finding_key(f), str(f["document"])))
-        expected = sorted(case["findings"], key=lambda f: (*finding_key(f), str(f.get("document"))))
-        messages = "\n".join(f"{f['document']}: {f['message']}" for f in reported)
-        self.assertEqual([finding_key(f) for f in found], [finding_key(f) for f in expected], messages)
-        for f, e in zip(found, expected, strict=True):
-            if "document" in e:
-                self.assertEqual(f["document"], e["document"], f["message"])
-        waived = sorted((f["rule"], f["record"]) for f in report["exceptions_applied"])
-        self.assertEqual(waived, sorted((w["rule"], w["record"]) for w in case.get("waived", [])))
-        self.assertEqual(report["result"], case["result"])
-
-    def test_cases_0_1(self) -> None:
-        suite, bases = self.suites["0.1"]
-        date = dt.date.fromisoformat(suite["date"])
-        for case in suite["cases"]:
-            with self.subTest(case["description"]):
-                doc = jsonpatch.apply_patch(bases[case["base"]], case["patch"])
-                before = copy.deepcopy(doc)
-                report = validate(doc, date).as_dict()
-                self.assertEqual(doc, before, "the validator must not change its input")
-                self.check_report(case, report)
-
-    def test_cases_0_2(self) -> None:
-        suite, bases = self.suites["0.2"]
-        date = dt.date.fromisoformat(suite["date"])
-        for case in suite["cases"]:
-            with self.subTest(case["description"]):
-                docs = jsonpatch.apply_patch(bases[case["base"]], case["patch"])
-                before = copy.deepcopy(docs)
-                report = validate_documents(docs, date, case.get("revision", suite["revision"])).as_dict()
-                self.assertEqual(docs, before, "the validator must not change its input")
-                self.check_report(case, report)
+    suites: ClassVar[dict[str, tuple[dict[str, Any], dict[str, Any]]]] = SUITES
 
     def test_reports_render_for_malformed_metadata(self) -> None:
         _, bases = self.suites["0.1"]

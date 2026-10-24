@@ -2,21 +2,23 @@
 with an $id matching its path, every example validates, and every case in
 0.2/cases.yaml gives the stated result and reports the stated errors.
 
-Run with `mise run test`, or from the repository root: uv run python -m unittest discover -s spec/tests
+Run with `mise run test`, or from the repository root: uv run pytest spec/tests
 """
 
 import json
 import unittest
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
 import jsonpatch
 import jsonschema
+import pytest
 import yaml
 
 TESTS = Path(__file__).resolve().parent
 SPEC = TESTS.parent
+ROOT = SPEC.parent
 SCHEMA_DIR = SPEC / "schema" / "0.2"
 KINDS = ("config", "state")
 EXAMPLES = SPEC / "examples" / "0.2"
@@ -72,25 +74,24 @@ class SchemaTest(unittest.TestCase):
                 with self.subTest(example=str(path.relative_to(EXAMPLES))):
                     self.assertEqual([e.message for e in check.iter_errors(load(path))], [])
 
-    def test_cases(self) -> None:
-        for suite in yaml.safe_load(CASES.read_text())["suites"]:
-            check = validator(suite["schema"])
-            base = load(CASES.parent / suite["base"])
-            for case in suite["cases"]:
-                with self.subTest(f"{suite['schema']}: {case['description']}"):
-                    doc = jsonpatch.apply_patch(base, case["patch"])
-                    errors = list(check.iter_errors(doc))
-                    found = [f"{pointer(e.absolute_path) or '/'} {e.validator}: {e.message}" for e in errors]
-                    if case["valid"]:
-                        self.assertEqual(found, [])
-                        continue
-                    self.assertTrue(case.get("errors"), "an invalid case must list its expected errors")
-                    for expected in case["errors"]:
-                        self.assertTrue(
-                            any(matches(e, expected) for e in errors),
-                            f"expected {expected}, got {found}",
-                        )
+
+def load_cases() -> list[tuple[dict[str, Any], dict[str, Any]]]:
+    return [(suite, case) for suite in yaml.safe_load(CASES.read_text())["suites"] for case in suite["cases"]]
 
 
-if __name__ == "__main__":
-    unittest.main()
+CASE_LIST = load_cases()
+
+
+@pytest.mark.parametrize(("suite", "case"), CASE_LIST, ids=[f"{s['schema']}: {c['description']}" for s, c in CASE_LIST])
+def test_case(suite: dict[str, Any], case: dict[str, Any], record_property: Callable[[str, object], None]) -> None:
+    # Bindings in spec/exacly select test cases by this ID.
+    record_property("exacly-case", f"{CASES.relative_to(ROOT)}::{case['description']}")
+    doc = jsonpatch.apply_patch(load(CASES.parent / suite["base"]), case["patch"])
+    errors = list(validator(suite["schema"]).iter_errors(doc))
+    found = [f"{pointer(e.absolute_path) or '/'} {e.validator}: {e.message}" for e in errors]
+    if case["valid"]:
+        assert found == []
+        return
+    assert case.get("errors"), "an invalid case must list its expected errors"
+    for expected in case["errors"]:
+        assert any(matches(e, expected) for e in errors), f"expected {expected}, got {found}"

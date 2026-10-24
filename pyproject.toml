@@ -11,11 +11,13 @@ dependencies = [
 
 [project.scripts]
 exacly-validate = "exacly_validate.cli:main"
+exacly-refresh = "exacly_validate.cli:refresh_main"
 
 [dependency-groups]
 dev = [
     "jsonpatch",
     "mypy",
+    "pytest>=9.1.1",
     "ruff",
     "types-jsonschema",
     "types-PyYAML",
@@ -50,3 +52,7 @@ strict = true
 [[tool.mypy.overrides]]
 module = ["jsonpatch"]
 ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+# xunit1 keeps each test's file in the JUnit report, which exacly refresh reads.
+junit_family = "xunit1"
