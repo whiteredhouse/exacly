@@ -8,6 +8,7 @@ on:
       - "pyproject.toml"
       - "uv.lock"
       - "mise.toml"
+      - "tests/**"
       - ".github/workflows/spec.yml"
   push:
     branches: [main]
