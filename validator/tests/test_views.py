@@ -10,6 +10,7 @@ import tempfile
 from html.parser import HTMLParser
 from pathlib import Path
 
+import pytest
 from exacly_validate import query, views
 from exacly_validate.cli import exacly_main
 from test_query import STATE, TestChanges, documents, model
@@ -129,6 +130,26 @@ class TestSite:
                     assert (out / href).exists(), href
             assert f'href="records/{views.page_name("../index")}"' in index
 
+    def test_distinct_ids_get_distinct_pages(self) -> None:
+        encoded = views.page_name("a/b")
+        assert encoded.startswith("_") and views.page_name(encoded.removesuffix(".html")) != encoded
+        docs = documents()
+        billing = next(d for name, d in docs.items() if name.endswith("billing.yaml"))
+        out_001 = next(r for r in billing["records"] if r["id"] == "OUT-001")
+        clash = encoded.removesuffix(".html").lstrip("_")  # The name an encoded ID got before.
+        billing["records"] += [{**copy.deepcopy(out_001), "id": rid} for rid in ("a/b", clash)]
+        with tempfile.TemporaryDirectory() as folder:
+            written = views.site(query.load(docs), Path(folder))
+            assert len({p.name for p in written}) == len(written) == len(query.load(docs).records) + 1
+
+    def test_ids_that_differ_only_in_case_are_an_error(self) -> None:
+        docs = documents()
+        billing = next(d for name, d in docs.items() if name.endswith("billing.yaml"))
+        out_001 = next(r for r in billing["records"] if r["id"] == "OUT-001")
+        billing["records"].append({**copy.deepcopy(out_001), "id": "out-001"})
+        with tempfile.TemporaryDirectory() as folder, pytest.raises(query.QueryError, match="OUT-001, out-001"):
+            views.site(query.load(docs), Path(folder))
+
     def test_only_web_evidence_is_a_link(self) -> None:
         docs = documents()
         evidence = docs["state/production.json"]["records"]["REQ-001"]["assessments"][0]["evidence"]
@@ -136,11 +157,13 @@ class TestSite:
             {**evidence[0], "locator": "javascript:alert(document.domain)", "claim": "Script"},
             {**evidence[0], "locator": " JavaScript:alert(1)", "claim": "Spaced"},
             {**evidence[0], "locator": "validator/tests/test_views.py", "claim": "A file"},
+            {**evidence[0], "locator": "https://[invalid", "claim": "Malformed"},
         ]
         page = views.record_page(query.load(docs), "REQ-001")
         assert all(href.startswith("https://") or ":" not in href for href in links(page)), links(page)
         assert "Script <code>javascript:alert(document.domain)</code>" in page
         assert "A file <code>validator/tests/test_views.py</code>" in page
+        assert "Malformed <code>https://[invalid</code>" in page
         assert '<a href="https://ci.example/runs/7">' in page
 
     def test_regenerating_removes_pages_of_deleted_records(self) -> None:

@@ -176,10 +176,11 @@ def chips(status: dict[str, dict[str, str]]) -> str:
 
 def page_name(rid: str) -> str:
     """The file name of a record's page. IDs that are not plain names, such as ../index, get a name made of their
-    safe characters and a hash, so that no ID can write outside the records folder or onto another page."""
+    safe characters and a hash, so that no ID can write outside the records folder. That name starts with an
+    underscore, which a plain name can't, so it is never another record's page."""
     if SAFE_NAME.fullmatch(rid):
         return f"{rid}.html"
-    return f"{re.sub(r'[^A-Za-z0-9_-]', '_', rid)}-{hashlib.sha256(rid.encode()).hexdigest()[:12]}.html"
+    return f"_{re.sub(r'[^A-Za-z0-9_-]', '_', rid)}-{hashlib.sha256(rid.encode()).hexdigest()[:16]}.html"
 
 
 def link(node: Doc, prefix: str = "") -> str:
@@ -189,7 +190,11 @@ def link(node: Doc, prefix: str = "") -> str:
 def evidence(ev: Doc) -> str:
     """A link for web evidence; any other locator, such as javascript: or a file path, is shown as text."""
     locator = str(ev["locator"])
-    if urlsplit(locator).scheme.lower() in LINKED_SCHEMES:
+    try:
+        scheme = urlsplit(locator).scheme.lower()
+    except ValueError:  # Such as https://[invalid
+        scheme = ""
+    if scheme in LINKED_SCHEMES:
         return f'<a href="{e(locator)}">{e(ev["claim"])}</a>'
     return f"{e(ev['claim'])} <code>{e(locator)}</code>"
 
@@ -312,6 +317,12 @@ def index_page(model: query.Model) -> str:
 def site(model: query.Model, out: Path) -> list[Path]:
     """Write the site into `out`: index.html, and a page in records/ for each record, removing pages there of
     records no longer in the model. Returns the files written."""
+    names: dict[str, list[str]] = {}
+    for rid in model.records:
+        names.setdefault(page_name(rid).casefold(), []).append(rid)
+    clashes = [", ".join(sorted(rids)) for rids in names.values() if len(rids) > 1]
+    if clashes:  # A file system that ignores case, such as macOS's, would keep one page for each.
+        raise query.QueryError(f"record IDs that differ only in case can't each have a page: {'; '.join(clashes)}")
     records = out / "records"
     records.mkdir(parents=True, exist_ok=True)
     written = [out / "index.html"]
