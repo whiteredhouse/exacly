@@ -5,7 +5,7 @@ model:
   product: Exacly
   owner: exacly-maintainers
   scope:
-    covers: The Exacly specification's schemas, the validator, and the tooling that observes a model's reality
+    covers: The Exacly specification's schemas, the validator, and the tooling that observes and answers questions about a model
     excludes: [The specification's prose, Pilot and client models]
   environment: main
   review_interval_days: 90

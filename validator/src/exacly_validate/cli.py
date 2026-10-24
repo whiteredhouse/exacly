@@ -2,6 +2,7 @@
 
 exacly-validate PATH... [--revision REV] [--date YYYY-MM-DD] [--json]
 exacly-refresh PATH... --context CONTEXT --state FILE [--junit FILE...] [--distribution] [run options]
+exacly show|trace|impact|gaps [-m PATH]... [--json] ...; exacly validate|refresh ... run the commands above
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import subprocess
 import sys
 from collections import Counter
 from pathlib import Path
@@ -17,10 +19,16 @@ from typing import Any
 
 import yaml
 
+from exacly_validate import query
 from exacly_validate.core import is_state, validate_documents
 from exacly_validate.refresh import RefreshError, Run, read_junit, refresh
 
 SUFFIXES = {".yaml", ".yml", ".json"}
+
+
+def wanted(file: Path, folder: Path) -> bool:
+    """Whether a file under a folder given is a model document: YAML or JSON, not in a hidden folder."""
+    return file.suffix in SUFFIXES and not any(p.startswith(".") for p in file.relative_to(folder).parts)
 
 
 def load(paths: list[Path]) -> dict[str, Any]:
@@ -28,16 +36,25 @@ def load(paths: list[Path]) -> dict[str, Any]:
     files: list[Path] = []
     for path in paths:
         if path.is_dir():
-            files += sorted(
-                f
-                for f in path.rglob("*")
-                if f.suffix in SUFFIXES
-                and f.is_file()
-                and not any(p.startswith(".") for p in f.relative_to(path).parts)
-            )
+            files += sorted(f for f in path.rglob("*") if f.is_file() and wanted(f, path))
         else:
             files.append(path)
     return {str(f): yaml.safe_load(f.read_text()) for f in files}
+
+
+def load_at(revision: str, paths: list[Path]) -> dict[str, Any]:
+    """As `load`, but the files as they were at a Git revision."""
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
+
+    documents = {}
+    for path in paths:
+        for name in git("ls-tree", "-r", "--name-only", revision, "--", str(path)).splitlines():
+            file = Path(name)
+            if file == path or wanted(file, path):
+                documents[name] = yaml.safe_load(git("show", f"{revision}:./{name}"))
+    return documents
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -137,6 +154,192 @@ def refresh_main(argv: list[str] | None = None) -> int:
     counts = Counter(f"{a['dimension']} {a['state']}" for r in state["records"].values() for a in r["assessments"])
     summary = ", ".join(f"{n} {k}" for k, n in sorted(counts.items())) or "no assessments"
     print(f"Wrote {args.state}: {args.context} serial {state['serial']} at {args.revision}: {summary}")
+    return 0
+
+
+def label(node: dict[str, Any]) -> str:
+    """One line naming a record, with its status in each context."""
+    text = f"{node['id']} {node['type']}: {node['name']}"
+    if node["lifecycle"] != "active":
+        text += f" ({node['lifecycle']})"
+    status = node.get("status") or {}
+    if status:
+        text += (
+            "  ["
+            + "; ".join(
+                f"{context}: " + ", ".join(f"{d} {s}" for d, s in sorted(dims.items()))
+                for context, dims in sorted(status.items())
+            )
+            + "]"
+        )
+    return text
+
+
+def tree_lines(node: dict[str, Any], depth: int = 0) -> list[str]:
+    via = node.get("via")
+    via = f"{via['type']} {'->' if via['direction'] == 'out' else '<-'} " if via else ""
+    line = "  " * depth + via + label(node) + (" (above)" if node.get("repeated") else "")
+    return [line, *(x for child in node.get("children", []) for x in tree_lines(child, depth + 1))]
+
+
+def finding_line(f: dict[str, Any]) -> str:
+    where = f" ({f['document']})" if f.get("document") else ""
+    return f"  {f['severity']} {f['rule']} {f.get('record') or ''}: {f['message']}{where}".replace(" :", ":")
+
+
+def show_text(answer: dict[str, Any]) -> str:
+    r = answer["record"]
+    lines = [label({**r, "status": None}), r["description"]]
+    lines.append(f"Owner {r['owner']}, reviewed {r['last_reviewed_at'] or 'never'}, in {answer['document']}")
+    details = {
+        k: v
+        for k, v in r.items()
+        if k not in {"id", "type", "name", "lifecycle", "description", "owner", "last_reviewed_at", "evidence"}
+    }
+    if details:
+        lines += ["", yaml.safe_dump(details, sort_keys=False, allow_unicode=True, width=100).rstrip()]
+    lines += ["", "Relationships"]
+    for rel in answer["relationships"]:
+        arrow = "->" if rel["direction"] == "out" else "<-"
+        role = f" ({rel['role']})" if rel.get("role") else ""
+        lines.append(f"  {rel['type']}{role} {arrow} {label(rel['record'])}")
+    if not answer["relationships"]:
+        lines.append("  none")
+    lines += ["", "State"]
+    for context, observed in sorted(answer["state"].items()):
+        lines.append(f"  {context}, observed against {observed['config_revision'][:12]}:")
+        for a in observed.get("assessments", []):
+            reason = f": {a['reason']}" if a.get("reason") else ""
+            cited = "; ".join(f"{e['claim']} ({e['locator']})" for e in a["evidence"])
+            lines.append(f"    {a['dimension']} {a['state']}{reason}" + (f" - {cited}" if cited else ""))
+        for work in observed.get("pending", []):
+            lines.append(f"    pending {work['task']} since {work['opened_at']}")
+    if not answer["state"]:
+        lines.append("  not observed")
+    lines += [
+        "",
+        "Findings",
+        *(finding_line(f) for f in answer["findings"]),
+        *([] if answer["findings"] else ["  none"]),
+    ]
+    return "\n".join(lines)
+
+
+def trace_text(answer: dict[str, Any]) -> str:
+    return "\n".join(["Why", *tree_lines(answer["why"]), "", "How", *tree_lines(answer["how"])])
+
+
+def impact_text(answer: dict[str, Any]) -> str:
+    lines = []
+    if "records" in answer:
+        for kind, sign in (("added", "+"), ("changed", "~"), ("removed", "-")):
+            for r in answer["records"][kind]:
+                fields = f" ({', '.join(r['fields'])})" if r.get("fields") else ""
+                lines.append(f"{sign} {r['id']} {r['type']}: {r['name']}{fields}")
+        for kind, sign in (("added", "+"), ("removed", "-")):
+            lines += [f"{sign} {rel}" for rel in answer["relationships"][kind]]
+        if not lines:
+            return "No changes to the model."
+        lines.append("")
+        answer = answer["impact"]
+    else:
+        lines += ["Changed", *(f"  {label(r)}" for r in answer["changed"]), ""]
+    lines.append("Affected")
+    lines += [f"  {label(r)}\n    via {' -> '.join(r['path'])}" for r in answer["affected"]] or ["  nothing else"]
+    lines += ["", "Outcomes: " + (", ".join(answer["outcomes"]) or "none reached"), "", "Check again"]
+    for r in answer["recheck"]:
+        tests = r["observe"].get("tests")
+        how = (
+            f"{tests['workflow']}" + (f" cases {', '.join(tests['cases'])}" if tests.get("cases") else "")
+            if tests
+            else "no tests binding"
+        )
+        lines.append(f"  {r['id']} {r['name']}: {how}")
+    if not answer["recheck"]:
+        lines.append("  no Requirement")
+    return "\n".join(lines)
+
+
+def gaps_text(answer: dict[str, Any]) -> str:
+    contexts = ", ".join(
+        f"{c} (serial {s['serial']}, config {s['config_revision'][:12]})" for c, s in sorted(answer["contexts"].items())
+    )
+    lines = [f"Result: {answer['result']}", f"State: {contexts or 'none'}", ""]
+    for kind in ("errors", "warnings", "waived"):
+        lines += [f"{kind.capitalize()} ({len(answer[kind])})", *(finding_line(f) for f in answer[kind]), ""]
+    titles = {
+        "unverified": "Requirements not verified in any context",
+        "unreleased": "Requirements not released in any context",
+        "unobserved": "Requirements with no observation binding",
+        "proposed_measures": "Measures still proposed",
+    }
+    for kind, title in titles.items():
+        items = answer["coverage"][kind]
+        lines.append(f"{title} ({len(items)})")
+        lines += [f"  {label(r)}" for r in items]
+        lines.append("")
+    lines.append(f"Pending work ({len(answer['pending'])})")
+    lines += [f"  {w['context']}: {w['record']} {w['task']} since {w['opened_at']}" for w in answer["pending"]]
+    return "\n".join(lines).rstrip()
+
+
+def exacly_main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv and argv[0] in ("validate", "refresh"):
+        return main(argv[1:]) if argv[0] == "validate" else refresh_main(argv[1:])
+    parser = argparse.ArgumentParser(
+        prog="exacly",
+        description="Ask an Exacly model about its records, from its config and state. "
+        "validate and refresh run exacly-validate and exacly-refresh.",
+    )
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument(
+        "-m",
+        "--model",
+        action="append",
+        type=Path,
+        metavar="PATH",
+        help="config and state documents, or folders holding them (default: spec/exacly)",
+    )
+    common.add_argument("--json", action="store_true", help="print the answer as JSON")
+    commands = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
+    commands.add_parser("validate", help="validate the model (exacly-validate)")
+    commands.add_parser("refresh", help="write state from observations (exacly-refresh)")
+    show = commands.add_parser("show", parents=[common], help="one record: relationships, state and findings")
+    show.add_argument("record")
+    trace = commands.add_parser("trace", parents=[common], help="why a record exists, and how it is realized")
+    trace.add_argument("record")
+    impact = commands.add_parser("impact", parents=[common], help="what a change to records affects")
+    impact.add_argument("records", nargs="*", metavar="RECORD")
+    impact.add_argument("--base", metavar="REV", help="compare with the model at this Git revision instead")
+    commands.add_parser("gaps", parents=[common], help="findings, and what is not yet verified, released or observed")
+    args = parser.parse_args(argv)
+    paths = args.model or [Path("spec/exacly")]
+    try:
+        model = query.load(load(paths))
+        if args.command == "show":
+            answer, text = query.show(model, args.record), show_text
+        elif args.command == "trace":
+            answer, text = query.trace(model, args.record), trace_text
+        elif args.command == "impact":
+            if bool(args.base) == bool(args.records):
+                parser.error("impact takes record IDs or --base, not both")
+            if args.base:
+                documents = load_at(args.base, paths)
+                base = query.load(documents) if documents else query.empty(model.graph.namespace)
+                answer = query.change_impact(base, model)
+            else:
+                answer = query.impact(model, args.records)
+            text = impact_text
+        else:
+            answer, text = query.gaps(model), gaps_text
+    except query.QueryError as error:
+        print(f"exacly: {error}", file=sys.stderr)
+        return 1
+    except subprocess.CalledProcessError as error:
+        print(f"exacly: git failed: {error.stderr.strip()}", file=sys.stderr)
+        return 1
+    print(json.dumps(answer, indent=2, default=str) if args.json else text(answer))
     return 0
 
 
