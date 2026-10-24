@@ -239,6 +239,24 @@ class TestChanges:
         assert answer["affected"][0] == {**query.Model.summary(model(), "INFO-001"), "path": ["INFO-001"]}
         assert "APP-001" in ids(answer["affected"])
 
+    def test_a_retargeted_relationship_affects_both_versions(self) -> None:
+        def with_requirements(target: str) -> query.Model:
+            docs = documents()
+            billing = next(d for name, d in docs.items() if name.endswith("billing.yaml"))
+            second = copy.deepcopy(next(r for r in billing["records"] if r["id"] == "REQ-001"))
+            billing["records"].append({**second, "id": "REQ-002"})
+            billing["relationships"].append({"source": "REQ-002", "type": "supports", "target": "PROC-001"})
+            implements = next(r for r in billing["relationships"] if r["type"] == "implements")
+            implements.update(id="REL-1", target=target)
+            return query.load(docs)
+
+        diff = query.change_impact(with_requirements("REQ-001"), with_requirements("REQ-002"))
+        assert diff["relationships"]["changed"] == [
+            {"relationship": "APP-001 --implements--> REQ-002", "fields": ["target"]}
+        ]
+        # REQ-001 lost its implementer and REQ-002 gained one, so both are checked again.
+        assert ids(diff["impact"]["recheck"]) == ["REQ-001", "REQ-002"]
+
     def test_a_qualified_reference_to_the_model_itself_is_the_same_relationship(self) -> None:
         docs = documents()
         billing = next(d for name, d in docs.items() if name.endswith("billing.yaml"))
@@ -309,6 +327,15 @@ class TestCommand:
             assert "(description)" in out and "Outcomes: OUT-001" in out
             code, out, _ = run("impact", "--base", "HEAD", "--json")
             assert json.loads(out)["impact"]["recheck"][0]["id"] == "REQ-001"
+            # A file name Git would quote in its output.
+            (model_dir / "billing.yaml").rename(model_dir / "facturación.yaml")
+            git("add", "-A")
+            git("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "rename")
+            code, out, _ = run("impact", "--base", "HEAD")
+            assert code == 0 and out == "No changes to the model.\n"
+            (model_dir / "facturación.yaml").rename(model_dir / "billing.yaml")
+            git("reset", "-q", "--hard", "HEAD~1")
+            (model_dir / "billing.yaml").write_text(yaml.safe_dump(billing))
             code, _, err = run("impact", "--base", "no-such-revision")
             assert code == 1 and "git failed" in err
             # An absolute model path, from inside the repository and from outside it.

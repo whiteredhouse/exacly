@@ -331,9 +331,11 @@ def change_impact(base: Model, head: Model) -> Doc:
     touched = {r["id"] for kind in ("added", "changed") for r in diff["records"][kind]}
     removed = {r["id"] for r in diff["records"]["removed"]}
     old, new = authored(base), authored(head)
-    for key in new.keys() - old.keys() | {k for k in new.keys() & old.keys() if differing(old[k], new[k])}:
+    retargeted = {k for k in new.keys() & old.keys() if differing(old[k], new[k])}
+    for key in new.keys() - old.keys() | retargeted:
         touched |= reliant(head, new[key])
-    for key in old.keys() - new.keys():
+    # A changed relationship affects its earlier version's ends too, such as a Requirement that lost its implementer.
+    for key in old.keys() - new.keys() | retargeted:
         for rid in reliant(base, old[key]):
             (touched if rid in head.records else removed).add(rid)
     result = impact(head, touched)
