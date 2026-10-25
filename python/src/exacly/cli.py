@@ -26,7 +26,7 @@ from typing import Any
 import yaml
 
 from exacly import mcp, query, views
-from exacly.core import is_state, validate_documents
+from exacly.core import bindings, identity, is_state, validate_documents
 from exacly.refresh import RefreshError, Run, read_junit, refresh, unattributed
 
 SUFFIXES = {".yaml", ".yml", ".json"}
@@ -188,6 +188,7 @@ def github_defaults() -> dict[str, str | None]:
     workflow_ref = env.get("GITHUB_WORKFLOW_REF")  # owner/repo/.github/workflows/spec.yml@refs/heads/main
     return {
         "revision": sha,
+        "repository": repo,
         "workflow": workflow_ref.split("@")[0].removeprefix(f"{repo}/") if workflow_ref and repo else None,
         "job": env.get("GITHUB_JOB"),
         "run_url": f"{server}/{repo}/actions/runs/{run_id}" if server and repo and run_id else None,
@@ -218,6 +219,9 @@ def refresh_main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--workflow", default=defaults["workflow"], help="workflow path of the run, for bindings")
     parser.add_argument("--job", default=defaults["job"], help="job of the run, for bindings")
+    parser.add_argument(
+        "--repository", default=defaults["repository"], help="repository of the run, as owner/name, for bindings"
+    )
     parser.add_argument("--job-status", help="the job's status so far, for bindings without cases (success, failure)")
     parser.add_argument("--run-url", default=defaults["run_url"], help="link to the run, cited as evidence")
     parser.add_argument("--source-url", default=defaults["source_url"], help="base link to files at the revision")
@@ -237,6 +241,7 @@ def refresh_main(argv: list[str] | None = None) -> int:
         observed_at=dt.datetime.now(dt.UTC).replace(microsecond=0),
         workflow=args.workflow,
         job=args.job,
+        repository=args.repository,
         job_status=args.job_status,
         url=args.run_url,
         source_url=args.source_url,
@@ -326,7 +331,7 @@ def show_text(answer: dict[str, Any]) -> str:
                 f"    {a['dimension']} {a['state']}{source_words(a)}{reason}" + (f" - {cited}" if cited else "")
             )
         for m in observed.get("missing", []):
-            lines.append(f"    {m['dimension']} has no result from {m['source']}, which is bound to it")
+            lines.append(f"    {m['dimension']} has no result{source_words(m)}, which is bound to it")
         if len(observed.get("assessments", [])) > len(observed.get("status", {})) or observed.get("missing"):
             combined = ", ".join(f"{d} {s}" for d, s in sorted(observed["status"].items()))
             lines.append(f"    combined: {combined}")
@@ -367,13 +372,12 @@ def impact_text(answer: dict[str, Any]) -> str:
     lines += [f"  {label(r)}\n    {views.via(r['path'], ' -> ')}" for r in answer["affected"]] or ["  nothing else"]
     lines += ["", "Outcomes: " + (", ".join(answer["outcomes"]) or "none reached"), "", "Check again"]
     for r in answer["recheck"]:
-        tests = r["observe"].get("tests")
-        how = (
-            f"{tests['workflow']}" + (f" cases {', '.join(tests['cases'])}" if tests.get("cases") else "")
-            if tests
-            else "no tests binding"
+        tests = bindings(r, "tests")
+        how = "; ".join(
+            " ".join(identity("tests", b).values()) + (f" cases {', '.join(b['cases'])}" if b.get("cases") else "")
+            for b in tests
         )
-        lines.append(f"  {r['id']} {r['name']}: {how}")
+        lines.append(f"  {r['id']} {r['name']}: {how or 'no tests binding'}")
     if not answer["recheck"]:
         lines.append("  no Requirement")
     return "\n".join(lines)

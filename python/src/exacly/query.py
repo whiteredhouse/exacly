@@ -18,7 +18,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from exacly.core import PARTS, Edge, Graph, Report, is_state, validate_documents
+from exacly.core import PARTS, Edge, Graph, Report, bindings, identity, is_state, validate_documents
 from exacly.refresh import LEGACY_SOURCES
 
 Doc = dict[str, Any]
@@ -87,7 +87,7 @@ class Model:
 
     def results(self, rid: str) -> dict[str, dict[str, list[Doc]]]:
         """Each assessed dimension's results by context, one per source and binding, with a `not_checked` (or the
-        dimension's other not-yet-known state) result for each source bound to the record that has none there:
+        dimension's other not-yet-known state) result for each binding of the record that has none there:
         {"main": {"verification": [{"source": "tests", "state": "passed"}]}}."""
         found: dict[str, dict[str, list[Doc]]] = {}
         for context, assessments in self.assessments(rid).items():
@@ -98,9 +98,18 @@ class Model:
             for dimension, listed in dims.items():
                 if dimension not in UNOBSERVED:
                     continue
-                seen = {r["source"] for r in listed}
-                for source in sorted(bound(self.records[rid], dimension) - seen):
-                    listed.append({"source": source, "state": UNOBSERVED[dimension], "missing": True})
+                for source in sorted(bound(self.records[rid], dimension)):
+                    expected = bindings(self.records[rid], source)
+                    mine = [r for r in listed if r["source"] == source]
+                    for binding in expected:
+                        key = identity(source, binding)
+                        # A result names its binding, or names none and belongs to the record's only binding, or to
+                        # one with no identifying fields.
+                        if not any(
+                            r["binding"] == key if "binding" in r else len(expected) == 1 or not key for r in mine
+                        ):
+                            missing = {"source": source, **({"binding": key} if key else {})}
+                            listed.append({**missing, "state": UNOBSERVED[dimension], "missing": True})
             found[context] = dict(dims)
         return found
 
@@ -204,7 +213,7 @@ def show(model: Model, rid: str) -> Doc:
     for context, dims in model.results(rid).items():
         observed[context]["status"] = {dimension: combine(dimension, listed) for dimension, listed in dims.items()}
         missing = [
-            {"dimension": dimension, "source": r["source"]}
+            {"dimension": dimension, "source": r["source"], **({"binding": r["binding"]} if "binding" in r else {})}
             for dimension, listed in dims.items()
             for r in listed
             if r.get("missing")

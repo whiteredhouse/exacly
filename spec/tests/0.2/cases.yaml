@@ -75,7 +75,25 @@ suites:
           - { op: replace, path: /records/5/observe/deployments, value: {} }
         valid: false
         errors:
-          - { at: /records/5/observe/deployments, keyword: minProperties }
+          - { at: /records/5/observe/deployments, keyword: anyOf }
+
+      - description: A source may have a list of bindings, such as tests in two repositories
+        patch:
+          - op: replace
+            path: /records/3/observe/tests
+            value:
+              - { repository: acme/billing, workflow: .github/workflows/ci.yml, cases: ["tests/reminders/*"] }
+              - { repository: acme/billing-cli, workflow: .github/workflows/ci.yml, cases: ["cmd/remind::*"] }
+        valid: true
+
+      - description: A list of bindings is not empty, and holds no empty binding
+        patch:
+          - { op: replace, path: /records/3/observe/tests, value: [] }
+          - { op: replace, path: /records/5/observe/deployments, value: [{}] }
+        valid: false
+        errors:
+          - { at: /records/3/observe/tests, keyword: anyOf }
+          - { at: /records/5/observe/deployments, keyword: anyOf }
 
       - description: A record may be observe-only
         patch:

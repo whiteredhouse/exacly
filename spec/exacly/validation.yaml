@@ -77,10 +77,11 @@ records:
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-23"
-    statement: Report duplicate IDs and edges, unresolved references, relationship endpoints section 6 does not allow, and containment, replacement and dependency cycles.
+    last_reviewed_at: "2026-10-25"
+    statement: Report duplicate IDs, edges and bindings, unresolved references, relationship endpoints section 6 does not allow, and containment, replacement and dependency cycles.
     acceptance_criteria:
       - Duplicate IDs and duplicate edges are errors.
+      - Two bindings of one source on a record that can't be told apart are an error, by repository, workflow and job for tests, otherwise by their whole content.
       - A reference to a record the model does not contain is an error; a reference to another model is not resolved locally.
       - An endpoint section 6 does not allow is an error, including stores from anything but Infrastructure.
       - A containment or replacement cycle is an error; a dependency cycle, including a self-dependency, is a warning.

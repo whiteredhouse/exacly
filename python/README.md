@@ -53,9 +53,24 @@ exacly refresh spec/exacly --context main --state spec/exacly/state/main.json --
 
 - **Case IDs.** A test case's ID is its `exacly-case` property in the report, or `<file>::<name>`.
 - **Releases.** With `--distribution`, the context is how the product is distributed, for example when users install from main. A Requirement whose active implementer's `implementation_ref` or `operational_ref` exists at the revision is then also assessed as released there, with the reference as implementation evidence.
-- **Sources.** Each assessment names its source: `tests` for verification from a `tests` binding, with the binding's `workflow` and `job`, and `distribution` for a release from `--distribution`.
+- **Sources.** Each assessment names its source: `tests` for verification from a `tests` binding, with the binding's `repository`, `workflow` and `job`, and `distribution` for a release from `--distribution`.
+- **Several repositories.** A binding can name the `repository` (owner/name) whose runs observe it, and `tests` can be a list of bindings, such as one in a service and one in the CLI that talks to it. A run observes a binding only when the binding's repository, workflow and job match the run's `--repository`, `--workflow` and `--job`; a field the binding leaves out matches any run. Each binding keeps its own result, a run replaces only the results of the bindings it observed, and the record is verified only when every binding passed. A binding's result goes when the binding leaves the config or its repository, workflow or job changes.
 - **Earlier state.** An existing state file is read first. Its lineage is kept and its serial increases by one. A write replaces only the assessments of the sources it observed: refreshing tests keeps an earlier release, another observer's assessments such as a manual check, other evidence, and records it did not observe, such as a binding for another workflow. An earlier verification or delivery assessment without a source was written by refresh, so it is read as `tests` or `distribution` and rewritten with it; one of another dimension without a source is kept and named on stderr, since its origin is unknown. Observations and pending work for records or relationships that left the config are dropped. State for another model or context is refused.
-- **GitHub Actions.** There, the revision, workflow, job, run link and source link default to the current run.
+- **GitHub Actions.** There, the revision, repository, workflow, job, run link and source link default to the current run.
+
+### Tests in another repository
+
+State is written only in the model's repository, from its main line (section 9), so the model's state job reads the other repository's results rather than that repository writing state. Have the other repository upload its JUnit report as an artifact. After refreshing from its own run, the state job downloads the report of the other repository's latest successful run on main and refreshes again, naming that run:
+
+```sh
+run_id=$(gh run list -R acme/notes-cli --workflow ci.yml --branch main --status success -L 1 --json databaseId -q '.[0].databaseId')
+gh run download "$run_id" -R acme/notes-cli -n junit -D reports/notes-cli
+exacly refresh spec/exacly --context main --state reports/state/main.json --junit reports/notes-cli/*.xml \
+  --repository acme/notes-cli --workflow .github/workflows/ci.yml --job test \
+  --run-url "https://github.com/acme/notes-cli/actions/runs/$run_id"
+```
+
+`gh` needs a token that can read the other repository's Actions artifacts, such as a fine-grained token with read access to its actions. Only the model's repository holds a token that writes state. Each state write restates the other repository's latest result against the current config revision, and a scheduled run of the state job picks up the other repository's changes between pushes.
 
 ## Questions
 
@@ -105,6 +120,7 @@ This repository's [`.mcp.json`](../.mcp.json) does the same with `uv run`. The [
    - Unresolved references in relationships, exceptions and assessments (`11.unresolved`). A reference to another model is `namespace:ID`; a reference to this model may be qualified with its own namespace.
    - Relationship endpoints section 6 does not allow, and `contains` or `supersedes` between different types (`11.endpoint`). From 0.2, `stores` runs from Infrastructure to Information.
    - Duplicate edges (`11.duplicate-edge`).
+   - Two bindings of one source on a record that can't be told apart (`11.duplicate-binding`): tests bindings by their `repository`, `workflow` and `job`, other bindings by their whole content.
    - Containment or replacement cycles (`11.cycle`).
 3. **State (0.2).** Each state document is read against the config.
    - State for another model's namespace is an error and is not read (`11.state-namespace`), as is a second state document for the same context (`11.state-context`).

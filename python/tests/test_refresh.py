@@ -33,7 +33,7 @@ RUN = Run(
 CI = {"workflow": ".github/workflows/ci.yml", "job": "check"}
 
 
-def requirement(rid: str, tests: dict[str, Any] | None = None) -> dict[str, Any]:
+def requirement(rid: str, tests: dict[str, Any] | list[dict[str, Any]] | None = None) -> dict[str, Any]:
     record: dict[str, Any] = {
         "id": rid,
         "type": "Requirement",
@@ -223,11 +223,19 @@ def test_a_record_without_a_binding_gets_no_verification() -> None:
 
 
 def test_a_binding_for_another_workflow_is_not_observed_and_keeps_its_earlier_entry() -> None:
-    docs = {"config": config(requirement("REQ-1", {**CI, "workflow": ".github/workflows/nightly.yml"}))}
-    earlier = refresh({"config": config(requirement("REQ-1", CI))}, RESULTS, RUN)
-    later = refresh(docs, RESULTS, Run(**{**RUN.__dict__, "revision": "1c2d3e4"}), previous=earlier)
+    docs = {"config": config(requirement("REQ-1", CI))}
+    earlier = refresh(docs, RESULTS, RUN)
+    nightly = Run(**{**RUN.__dict__, "revision": "1c2d3e4", "workflow": ".github/workflows/nightly.yml"})
+    later = refresh(docs, RESULTS, nightly, previous=earlier)
     assert later["records"] == earlier["records"]
     assert assessment(later, "REQ-1")["context"] == "0b6ad3b"
+
+
+def test_a_binding_moved_to_another_workflow_drops_the_earlier_result() -> None:
+    earlier = refresh({"config": config(requirement("REQ-1", CI))}, RESULTS, RUN)
+    docs = {"config": config(requirement("REQ-1", {**CI, "workflow": ".github/workflows/nightly.yml"}))}
+    later = refresh(docs, RESULTS, Run(**{**RUN.__dict__, "revision": "1c2d3e4"}), previous=earlier)
+    assert later["records"] == {}
 
 
 def test_each_write_increases_the_serial_and_keeps_the_lineage() -> None:
@@ -324,6 +332,21 @@ def test_cli_writes_state_the_validator_accepts(monkeypatch: pytest.MonkeyPatch)
     released = assessment(state, "REQ-1", "delivery")["evidence"][0]["locator"]
     assert released == "https://github.com/acme/demo/blob/0b6ad3b/python/src/exacly"
     conforms(docs, state)
+
+
+def test_the_cli_observes_only_bindings_of_its_repository(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITHUB_REPOSITORY", "acme/demo")
+    ours, theirs = {"repository": "acme/demo", **CI}, {"repository": "acme/other", **CI}
+    docs = {"config": config(requirement("REQ-1", [ours, theirs]))}
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        (folder / "model.json").write_text(json.dumps(docs["config"]))
+        args = [str(folder / "model.json"), "--context", "main", "--state", str(folder / "main.json")]
+        args += ["--revision", "0b6ad3b", "--workflow", CI["workflow"], "--job", CI["job"], "--job-status", "success"]
+        with contextlib.redirect_stdout(io.StringIO()):
+            assert refresh_main(args) == 0
+        state = json.loads((folder / "main.json").read_text())
+    assert [a["binding"] for a in state["records"]["REQ-1"]["assessments"]] == [ours]
 
 
 def test_refreshing_one_dimension_keeps_the_others() -> None:
@@ -458,3 +481,69 @@ def test_an_assessment_of_another_dimension_without_a_source_is_kept_and_reporte
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             assert refresh_main([*args, "--revision", "0b6ad3b", "--job-status", "success"]) == 0
     assert "name no source" in err.getvalue() and "REQ-1 operation" in err.getvalue()
+
+
+SERVER = {"repository": "acme/server", **CI, "cases": ["tests/cases.yaml::7.1*"]}
+CLIENT = {"repository": "acme/cli", **CI, "cases": ["cli::*"]}
+SERVER_RUN = Run(**{**RUN.__dict__, "repository": "acme/server"})
+CLIENT_RUN = Run(**{**RUN.__dict__, "repository": "acme/cli", "url": "https://ci.example/cli/runs/3"})
+
+
+def two_repositories() -> dict[str, Any]:
+    return {"config": config(requirement("REQ-1", [SERVER, CLIENT]))}
+
+
+def combined(docs: dict[str, Any], state: dict[str, Any]) -> tuple[dict[str, Any], query.Model]:
+    model = query.load({**docs, "state": state}, WHEN.date(), RUN.revision)
+    return model.status("REQ-1"), model
+
+
+def test_one_repositorys_run_leaves_the_other_binding_not_checked() -> None:
+    docs = two_repositories()
+    state = valid_state(refresh(docs, RESULTS, SERVER_RUN))
+    assert [a["binding"]["repository"] for a in state["records"]["REQ-1"]["assessments"]] == ["acme/server"]
+    status, model = combined(docs, state)
+    assert status == {"main": {"verification": "not_checked"}}
+    missing = query.show(model, "REQ-1")["state"]["main"]["missing"]
+    assert missing == [{"dimension": "verification", "source": "tests", "binding": {"repository": "acme/cli", **CI}}]
+
+
+def test_each_repositorys_run_keeps_the_others_result() -> None:
+    docs = two_repositories()
+    server = refresh(docs, RESULTS, SERVER_RUN)
+    both = valid_state(refresh(docs, {"cli::login": "passed"}, CLIENT_RUN, previous=server))
+    status, model = combined(docs, both)
+    assert status == {"main": {"verification": "passed"}}
+    results = query.gaps(model)["coverage"]["unverified"]
+    assert results == []
+    shown = query.show(model, "REQ-1")["state"]["main"]["assessments"]
+    assert [(a["binding"]["repository"], a["state"]) for a in shown] == [
+        ("acme/server", "passed"),
+        ("acme/cli", "passed"),
+    ]
+
+    failing = valid_state(refresh(docs, {**RESULTS, "tests/cases.yaml::7.1: a gap": "failed"}, SERVER_RUN, both))
+    assert combined(docs, failing)[0] == {"main": {"verification": "failed"}}
+    kept = [a for a in failing["records"]["REQ-1"]["assessments"] if a["binding"]["repository"] == "acme/cli"]
+    assert kept == [a for a in both["records"]["REQ-1"]["assessments"] if a["binding"]["repository"] == "acme/cli"]
+
+
+def test_a_binding_without_a_repository_is_observed_by_any_repositorys_run() -> None:
+    docs = {"config": config(requirement("REQ-1", {**CI, "cases": ["tests/cases.yaml::7.*"]}))}
+    a = assessment(valid_state(refresh(docs, RESULTS, SERVER_RUN)), "REQ-1")
+    assert a["state"] == "passed" and a["binding"] == CI
+
+
+def test_a_run_of_another_repository_leaves_the_assessments_as_they_were() -> None:
+    docs = two_repositories()
+    earlier = refresh(docs, RESULTS, SERVER_RUN)
+    other = Run(**{**RUN.__dict__, "repository": "acme/docs"})
+    assert refresh(docs, {}, other, previous=earlier)["records"] == earlier["records"]
+
+
+def test_the_result_of_a_binding_that_left_the_config_goes() -> None:
+    docs = two_repositories()
+    both = refresh(docs, {"cli::login": "passed"}, CLIENT_RUN, previous=refresh(docs, RESULTS, SERVER_RUN))
+    server_only = {"config": config(requirement("REQ-1", [SERVER]))}
+    later = valid_state(refresh(server_only, {}, Run(**{**RUN.__dict__, "repository": "acme/docs"}), both))
+    assert [a["binding"]["repository"] for a in later["records"]["REQ-1"]["assessments"]] == ["acme/server"]

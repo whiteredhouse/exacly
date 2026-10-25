@@ -496,3 +496,38 @@ cases:
     result: does not conform
     findings:
       - { severity: error, rule: "11.endpoint", record: APP-001, document: billing }
+
+  - description: Tests bindings in two repositories are told apart by their repository
+    base: proposed
+    patch:
+      - op: replace
+        path: /billing/records/3/observe/tests
+        value:
+          - { repository: acme/billing, workflow: .github/workflows/ci.yml, job: test, cases: ["tests/reminders/*"] }
+          - { repository: acme/billing-cli, workflow: .github/workflows/ci.yml, job: test, cases: ["cmd/remind::*"] }
+    result: conforms
+    findings: []
+
+  - description: "Duplicate bindings: two tests bindings with the same repository, workflow and job"
+    base: proposed
+    patch:
+      - op: replace
+        path: /billing/records/3/observe/tests
+        value:
+          - { repository: acme/billing, workflow: .github/workflows/ci.yml, job: test, cases: ["tests/reminders/*"] }
+          - { repository: acme/billing, workflow: .github/workflows/ci.yml, job: test, cases: ["tests/other/*"] }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.duplicate-binding", record: REQ-001, document: billing }
+
+  - description: "Duplicate bindings: two identical bindings of a source that names no identifying fields"
+    base: proposed
+    patch:
+      - op: replace
+        path: /billing/records/5/observe/deployments
+        value:
+          - { service: reminder-service, environments: [production] }
+          - { service: reminder-service, environments: [production] }
+    result: does not conform
+    findings:
+      - { severity: error, rule: "11.duplicate-binding", record: APP-001, document: billing }

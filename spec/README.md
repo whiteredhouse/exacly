@@ -11,7 +11,7 @@
 
 Version 0.2 splits the product map into **config**, which people and agents author, and **state**, which only tooling writes (section 9). Each has its own schema:
 
-- [`schema/0.2/config/2026-10-23.json`](schema/0.2/config/2026-10-23.json) checks one config document: the model boundary, records with their bindings, relationships and exceptions. Config may span several documents, and exactly one declares the model boundary.
+- [`schema/0.2/config/2026-10-25.json`](schema/0.2/config/2026-10-25.json) checks one config document: the model boundary, records with their bindings, relationships and exceptions. Config may span several documents, and exactly one declares the model boundary. It allows a list of bindings for a source, which the [2026-10-23](schema/0.2/config/2026-10-23.json) iteration did not.
 - [`schema/0.2/state/2026-10-25.json`](schema/0.2/state/2026-10-25.json) checks one state document: for one context, the assessments and observed evidence per record, observed evidence per relationship, and pending work. It adds an optional `source`, `binding` and `x-` fields on assessments to the [2026-10-23](schema/0.2/state/2026-10-23.json) iteration.
 
 [`examples/0.2/invoice-reminders/`](examples/0.2/invoice-reminders/) is the section 12 worked example as two config documents. It has no state, because every record is still proposed. Section 14 of the spec lists the changes from 0.1 and how to migrate.
