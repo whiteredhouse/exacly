@@ -87,7 +87,8 @@ def test_the_plan_is_commented_only_on_pull_requests_from_this_repository() -> N
     )
     script = run_steps("plan")
     # This repository's own plan runs the pull request's code, not a released validator.
-    assert 'exacly view plan --base "origin/$BASE"' in script
+    # Config only: state committed for main can name records the change removes.
+    assert """exacly view plan --base "origin/$BASE" -m 'spec/exacly/*.yaml'""" in script
     # The base branch's name reaches the script through the environment, never pasted into it.
     assert "${{" not in script
     assert "<!-- exacly-plan -->" in script

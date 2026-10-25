@@ -50,7 +50,8 @@ jobs:
         run: |
           set -euo pipefail
           mise run sync
-          uv run --locked exacly view plan --base "origin/$BASE" > plan.md
+          # The config alone: the committed state belongs to main and can name records this change removes.
+          uv run --locked exacly view plan --base "origin/$BASE" -m 'spec/exacly/*.yaml' > plan.md
           cat plan.md >> "$GITHUB_STEP_SUMMARY"
       - name: Comment the plan, replacing the earlier one
         env:
