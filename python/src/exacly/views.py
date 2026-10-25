@@ -218,6 +218,14 @@ def value_html(value: Any) -> str:
     return e(value)
 
 
+def source_note(assessment: dict[str, Any]) -> str:
+    """The source and binding that gave an assessment, under its chip."""
+    if "source" not in assessment:
+        return ""
+    binding = " ".join(assessment.get("binding", {}).values())
+    return f'<br><span class="muted mono">{e(assessment["source"] + (f" ({binding})" if binding else ""))}</span>'
+
+
 def record_page(model: query.Model, rid: str) -> str:
     shown, traced = query.show(model, rid), query.trace(model, rid)
     r = shown["record"]
@@ -225,10 +233,15 @@ def record_page(model: query.Model, rid: str) -> str:
     state = ""
     for context, observed in sorted(shown["state"].items()):
         rows = "".join(
-            f"<tr><td>{chip(a['dimension'], a['state'])}</td><td>{e(a.get('reason', ''))}</td><td>"
+            f"<tr><td>{chip(a['dimension'], a['state'])}{source_note(a)}</td><td>{e(a.get('reason', ''))}</td><td>"
             + "<br>".join(evidence(ev) for ev in a["evidence"])
             + f'</td><td class="mono">{e(a["at"])}</td></tr>'
             for a in observed.get("assessments", [])
+        )
+        rows += "".join(
+            f"<tr><td>{chip(m['dimension'], query.UNOBSERVED[m['dimension']])}{source_note(m)}</td>"
+            "<td>No result yet from this source, which is bound to the record.</td><td></td><td></td></tr>"
+            for m in observed.get("missing", [])
         )
         rows += "".join(
             f'<tr><td><span class="chip warn">pending</span></td><td>{e(w["task"])}</td><td></td>'

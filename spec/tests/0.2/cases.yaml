@@ -170,6 +170,38 @@ suites:
         errors:
           - { at: /records/REQ-001/assessments/1/state, keyword: enum }
 
+      - description: An assessment may name its source, its binding and extension fields
+        patch:
+          - { op: add, path: /records/REQ-001/assessments/1/source, value: tests }
+          - { op: add, path: /records/REQ-001/assessments/1/binding, value: { workflow: .github/workflows/ci.yml, job: test } }
+          - { op: add, path: /records/REQ-001/assessments/0/source, value: distribution }
+          - { op: add, path: /records/APP-001/assessments/0/source, value: "manual-qa:observations" }
+          - { op: add, path: /records/APP-001/assessments/0/x-platform, value: android }
+        valid: true
+
+      - description: A source is a source kind, distribution, or an extension source
+        patch:
+          - { op: add, path: /records/REQ-001/assessments/1/source, value: manual }
+        valid: false
+        errors:
+          - { at: /records/REQ-001/assessments/1/source, keyword: pattern }
+
+      - description: A binding names at least one field, each as text
+        patch:
+          - { op: add, path: /records/REQ-001/assessments/1/binding, value: {} }
+          - { op: add, path: /records/REQ-001/assessments/0/binding, value: { job: 3 } }
+        valid: false
+        errors:
+          - { at: /records/REQ-001/assessments/1/binding, keyword: minProperties }
+          - { at: /records/REQ-001/assessments/0/binding/job, keyword: type }
+
+      - description: Other fields on an assessment start with x-
+        patch:
+          - { op: add, path: /records/REQ-001/assessments/1/platform, value: android }
+        valid: false
+        errors:
+          - { at: /records/REQ-001/assessments/1, keyword: additionalProperties, property: platform }
+
       - description: An assessment that is not positive says why
         patch:
           - { op: remove, path: /records/APP-001/assessments/0/reason }

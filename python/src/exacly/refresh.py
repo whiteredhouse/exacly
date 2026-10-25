@@ -7,9 +7,10 @@ distributed (for example, users install from main), so a Requirement whose
 implementer's reference exists at the revision is also assessed as released there.
 
 State is rebuilt by observing again, never edited: each write increases the serial
-and keeps the lineage. An observation replaces only the assessments of the dimensions
-it observed; other assessments and evidence stay, unless their record or relationship
-has left the config, and so does pending work.
+and keeps the lineage. Each assessment names its source, `tests` or `distribution`, and
+an observation replaces only the assessments of the sources it observed; other
+assessments and evidence stay, such as another observer's, unless their record or
+relationship has left the config, and so does pending work.
 """
 
 from __future__ import annotations
@@ -29,6 +30,10 @@ from exacly.core import is_state, version_of
 Doc = dict[str, Any]
 CASE_PROPERTY = "exacly-case"
 MAX_NAMED_FAILURES = 5
+# The fields that tell a record's tests bindings apart, recorded on each assessment.
+BINDING_IDENTITY = ("workflow", "job")
+# The source an assessment written before sources were recorded came from: this observer wrote only these.
+LEGACY_SOURCES = {"verification": "tests", "delivery": "distribution"}
 
 
 class RefreshError(Exception):
@@ -98,6 +103,10 @@ def verification(binding: Doc, results: Mapping[str, str], run: Run) -> Doc:
         "applies_to": run.revision,
     }
     assessment: Doc = {"dimension": "verification", "state": None, "context": run.revision, "at": timestamp(run)}
+    assessment["source"] = "tests"
+    identity = {key: str(binding[key]) for key in BINDING_IDENTITY if binding.get(key)}
+    if identity:
+        assessment["binding"] = identity
     patterns = binding.get("cases")
     job = f"job {binding['job']}" if binding.get("job") else "job"
     if not patterns:
@@ -167,8 +176,27 @@ def delivery(
         "state": "released",
         "context": run.context,
         "at": timestamp(run),
+        "source": "distribution",
         "evidence": evidence,
     }
+
+
+def with_source(assessment: Doc) -> Doc:
+    """An earlier assessment with its source: one written before sources were recorded gets the source of the
+    observer that wrote it. An assessment of another dimension without a source is kept as it is."""
+    if "source" in assessment or assessment["dimension"] not in LEGACY_SOURCES:
+        return assessment
+    return {**assessment, "source": LEGACY_SOURCES[assessment["dimension"]]}
+
+
+def unattributed(state: Doc) -> list[str]:
+    """The assessments in a state that name no source, as `<record> <dimension>`: their origin is unknown."""
+    return [
+        f"{rid} {a['dimension']}"
+        for rid, entry in state["records"].items()
+        for a in entry.get("assessments", [])
+        if "source" not in a
+    ]
 
 
 def refresh(
@@ -217,6 +245,8 @@ def refresh(
     for ref, entry in earlier.get("records", {}).items():
         if local(ref) in records:
             observed[local(ref)] = copy.deepcopy(entry)
+            if "assessments" in entry:
+                observed[local(ref)]["assessments"] = [with_source(a) for a in observed[local(ref)]["assessments"]]
     ids = {rel["id"] for rel in relationships if "id" in rel}
     keys = {(rel["source"], rel["type"], rel["target"]) for rel in relationships}
     kept_relationships = [
@@ -228,22 +258,22 @@ def refresh(
 
     for rid, record in records.items():
         binding = record.get("observe", {}).get("tests")
-        fresh, dimensions = [], set()
+        fresh, sources = [], set()
         if binding and observes(binding, run):
             fresh.append(verification(binding, results, run))
-            dimensions.add("verification")
+            sources.add("tests")
         if distribution and record["type"] == "Requirement":
             # Delivery is observed either way: without a present implementer, an earlier release no longer holds.
-            dimensions.add("delivery")
+            sources.add("distribution")
             released = delivery(rid, records, relationships, run, root)
             if released:
                 fresh.append(released)
-        if not dimensions or (rid not in observed and not fresh):
+        if not sources or (rid not in observed and not fresh):
             continue
-        # Replace only the dimensions this run observed; other assessments and evidence stay.
+        # Replace only the sources this run observed; other assessments, such as another observer's, and evidence stay.
         entry = observed.setdefault(rid, {})
         entry["assessments"] = [
-            *(a for a in entry.get("assessments", []) if a["dimension"] not in dimensions),
+            *(a for a in entry.get("assessments", []) if a.get("source") not in sources),
             *fresh,
         ]
         if not entry["assessments"] and not entry.get("evidence"):

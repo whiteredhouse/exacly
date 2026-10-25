@@ -27,7 +27,7 @@ import yaml
 
 from exacly import mcp, query, views
 from exacly.core import is_state, validate_documents
-from exacly.refresh import RefreshError, Run, read_junit, refresh
+from exacly.refresh import RefreshError, Run, read_junit, refresh, unattributed
 
 SUFFIXES = {".yaml", ".yml", ".json"}
 DEFAULT_MODEL = Path("spec/exacly")
@@ -251,7 +251,21 @@ def refresh_main(argv: list[str] | None = None) -> int:
     counts = Counter(f"{a['dimension']} {a['state']}" for r in state["records"].values() for a in r["assessments"])
     summary = ", ".join(f"{n} {k}" for k, n in sorted(counts.items())) or "no assessments"
     print(f"Wrote {args.state}: {args.context} serial {state['serial']} at {args.revision}: {summary}")
+    unknown = unattributed(state)
+    if unknown:
+        print(
+            f"exacly refresh: kept assessments that name no source, so their origin is unknown: {', '.join(unknown)}",
+            file=sys.stderr,
+        )
     return 0
+
+
+def source_words(assessment: dict[str, Any]) -> str:
+    """The source and binding that gave an assessment, such as " from tests (.github/workflows/ci.yml test)"."""
+    if "source" not in assessment:
+        return ""
+    binding = " ".join(assessment.get("binding", {}).values())
+    return f" from {assessment['source']}" + (f" ({binding})" if binding else "")
 
 
 def label(node: dict[str, Any]) -> str:
@@ -308,7 +322,14 @@ def show_text(answer: dict[str, Any]) -> str:
         for a in observed.get("assessments", []):
             reason = f": {a['reason']}" if a.get("reason") else ""
             cited = "; ".join(f"{e['claim']} ({e['locator']})" for e in a["evidence"])
-            lines.append(f"    {a['dimension']} {a['state']}{reason}" + (f" - {cited}" if cited else ""))
+            lines.append(
+                f"    {a['dimension']} {a['state']}{source_words(a)}{reason}" + (f" - {cited}" if cited else "")
+            )
+        for m in observed.get("missing", []):
+            lines.append(f"    {m['dimension']} has no result from {m['source']}, which is bound to it")
+        if len(observed.get("assessments", [])) > len(observed.get("status", {})) or observed.get("missing"):
+            combined = ", ".join(f"{d} {s}" for d, s in sorted(observed["status"].items()))
+            lines.append(f"    combined: {combined}")
         for work in observed.get("pending", []):
             lines.append(f"    pending {work['task']} since {work['opened_at']}")
     if not answer["state"]:
