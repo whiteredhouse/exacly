@@ -152,7 +152,7 @@ class TestImpact:
         assert recheck == [
             {
                 **query.Model.summary(model(), "REQ-001"),
-                "observe": {"tests": {"workflow": "ci.yml", "path": "tests/reminders"}},
+                "observe": {"tests": {"workflow": ".github/workflows/ci.yml", "cases": ["tests/reminders/*"]}},
             }
         ]
 

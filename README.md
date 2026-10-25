@@ -32,7 +32,7 @@ records:
       Send one reminder three days before the due date if the invoice remains
       unpaid and the customer can receive email.
     observe:
-      tests: { workflow: ci.yml, path: tests/reminders }
+      tests: { workflow: .github/workflows/ci.yml, cases: ["tests/reminders/*"] }
   # ... OUT-001, CAP-001, PROC-001, APP-001 and the rest
 
 relationships:
@@ -59,7 +59,7 @@ Requirements not verified in any context (1)
   REQ-001 Requirement: Remind before due date (proposed)
 ```
 
-Nothing has run yet, so nothing is proven. Once `tests/reminders` passes in CI, `exacly refresh` records the run as evidence in state, and the gap closes without anyone editing the model. If the tests later fail, the next refresh records that, and the requirement is back on the list.
+Nothing has run yet, so nothing is proven. Once the test cases under `tests/reminders/` pass in that workflow, `exacly refresh` reads their results and records the run as evidence in state, and the gap closes without anyone editing the model. If the tests later fail, the next refresh records that, and the requirement is back on the list.
 
 ## How it fits the lifecycle
 

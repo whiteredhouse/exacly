@@ -67,7 +67,7 @@ records:
       - A transient delivery failure is recorded and retried under a separately documented retry policy.
     verification_method: Eligibility tests, idempotency tests, and an integration test with a controlled email provider.
     observe:
-      tests: { workflow: ci.yml, path: tests/reminders }
+      tests: { workflow: .github/workflows/ci.yml, cases: ["tests/reminders/*"] }
 
   - id: INFO-001
     type: Information
