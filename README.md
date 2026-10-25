@@ -92,7 +92,7 @@ Exacly is at 0.x and unstable: anything may change until 1.0, which comes with t
 Each part of Exacly has its own version, tagged as `<part>-vX.Y.Z`, as release-please and Changesets tag the parts of one repository:
 
 - **The specification**, `spec-vX.Y.Z`: the file in [`spec/versions/`](spec/versions/) and the `exacly:` line of every model document.
-- **The package**, `exacly-vX.Y.Z`: the `exacly` Python package and command, with validation, refresh, questions, views and the MCP server. Up to 0.1.0 it was `exacly-validate`, tagged `validator-vX.Y.Z`.
+- **The Python package**, `python-vX.Y.Z`: the `exacly` package and command, with validation, refresh, questions, views and the MCP server. Up to 0.1.0 it was `exacly-validate`, tagged `validator-vX.Y.Z`.
 - **The GitHub Action** lives in [whiteredhouse/exacly-action](https://github.com/whiteredhouse/exacly-action), tagged `vX.Y.Z` with a moving `v0`, as workflows expect. Each action release runs one package release.
 
 | Package | Spec versions it reads |
