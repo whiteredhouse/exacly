@@ -1,6 +1,6 @@
 """Checks the MCP server: the protocol messages, and each tool's answer over the invoice reminders example.
 
-Run with `mise run test`, or from the repository root: uv run pytest validator/tests
+Run with `mise run test`, or from the repository root: uv run pytest python/tests
 """
 
 import io
@@ -11,8 +11,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from exacly_validate import mcp
-from exacly_validate.cli import ask
+from exacly import mcp
+from exacly.cli import ask
 
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLE = ROOT / "spec" / "examples" / "0.2" / "invoice-reminders"
@@ -100,7 +100,7 @@ def test_the_exacly_mcp_command() -> None:
         [
             sys.executable,
             "-c",
-            "import sys; from exacly_validate.cli import exacly_main; sys.exit(exacly_main())",
+            "import sys; from exacly.cli import exacly_main; sys.exit(exacly_main())",
             "mcp",
             "-m",
             str(EXAMPLE),

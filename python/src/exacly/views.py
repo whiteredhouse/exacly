@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from exacly_validate import query
+from exacly import query
 
 Doc = dict[str, Any]
 MARKER = "<!-- exacly-plan -->"  # Lets CI find and replace its earlier comment.

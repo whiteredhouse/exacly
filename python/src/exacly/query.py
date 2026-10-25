@@ -18,7 +18,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from exacly_validate.core import PARTS, Edge, Graph, Report, is_state, validate_documents
+from exacly.core import PARTS, Edge, Graph, Report, is_state, validate_documents
 
 Doc = dict[str, Any]
 

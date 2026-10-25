@@ -1,8 +1,8 @@
 [project]
-name = "exacly-validate"
-version = "0.1.0"
-description = "Validate Exacly models (0.1 product maps, 0.2 config and state) against the Exacly Specification"
-readme = "validator/README.md"
+name = "exacly"
+version = "0.2.0"
+description = "Validate, refresh and ask Exacly models (0.1 product maps, 0.2 config and state), for people and coding agents"
+readme = "python/README.md"
 requires-python = ">=3.12"
 dependencies = [
     "jsonschema>=4.18",
@@ -10,9 +10,10 @@ dependencies = [
 ]
 
 [project.scripts]
-exacly-validate = "exacly_validate.cli:main"
-exacly-refresh = "exacly_validate.cli:refresh_main"
-exacly = "exacly_validate.cli:exacly_main"
+exacly = "exacly.cli:exacly_main"
+# The commands' names before 0.2.0, kept for one release.
+exacly-validate = "exacly.cli:validate_renamed"
+exacly-refresh = "exacly.cli:refresh_renamed"
 
 [dependency-groups]
 dev = [
@@ -29,14 +30,14 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.sdist]
-only-include = ["validator/src", "validator/README.md", "spec/schema"]
+only-include = ["python/src", "python/README.md", "spec/schema"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["validator/src/exacly_validate"]
+packages = ["python/src/exacly"]
 
 # The wheel carries the spec's schemas, so the installed command validates without the repository.
 [tool.hatch.build.targets.wheel.force-include]
-"spec/schema" = "exacly_validate/schemas"
+"spec/schema" = "exacly/schemas"
 
 [tool.ruff]
 line-length = 120
@@ -46,7 +47,7 @@ target-version = "py312"
 select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF"]
 
 [tool.mypy]
-files = ["validator/src", "validator/tests", "spec/tests", "tests"]
+files = ["python/src", "python/tests", "spec/tests", "tests"]
 strict = true
 
 # jsonpatch ships no type information; only the tests use it.

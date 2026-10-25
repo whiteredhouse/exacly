@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from exacly_validate.core import is_state, version_of
+from exacly.core import is_state, version_of
 
 Doc = dict[str, Any]
 CASE_PROPERTY = "exacly-case"

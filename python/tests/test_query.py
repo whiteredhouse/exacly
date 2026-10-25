@@ -1,6 +1,6 @@
 """Checks the query core and the exacly command: show, trace, impact and gaps over the invoice reminders example.
 
-Run with `mise run test`, or from the repository root: uv run pytest validator/tests
+Run with `mise run test`, or from the repository root: uv run pytest python/tests
 """
 
 import contextlib
@@ -14,8 +14,8 @@ from typing import Any
 
 import pytest
 import yaml
-from exacly_validate import query
-from exacly_validate.cli import exacly_main, load
+from exacly import query
+from exacly.cli import exacly_main, load
 
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLE = ROOT / "spec" / "examples" / "0.2" / "invoice-reminders"

@@ -68,7 +68,7 @@ records:
         workflow: .github/workflows/spec.yml
         cases:
           - "spec/tests/*/cases.yaml::*"
-          - "validator/tests/*/cases.yaml::*fails*schema*"
+          - "python/tests/*/cases.yaml::*fails*schema*"
 
   - id: REQ-002
     type: Requirement
@@ -89,15 +89,15 @@ records:
       tests:
         workflow: .github/workflows/spec.yml
         cases:
-          - "validator/tests/*/cases.yaml::Duplicate*"
-          - "validator/tests/*/cases.yaml::IDs must be unique*"
-          - "validator/tests/*/cases.yaml::A relationship to a record that does not exist"
-          - "validator/tests/*/cases.yaml::A reference to another model*"
-          - "validator/tests/*/cases.yaml::A namespace-qualified reference*"
-          - "validator/tests/*/cases.yaml::A relationship between types*"
-          - "validator/tests/*/cases.yaml::contains must link*"
-          - "validator/tests/*/cases.yaml::Only Infrastructure stores*"
-          - "validator/tests/*/cases.yaml::*cycle*"
+          - "python/tests/*/cases.yaml::Duplicate*"
+          - "python/tests/*/cases.yaml::IDs must be unique*"
+          - "python/tests/*/cases.yaml::A relationship to a record that does not exist"
+          - "python/tests/*/cases.yaml::A reference to another model*"
+          - "python/tests/*/cases.yaml::A namespace-qualified reference*"
+          - "python/tests/*/cases.yaml::A relationship between types*"
+          - "python/tests/*/cases.yaml::contains must link*"
+          - "python/tests/*/cases.yaml::Only Infrastructure stores*"
+          - "python/tests/*/cases.yaml::*cycle*"
 
   - id: REQ-003
     type: Requirement
@@ -117,9 +117,9 @@ records:
       tests:
         workflow: .github/workflows/spec.yml
         cases:
-          - "validator/tests/*/cases.yaml::7.*"
-          - "validator/tests/*/cases.yaml::The worked example*"
-          - "validator/tests/*/cases.yaml::An active relationship to a retired record*"
+          - "python/tests/*/cases.yaml::7.*"
+          - "python/tests/*/cases.yaml::The worked example*"
+          - "python/tests/*/cases.yaml::An active relationship to a retired record*"
 
   - id: REQ-004
     type: Requirement
@@ -139,9 +139,9 @@ records:
       tests:
         workflow: .github/workflows/spec.yml
         cases:
-          - "validator/tests/*/cases.yaml::*specification version*"
-          - "validator/tests/*/cases.yaml::*model boundary*"
-          - "validator/tests/test_validator.py::*"
+          - "python/tests/*/cases.yaml::*specification version*"
+          - "python/tests/*/cases.yaml::*model boundary*"
+          - "python/tests/test_validator.py::*"
 
   - id: REQ-005
     type: Requirement
@@ -161,10 +161,10 @@ records:
       tests:
         workflow: .github/workflows/spec.yml
         cases:
-          - "validator/tests/*/cases.yaml::State *"
-          - "validator/tests/*/cases.yaml::Pending work*"
-          - "validator/tests/*/cases.yaml::Two state documents*"
-          - "validator/tests/*/cases.yaml::*revision*"
+          - "python/tests/*/cases.yaml::State *"
+          - "python/tests/*/cases.yaml::Pending work*"
+          - "python/tests/*/cases.yaml::Two state documents*"
+          - "python/tests/*/cases.yaml::*revision*"
 
   - id: REQ-006
     type: Requirement
@@ -184,7 +184,7 @@ records:
       tests:
         workflow: .github/workflows/spec.yml
         cases:
-          - "validator/tests/*/cases.yaml::*exception*"
+          - "python/tests/*/cases.yaml::*exception*"
 
   - id: REQ-007
     type: Requirement
@@ -204,10 +204,10 @@ records:
       tests:
         workflow: .github/workflows/spec.yml
         cases:
-          - "validator/tests/*/cases.yaml::*findings*"
-          - "validator/tests/*/cases.yaml::Findings*"
-          - "validator/tests/*/cases.yaml::A map with no model*"
-          - "validator/tests/test_validator.py::*"
+          - "python/tests/*/cases.yaml::*findings*"
+          - "python/tests/*/cases.yaml::Findings*"
+          - "python/tests/*/cases.yaml::A map with no model*"
+          - "python/tests/test_validator.py::*"
 
   - id: REQ-008
     type: Requirement
@@ -226,9 +226,9 @@ records:
       tests:
         workflow: .github/workflows/spec.yml
         cases:
-          - "validator/tests/*/cases.yaml::*reviewed*"
-          - "validator/tests/*/cases.yaml::An unknown baseline*"
-          - "validator/tests/*/cases.yaml::*xpire*"
+          - "python/tests/*/cases.yaml::*reviewed*"
+          - "python/tests/*/cases.yaml::An unknown baseline*"
+          - "python/tests/*/cases.yaml::*xpire*"
 
   - id: REQ-009
     type: Requirement
@@ -297,14 +297,14 @@ records:
   - id: APP-001
     type: Application
     name: Validator
-    description: The exacly-validate package and command.
+    description: Validation in the exacly package, run as exacly validate.
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
     last_reviewed_at: "2026-10-23"
     responsibility: Check a model's config and state against the specification and report the findings.
-    interfaces: [exacly-validate command, exacly_validate Python API]
-    implementation_ref: { locator: validator/src/exacly_validate }
+    interfaces: [exacly validate command, exacly Python API]
+    implementation_ref: { locator: python/src/exacly }
 
   - id: INF-001
     type: Infrastructure

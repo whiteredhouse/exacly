@@ -31,7 +31,7 @@ Rules that need the whole graph are left to a validator, as section 11 describes
 
 ## Tests
 
-`tests/` checks that each schema is valid and that every example validates. It also runs every case in [`tests/0.1/cases.yaml`](tests/0.1/cases.yaml) and [`tests/0.2/cases.yaml`](tests/0.2/cases.yaml). Each case is a JSON Patch to the worked example, with the result the schema must give and, for an invalid document, the errors it must report by location and keyword. The cases are plain data, so any validator can run them. The tests run in CI on every change under `spec/`. To run them locally with [mise](https://mise.jdx.dev/), which also runs the [validator](../validator/README.md)'s tests:
+`tests/` checks that each schema is valid and that every example validates. It also runs every case in [`tests/0.1/cases.yaml`](tests/0.1/cases.yaml) and [`tests/0.2/cases.yaml`](tests/0.2/cases.yaml). Each case is a JSON Patch to the worked example, with the result the schema must give and, for an invalid document, the errors it must report by location and keyword. The cases are plain data, so any validator can run them. The tests run in CI on every change under `spec/`. To run them locally with [mise](https://mise.jdx.dev/), which also runs the [`exacly` package](../python/README.md)'s tests:
 
 ```sh
 mise run test

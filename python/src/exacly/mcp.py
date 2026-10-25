@@ -18,7 +18,7 @@ from typing import IO, Any
 
 import jsonschema
 
-from exacly_validate import query
+from exacly import query
 
 PROTOCOL_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")  # Newest first.
 RECORD = {"type": "string", "description": "A record ID, such as REQ-001"}

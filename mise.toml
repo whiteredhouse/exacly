@@ -5,14 +5,14 @@ python = "3.12"
 uv = "0.11.32"
 
 [tasks.sync]
-description = "Install the validator and development tools into .venv from uv.lock"
+description = "Install exacly and development tools into .venv from uv.lock"
 run = "uv sync --locked"
 
 [tasks.test]
-description = "Run the schema and validator test cases"
+description = "Run the schema and exacly test cases"
 depends = ["sync"]
 # Each test case's result goes to reports/junit.xml, which the model task reads.
-run = "uv run --locked pytest spec/tests validator/tests tests --junitxml=reports/junit.xml"
+run = "uv run --locked pytest spec/tests python/tests tests --junitxml=reports/junit.xml"
 
 [tasks.lint]
 description = "Check style and formatting with Ruff"
@@ -27,7 +27,7 @@ run = "uv run --locked mypy"
 [tasks.examples]
 description = "Validate every example: each 0.1 product map, and each 0.2 config folder"
 depends = ["sync"]
-run = 'for f in spec/examples/0.1/*.yaml spec/examples/0.2/*/; do uv run --locked exacly-validate "$f" || exit 1; done'
+run = 'for f in spec/examples/0.1/*.yaml spec/examples/0.2/*/; do uv run --locked exacly validate "$f" || exit 1; done'
 
 [tasks.model]
 description = "Refresh Exacly's own state from the test results into reports/state/, and validate it with the config"
@@ -39,9 +39,9 @@ revision="$(git rev-parse HEAD)"
 mkdir -p reports/state
 rm -f reports/state/main.json
 if [ -f spec/exacly/state/main.json ]; then cp spec/exacly/state/main.json reports/state/main.json; fi
-uv run --locked exacly-refresh spec/exacly/*.yaml --context main --state reports/state/main.json \
+uv run --locked exacly refresh spec/exacly/*.yaml --context main --state reports/state/main.json \
   --junit reports/junit.xml --distribution --job-status success --revision "$revision"
-uv run --locked exacly-validate spec/exacly/*.yaml reports/state/main.json --revision "$revision"
+uv run --locked exacly validate spec/exacly/*.yaml reports/state/main.json --revision "$revision"
 """
 
 [tasks.check]

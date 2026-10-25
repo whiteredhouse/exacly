@@ -1,6 +1,6 @@
 """Runs every case in 0.1/cases.yaml and 0.2/cases.yaml through the validator and compares the report.
 
-Run with `mise run test`, or from the repository root: uv run pytest validator/tests
+Run with `mise run test`, or from the repository root: uv run pytest python/tests
 """
 
 import contextlib
@@ -14,12 +14,13 @@ import unittest
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, ClassVar
+from unittest import mock
 
 import jsonpatch
 import pytest
 import yaml
-from exacly_validate import validate, validate_documents
-from exacly_validate.cli import main
+from exacly import validate, validate_documents
+from exacly.cli import main, validate_renamed
 
 TESTS = Path(__file__).resolve().parent
 ROOT = TESTS.parent.parent
@@ -137,6 +138,14 @@ class ValidatorTest(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(main([str(folder), "--date", "2026-10-23", "--revision", "9f2c41e"]), 1)
                 self.assertEqual(main([str(folder / "model.yaml"), str(folder / "billing.yaml")]), 0)
+
+    def test_the_old_command_name_still_validates_and_says_the_new_one(self) -> None:
+        out, err = io.StringIO(), io.StringIO()
+        argv = ["exacly-validate", str(EXAMPLE_0_1), "--date", "2026-10-23"]
+        with mock.patch("sys.argv", argv), contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            self.assertEqual(validate_renamed(), 0)
+        self.assertIn("Result: conforms", out.getvalue())
+        self.assertIn("exacly-validate is now exacly validate", err.getvalue())
 
 
 if __name__ == "__main__":

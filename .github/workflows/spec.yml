@@ -4,7 +4,7 @@ on:
   pull_request:
     paths:
       - "spec/**"
-      - "validator/**"
+      - "python/**"
       - "pyproject.toml"
       - "uv.lock"
       - "mise.toml"

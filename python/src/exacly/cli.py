@@ -1,10 +1,10 @@
 """Command lines.
 
-exacly-validate PATH... [--revision REV] [--date YYYY-MM-DD] [--json]
-exacly-refresh PATH... --context CONTEXT --state FILE [--junit FILE...] [--distribution] [run options]
+exacly validate PATH... [--revision REV] [--date YYYY-MM-DD] [--json]
+exacly refresh PATH... --context CONTEXT --state FILE [--junit FILE...] [--distribution] [run options]
 exacly show|trace|impact|gaps [-m PATH]... [--json] ...; exacly mcp [-m PATH]...
 exacly view plan [--base REV] | site [--out DIR]
-exacly validate|refresh ... run the commands above
+exacly-validate and exacly-refresh are the first two under their names before 0.2.0, kept for one release
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import os
 import subprocess
 import sys
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from fnmatch import fnmatchcase
 from importlib import metadata
 from pathlib import Path, PurePosixPath
@@ -25,9 +25,9 @@ from typing import Any
 
 import yaml
 
-from exacly_validate import mcp, query, views
-from exacly_validate.core import is_state, validate_documents
-from exacly_validate.refresh import RefreshError, Run, read_junit, refresh
+from exacly import mcp, query, views
+from exacly.core import is_state, validate_documents
+from exacly.refresh import RefreshError, Run, read_junit, refresh
 
 SUFFIXES = {".yaml", ".yml", ".json"}
 DEFAULT_MODEL = Path("spec/exacly")
@@ -148,7 +148,7 @@ def load_at(revision: str, paths: list[Path]) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="exacly-validate",
+        prog="exacly validate",
         description="Validate an Exacly model and print the section 11 validation report. "
         "Exits 1 when the model does not conform.",
     )
@@ -170,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         documents = load(args.paths)
     except query.QueryError as error:
-        print(f"exacly-validate: {error}", file=sys.stderr)
+        print(f"exacly validate: {error}", file=sys.stderr)
         return 1
     if not documents:
         parser.error("no YAML or JSON documents found")
@@ -198,7 +198,7 @@ def github_defaults() -> dict[str, str | None]:
 def refresh_main(argv: list[str] | None = None) -> int:
     defaults = github_defaults()
     parser = argparse.ArgumentParser(
-        prog="exacly-refresh",
+        prog="exacly refresh",
         description="Observe what a model's bindings name and write the state document for one context. "
         "In GitHub Actions, the run options default to the current run.",
     )
@@ -228,7 +228,7 @@ def refresh_main(argv: list[str] | None = None) -> int:
     try:
         documents = {name: doc for name, doc in load(args.paths).items() if not is_state(doc)}
     except query.QueryError as error:
-        print(f"exacly-refresh: {error}", file=sys.stderr)
+        print(f"exacly refresh: {error}", file=sys.stderr)
         return 1
     previous = json.loads(args.state.read_text()) if args.state.exists() else None
     run = Run(
@@ -244,7 +244,7 @@ def refresh_main(argv: list[str] | None = None) -> int:
     try:
         state = refresh(documents, read_junit(args.junit), run, previous, args.distribution, args.root)
     except RefreshError as error:
-        print(f"exacly-refresh: {error}", file=sys.stderr)
+        print(f"exacly refresh: {error}", file=sys.stderr)
         return 1
     args.state.parent.mkdir(parents=True, exist_ok=True)
     args.state.write_text(json.dumps(state, indent=2) + "\n")
@@ -436,8 +436,7 @@ def exacly_main(argv: list[str] | None = None) -> int:
         return main(argv[1:]) if argv[0] == "validate" else refresh_main(argv[1:])
     parser = argparse.ArgumentParser(
         prog="exacly",
-        description="Ask an Exacly model about its records, from its config and state. "
-        "validate and refresh run exacly-validate and exacly-refresh.",
+        description="Validate an Exacly model, write its state, and ask it about its records.",
     )
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument(
@@ -450,8 +449,8 @@ def exacly_main(argv: list[str] | None = None) -> int:
     )
     common.add_argument("--json", action="store_true", help="print the answer as JSON")
     commands = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
-    commands.add_parser("validate", help="validate the model (exacly-validate)")
-    commands.add_parser("refresh", help="write state from observations (exacly-refresh)")
+    commands.add_parser("validate", help="validate the model and print the section 11 report")
+    commands.add_parser("refresh", help="write state for one context from what the bindings observe")
     show = commands.add_parser("show", parents=[common], help="one record: relationships, state and findings")
     show.add_argument("record")
     trace = commands.add_parser("trace", parents=[common], help="why a record exists, and how it is realized")
@@ -475,7 +474,7 @@ def exacly_main(argv: list[str] | None = None) -> int:
             print(f"exacly: {error}", file=sys.stderr)
             return 1
     if args.command == "mcp":
-        mcp.serve(mcp.Server(args.model or [DEFAULT_MODEL], ask, metadata.version("exacly-validate")))
+        mcp.serve(mcp.Server(args.model or [DEFAULT_MODEL], ask, metadata.version("exacly")))
         return 0
     try:
         answer, text = ask(
@@ -492,5 +491,19 @@ def exacly_main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def renamed(command: str, run: Callable[[list[str] | None], int]) -> Callable[[], int]:
+    """The command under its name before 0.2.0, which says what to run instead."""
+
+    def run_renamed() -> int:
+        print(f"exacly-{command} is now exacly {command}; the old name goes in the next release.", file=sys.stderr)
+        return run(None)
+
+    return run_renamed
+
+
+validate_renamed = renamed("validate", main)
+refresh_renamed = renamed("refresh", refresh_main)
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(exacly_main())

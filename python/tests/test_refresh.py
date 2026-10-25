@@ -1,6 +1,6 @@
-"""Checks exacly-refresh: test results and bindings in, state that the validator accepts out.
+"""Checks exacly refresh: test results and bindings in, state that the validator accepts out.
 
-Run with `mise run test`, or from the repository root: uv run pytest validator/tests
+Run with `mise run test`, or from the repository root: uv run pytest python/tests
 """
 
 import contextlib
@@ -14,10 +14,10 @@ from typing import Any
 
 import jsonschema
 import pytest
-from exacly_validate import validate_documents
-from exacly_validate.cli import refresh_main
-from exacly_validate.core import schema_for
-from exacly_validate.refresh import RefreshError, Run, read_junit, refresh
+from exacly import validate_documents
+from exacly.cli import refresh_main
+from exacly.core import schema_for
+from exacly.refresh import RefreshError, Run, read_junit, refresh
 
 ROOT = Path(__file__).resolve().parents[2]
 WHEN = dt.datetime(2026, 10, 24, 9, 0, tzinfo=dt.UTC)
@@ -52,7 +52,7 @@ def requirement(rid: str, tests: dict[str, Any] | None = None) -> dict[str, Any]
     return record
 
 
-def config(*records: dict[str, Any], app_ref: str = "validator/src/exacly_validate") -> dict[str, Any]:
+def config(*records: dict[str, Any], app_ref: str = "python/src/exacly") -> dict[str, Any]:
     """A small model: an Outcome, a Capability, a Process, an Application, and the given Requirements."""
     common = {"owner": "team", "lifecycle": "active", "evidence": [], "last_reviewed_at": "2026-10-20"}
     base = [
@@ -224,7 +224,7 @@ def test_a_distribution_context_releases_requirements_whose_implementer_exists()
     conforms(docs, state)
 
 
-@pytest.mark.parametrize("ref", ["validator/src/missing", "validator/src/exacly_validate"])
+@pytest.mark.parametrize("ref", ["python/src/missing", "python/src/exacly"])
 def test_no_release_without_distribution_or_an_existing_reference(ref: str) -> None:
     docs = {"config": config(requirement("REQ-1"), app_ref=ref)}
     distribution = ref.endswith("missing")
@@ -278,7 +278,7 @@ def test_cli_writes_state_the_validator_accepts(monkeypatch: pytest.MonkeyPatch)
         state = json.loads(state_path.read_text())
     assert assessment(state, "REQ-1")["evidence"][0]["locator"] == "https://github.com/acme/demo/actions/runs/42"
     released = assessment(state, "REQ-1", "delivery")["evidence"][0]["locator"]
-    assert released == "https://github.com/acme/demo/blob/0b6ad3b/validator/src/exacly_validate"
+    assert released == "https://github.com/acme/demo/blob/0b6ad3b/python/src/exacly"
     conforms(docs, state)
 
 
@@ -323,7 +323,7 @@ def test_a_release_that_no_longer_holds_is_cleared() -> None:
     docs = {"config": config(requirement("REQ-1", CI))}
     first = refresh(docs, RESULTS, RUN, distribution=True, root=ROOT)
     assert assessment(first, "REQ-1", "delivery")["state"] == "released"
-    moved = {"config": config(requirement("REQ-1", CI), app_ref="validator/src/moved")}
+    moved = {"config": config(requirement("REQ-1", CI), app_ref="python/src/moved")}
     second = valid_state(refresh(moved, RESULTS, RUN, previous=first, distribution=True, root=ROOT))
     assert [a["dimension"] for a in second["records"]["REQ-1"]["assessments"]] == ["verification"]
 

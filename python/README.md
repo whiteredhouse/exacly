@@ -1,28 +1,40 @@
-# Exacly validator
+# exacly
 
-Validates an Exacly model against the [Exacly Specification](../spec/README.md) and prints the validation report that section 11 describes. A model is either a 0.1 product map, or 0.2 config and state documents.
+The `exacly` command and Python package work with an Exacly model, either a 0.1 product map or 0.2 config and state documents, as the [Exacly Specification](../spec/README.md) describes it:
+
+- [`exacly validate`](#validate) checks the model and prints the section 11 validation report.
+- [`exacly refresh`](#refresh) writes state from what the model's bindings observe.
+- [`exacly show`, `trace`, `impact` and `gaps`](#questions) answer questions about the model, and [`exacly view`](#views) renders them for people.
+- [`exacly mcp`](#mcp-server) answers the same questions for coding agents.
 
 ```sh
-uv tool install "exacly-validate @ git+https://github.com/whiteredhouse/exacly"
+uv tool install "exacly @ git+https://github.com/whiteredhouse/exacly"
+```
+
+Before 0.2.0 the package was `exacly-validate`, with `exacly-validate` and `exacly-refresh` commands. Those commands still run, with a note, until the next release.
+
+## Validate
+
+```sh
 
 # 0.2: a folder of config documents, with state under it if there is any
-exacly-validate spec/exacly --revision "$(git rev-parse HEAD)"
+exacly validate spec/exacly --revision "$(git rev-parse HEAD)"
 
 # 0.1: one product map
-exacly-validate docs/exacly/product-map.yaml --json --date 2026-10-23
+exacly validate docs/exacly/product-map.yaml --json --date 2026-10-23
 ```
 
 Given a folder, it reads every YAML and JSON file under it, skipping hidden folders, so a README or the copied spec beside them is ignored. Files and folders can also be given one by one. A document is state when it has state's fields (`context`, `config_revision`, `serial` or `lineage`); every other document is config. `--revision` is the config revision being validated. State computed against another revision is reported. An abbreviated Git commit hash matches the full one; any other revision name, such as `release-1`, must match exactly.
 
-`pip install` works the same way. The package carries the spec's schemas, so it runs anywhere. In Python, `exacly_validate.validate_documents({name: doc, ...}, date, revision)` returns the report for a set of documents, and `exacly_validate.validate(doc, date)` for one document. Neither changes its input.
+`pip install` works the same way. The package carries the spec's schemas, so it runs anywhere. In Python, `exacly.validate_documents({name: doc, ...}, date, revision)` returns the report for a set of documents, and `exacly.validate(doc, date)` for one document. Neither changes its input.
 
 It exits 0 when the model conforms, with or without exceptions, and 1 when it does not.
 
-Conformance does not establish measurement readiness or observation completeness. An active Outcome linked to a proposed Measure can conform, as can config without state. The validator checks supplied documents; it does not execute observation bindings. [Measurement coverage acceptance criteria](../docs/measurement-coverage-acceptance-criteria.md) describe planned findings beyond these checks.
+Conformance does not establish measurement readiness or observation completeness. An active Outcome linked to a proposed Measure can conform, as can config without state. Validation checks supplied documents; it does not execute observation bindings. [Measurement coverage acceptance criteria](../docs/measurement-coverage-acceptance-criteria.md) describe planned findings beyond these checks.
 
 ## Refresh
 
-`exacly-refresh` writes a model's state for one context from what its bindings observe (section 9). It reads test results as JUnit XML reports from one CI run. For each record with a `tests` binding, it writes a verification assessment for the observed config revision:
+`exacly refresh` writes a model's state for one context from what its bindings observe (section 9). It reads test results as JUnit XML reports from one CI run. For each record with a `tests` binding, it writes a verification assessment for the observed config revision:
 - **passed** when every selected test case passed;
 - **failed** when any selected case failed, naming the failing cases in the reason;
 - **not checked** when no selected case ran, with the reason.
@@ -30,7 +42,7 @@ Conformance does not establish measurement readiness or observation completeness
 A binding without `cases` takes the job's status from `--job-status` instead, and is not checked without it. A record without a binding gets no verification assessment, because a missing binding says nothing about whether the record is tested.
 
 ```sh
-exacly-refresh spec/exacly --context main --state spec/exacly/state/main.json --junit junit.xml --distribution
+exacly refresh spec/exacly --context main --state spec/exacly/state/main.json --junit junit.xml --distribution
 ```
 
 - **Case IDs.** A test case's ID is its `exacly-case` property in the report, or `<file>::<name>`.
@@ -54,6 +66,8 @@ exacly gaps                  # findings, and Requirements not yet verified, rele
 - **Impact** lists each affected record with the shortest path from a changed one. With `--base`, a record or relationship is changed when any authored field differs, such as a dependency's conditions or a storage role; relationships to other models count too. A relationship added, changed or removed affects the record that relies on the other end, before and after the change, such as the Requirement that gains an implementer or the Application that reads new Information. A removed record's impact is traced in the earlier model. The model may be given by a relative or absolute path inside its Git repository.
 - **Gaps** go beyond conformance (section 10's coverage view): a conforming model can still have Requirements that no context has verified or released.
 
+In Python, `exacly.query` gives the same answers as data: `load(documents)`, then `show`, `trace`, `impact`, `gaps`, `changes` and `change_impact`.
+
 ### Views
 
 `exacly view` draws section 10's views for people from the same answers:
@@ -65,7 +79,7 @@ exacly view site --out site    # HTML pages: coverage and every record, then a p
 
 On each pull request from this repository, CI comments the plan and replaces its earlier comment, so the review shows what the change does to the model. The site has no scripts or outside files, so any static host can serve it.
 
-### For coding agents
+## MCP server
 
 `exacly mcp` answers the same questions as an [MCP](https://modelcontextprotocol.io) server on stdio, with one tool per question: `exacly_show`, `exacly_trace`, `exacly_impact` and `exacly_gaps`. Each result has the text answer as content and the JSON answer as structured content. Every call reads the model again, so an agent sees its own edits. In Claude Code, from the repository that holds the model:
 
@@ -75,9 +89,7 @@ claude mcp add exacly -- exacly mcp
 
 This repository's [`.mcp.json`](../.mcp.json) does the same with `uv run`. The [`exacly` skill](../skills/exacly/SKILL.md) tells an agent when to ask and how to keep config true to a change: look up the records first, change Requirements with the behaviour, and check what the branch affects before a pull request. Copy it to `.claude/skills/exacly/` in your repository.
 
-`exacly validate` and `exacly refresh` run `exacly-validate` and `exacly-refresh`. In Python, `exacly_validate.query` gives the same answers as data: `load(documents)`, then `show`, `trace`, `impact`, `gaps`, `changes` and `change_impact`.
-
-## What it checks
+## What validation checks
 
 1. **Documents.** Each document must match the JSON Schema for its spec version and kind, which is the latest dated iteration in `spec/schema/0.1/`, `spec/schema/0.2/config/` or `spec/schema/0.2/state/`. In 0.2, every document must declare the same spec version (`11.version-mismatch`), and exactly one config document must declare the model boundary (`11.model-boundary`). If any of this fails, the report lists the errors and skips the other checks. Authored evidence that should be observed is a schema error, because the config schema allows only `research` and `decision` evidence.
 2. **Section 11 errors.**
@@ -127,12 +139,12 @@ The repository uses [mise](https://mise.jdx.dev/) for its tools (Python and uv) 
 
 | Task | What it does |
 |---|---|
-| `mise run sync` | Installs the validator and development tools into `.venv` from `uv.lock` |
-| `mise run test` | Runs the schema, validator and refresh tests with pytest, writing `reports/junit.xml` |
+| `mise run sync` | Installs exacly and the development tools into `.venv` from `uv.lock` |
+| `mise run test` | Runs the schema and exacly tests with pytest, writing `reports/junit.xml` |
 | `mise run lint` | Checks style and formatting with Ruff |
 | `mise run typecheck` | Type-checks with mypy in strict mode |
 | `mise run examples` | Validates every example in `spec/examples/`: each 0.1 map and each 0.2 folder |
 | `mise run model` | Refreshes Exacly's own state from the test results into `reports/state/`, then validates it with the model in [`spec/exacly/`](../spec/exacly/README.md) |
 | `mise run check` | All of the above |
 
-To try a model against your working copy, run `uv run exacly-validate path/to/spec/exacly`.
+To try a model against your working copy, run `uv run exacly validate path/to/spec/exacly`.

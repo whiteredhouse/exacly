@@ -25,7 +25,7 @@ def test_the_workflow_cannot_write_by_default() -> None:
 def test_every_change_to_the_model_or_its_tooling_is_checked() -> None:
     # PyYAML reads the `on` key as True.
     triggers = WORKFLOW[True]
-    assert {"spec/**", "validator/**", "tests/**"} <= set(triggers["pull_request"]["paths"])
+    assert {"spec/**", "python/**", "tests/**"} <= set(triggers["pull_request"]["paths"])
     assert triggers["push"]["branches"] == ["main"]
     assert "mise run check" in run_steps("check")
 
