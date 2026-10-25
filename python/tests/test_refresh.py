@@ -17,7 +17,7 @@ import pytest
 from exacly import query, validate_documents
 from exacly.cli import refresh_main
 from exacly.core import schema_for
-from exacly.refresh import RefreshError, Run, read_junit, refresh
+from exacly.refresh import RefreshError, Run, read_junit, refresh, unattributed
 
 ROOT = Path(__file__).resolve().parents[2]
 WHEN = dt.datetime(2026, 10, 24, 9, 0, tzinfo=dt.UTC)
@@ -381,3 +381,80 @@ def test_references_qualified_with_the_model_namespace_find_the_implementer() ->
     state = refresh(docs, RESULTS, RUN, distribution=True, root=ROOT)
     assert assessment(state, "REQ-1", "delivery")["state"] == "released"
     conforms(docs, state)
+
+
+MANUAL = {
+    "dimension": "verification",
+    "state": "failed",
+    "context": "0b6ad3b",
+    "at": "2026-10-23T15:00:00Z",
+    "source": "manual-qa:observations",
+    "evidence": [
+        {"locator": "qa/observations/1.yaml", "kind": "test", "claim": "Criterion 2 failed on android",
+         "observed_at": "2026-10-23", "applies_to": "0b6ad3b"}
+    ],
+    "reason": "Criterion 2 failed on android.",
+    "x-platform": "android",
+}  # fmt: skip
+
+
+def test_each_assessment_names_its_source_and_binding() -> None:
+    docs = {"config": config(requirement("REQ-1", {**CI, "cases": ["tests/cases.yaml::7.*"]}))}
+    state = valid_state(refresh(docs, RESULTS, RUN, distribution=True, root=ROOT))
+    verified = assessment(state, "REQ-1")
+    assert (verified["source"], verified["binding"]) == ("tests", CI)
+    released = assessment(state, "REQ-1", "delivery")
+    assert released["source"] == "distribution" and "binding" not in released
+
+
+def test_a_binding_without_workflow_or_job_records_no_binding() -> None:
+    docs = {"config": config(requirement("REQ-1", {"cases": ["tests/cases.yaml::7.*"]}))}
+    a = assessment(valid_state(refresh(docs, RESULTS, RUN)), "REQ-1")
+    assert a["source"] == "tests" and "binding" not in a
+
+
+@pytest.mark.parametrize("distribution", [False, True])
+def test_refreshing_one_source_keeps_another_sources_assessments(distribution: bool) -> None:
+    docs = {"config": config(requirement("REQ-1", CI))}
+    earlier = refresh(docs, RESULTS, RUN)
+    earlier["records"]["REQ-1"]["assessments"].append(copy.deepcopy(MANUAL))
+    later = valid_state(refresh(docs, RESULTS, RUN, previous=earlier, distribution=distribution, root=ROOT))
+    verifications = [a for a in later["records"]["REQ-1"]["assessments"] if a["dimension"] == "verification"]
+    assert [a["source"] for a in verifications] == ["manual-qa:observations", "tests"]
+    assert verifications[0] == MANUAL
+
+
+def test_assessments_written_before_sources_get_the_source_that_wrote_them() -> None:
+    docs = {"config": config(requirement("REQ-1", CI), requirement("REQ-2", CI))}
+    earlier = refresh(docs, RESULTS, RUN, distribution=True, root=ROOT)
+    for entry in earlier["records"].values():
+        for a in entry["assessments"]:
+            del a["source"]
+            a.pop("binding", None)
+    # REQ-2's binding names another workflow now, so this run does not observe it: its assessment is kept.
+    moved = {"config": config(requirement("REQ-1", CI), requirement("REQ-2", {**CI, "workflow": "nightly.yml"}))}
+    later = valid_state(refresh(moved, RESULTS, RUN, previous=earlier, distribution=True, root=ROOT))
+    for rid in ("REQ-1", "REQ-2"):
+        sources = sorted((a["dimension"], a["source"]) for a in later["records"][rid]["assessments"])
+        assert sources == [("delivery", "distribution"), ("verification", "tests")], rid
+    assert "binding" not in assessment(later, "REQ-2")
+
+
+def test_an_assessment_of_another_dimension_without_a_source_is_kept_and_reported() -> None:
+    docs = {"config": config(requirement("REQ-1", CI))}
+    earlier = refresh(docs, RESULTS, RUN)
+    unknown = {"dimension": "operation", "state": "unknown", "context": "main", "at": "2026-10-23T15:00:00Z",
+               "evidence": [], "reason": "Not observed."}  # fmt: skip
+    earlier["records"]["REQ-1"]["assessments"].append(unknown)
+    later = valid_state(refresh(docs, RESULTS, RUN, previous=earlier))
+    assert assessment(later, "REQ-1", "operation") == unknown
+    assert unattributed(later) == ["REQ-1 operation"]
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        (folder / "model.json").write_text(json.dumps(docs["config"]))
+        (folder / "main.json").write_text(json.dumps(earlier))
+        args = [str(folder / "model.json"), "--context", "main", "--state", str(folder / "main.json")]
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            assert refresh_main([*args, "--revision", "0b6ad3b", "--job-status", "success"]) == 0
+    assert "name no source" in err.getvalue() and "REQ-1 operation" in err.getvalue()

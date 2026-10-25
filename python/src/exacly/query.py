@@ -13,12 +13,13 @@ from __future__ import annotations
 
 import datetime as dt
 import difflib
-from collections import deque
+from collections import defaultdict, deque
 from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from exacly.core import PARTS, Edge, Graph, Report, is_state, validate_documents
+from exacly.refresh import LEGACY_SOURCES
 
 Doc = dict[str, Any]
 
@@ -29,6 +30,24 @@ Doc = dict[str, Any]
 WHY_IS_TARGET = {"contributes_to", "uses_capability", "supports", "implements", "evaluates", "stores"}
 WHY_IS_SOURCE = {"uses", "reads", "writes", "depends_on", "contains"}
 DIMENSIONS = ("delivery", "verification", "operation", "outcome_evaluation")
+# The dimension each core source kind observes. An extension source is taken to observe verification, as a person
+# checking a requirement by hand does, until an extension can declare the dimension it observes.
+OBSERVES = {
+    "tests": "verification",
+    "deployments": "delivery",
+    "runtime": "operation",
+    "measurement": "outcome_evaluation",
+}
+# Each dimension's states, from the one that most needs attention to the one that needs none. A record's results in
+# a context combine to the first state any of them has, so a claim holds only when every result supports it.
+PRECEDENCE = {
+    "verification": ("failed", "inconclusive", "not_checked", "passed"),
+    "delivery": ("withdrawn", "planned", "in_progress", "released"),
+    "operation": ("unavailable", "degraded", "unknown", "healthy"),
+    "outcome_evaluation": ("target_not_met", "inconclusive", "not_evaluated", "target_met"),
+}
+# The result of a source bound to a record that has none yet in a context where the dimension was assessed.
+UNOBSERVED = {"verification": "not_checked", "operation": "unknown", "outcome_evaluation": "not_evaluated"}
 
 
 class QueryError(Exception):
@@ -65,11 +84,30 @@ class Model:
                     found[context] = observed["assessments"]
         return found
 
+    def results(self, rid: str) -> dict[str, dict[str, list[Doc]]]:
+        """Each assessed dimension's results by context, one per source and binding, with a `not_checked` (or the
+        dimension's other not-yet-known state) result for each source bound to the record that has none there:
+        {"main": {"verification": [{"source": "tests", "state": "passed"}]}}."""
+        found: dict[str, dict[str, list[Doc]]] = {}
+        for context, assessments in self.assessments(rid).items():
+            dims: dict[str, list[Doc]] = defaultdict(list)
+            for a in assessments:
+                result = {"source": source_of(a), "state": a["state"]}
+                dims[a["dimension"]].append({**result, **({"binding": a["binding"]} if "binding" in a else {})})
+            for dimension, listed in dims.items():
+                seen = {r["source"] for r in listed}
+                for source in sorted(bound(self.records[rid], dimension) - seen):
+                    listed.append({"source": source, "state": UNOBSERVED[dimension], "missing": True})
+            found[context] = dict(dims)
+        return found
+
     def status(self, rid: str) -> dict[str, dict[str, str]]:
-        """The state of each assessed dimension, by context: {"main": {"verification": "passed"}}."""
+        """The state of each assessed dimension, by context, combined from its results: {"main": {"verification":
+        "passed"}}. A record is verified in a context only when every result there passed, including one from each
+        source bound to it."""
         return {
-            context: {a["dimension"]: a["state"] for a in assessments}
-            for context, assessments in self.assessments(rid).items()
+            context: {dimension: combine(dimension, listed) for dimension, listed in dims.items()}
+            for context, dims in self.results(rid).items()
         }
 
     def summary(self, rid: str) -> Doc:
@@ -87,6 +125,26 @@ class Model:
         return [(e, e.source) for e in self.graph.edges if e.target == rid and e.type in WHY_IS_TARGET] + [
             (e, e.target) for e in self.graph.edges if e.source == rid and e.type in WHY_IS_SOURCE
         ]
+
+
+def source_of(assessment: Doc) -> str | None:
+    """The source that wrote an assessment. One written before sources were recorded came from exacly refresh."""
+    return assessment.get("source") or LEGACY_SOURCES.get(assessment["dimension"])
+
+
+def bound(record: Doc, dimension: str) -> set[str]:
+    """The sources bound to a record that observe this dimension."""
+    return {
+        kind
+        for kind in record.get("observe", {})
+        if OBSERVES.get(kind, "verification" if ":" in kind else None) == dimension
+    }
+
+
+def combine(dimension: str, results: list[Doc]) -> str:
+    """The state that needs the most attention among the results. A state the order doesn't know comes first."""
+    order = PRECEDENCE[dimension]
+    return str(min((r["state"] for r in results), key=lambda state: order.index(state) if state in order else -1))
 
 
 def empty(namespace: str) -> Model:
@@ -139,6 +197,17 @@ def show(model: Model, rid: str) -> Doc:
         pending = [w for w in state.get("pending", []) if model.graph.local(w["record"]) == rid]
         if pending:
             observed.setdefault(context, {"config_revision": state["config_revision"]})["pending"] = pending
+    # Each context's combined state, and the bound sources with no result there, beside the assessments.
+    for context, dims in model.results(rid).items():
+        observed[context]["status"] = {dimension: combine(dimension, listed) for dimension, listed in dims.items()}
+        missing = [
+            {"dimension": dimension, "source": r["source"]}
+            for dimension, listed in dims.items()
+            for r in listed
+            if r.get("missing")
+        ]
+        if missing:
+            observed[context]["missing"] = missing
     return {
         "record": record,
         "document": model.graph.document_of(record),
@@ -233,7 +302,9 @@ def gaps(model: Model) -> Doc:
             verification = {c: s["verification"] for c, s in status.items() if "verification" in s}
             delivery = {c: s["delivery"] for c, s in status.items() if "delivery" in s}
             if "passed" not in verification.values():
-                coverage["unverified"].append({**model.summary(rid), "verification": verification})
+                results = {c: dims["verification"] for c, dims in model.results(rid).items() if "verification" in dims}
+                entry = {**model.summary(rid), "verification": verification}
+                coverage["unverified"].append({**entry, **({"results": results} if results else {})})
             if "released" not in delivery.values():
                 coverage["unreleased"].append({**model.summary(rid), "delivery": delivery})
             if not r.get("observe"):

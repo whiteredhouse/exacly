@@ -14,8 +14,8 @@ from typing import Any
 
 import pytest
 import yaml
-from exacly import query
-from exacly.cli import exacly_main, load
+from exacly import query, views
+from exacly.cli import exacly_main, load, show_text
 
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLE = ROOT / "spec" / "examples" / "0.2" / "invoice-reminders"
@@ -186,6 +186,91 @@ class TestGaps:
         billing = next(d for name, d in docs.items() if name.endswith("billing.yaml"))
         del next(r for r in billing["records"] if r["id"] == "REQ-001")["observe"]
         assert ids(query.gaps(query.load(docs))["coverage"]["unobserved"]) == ["REQ-001"]
+
+
+def passed(source: str | None) -> dict[str, Any]:
+    """A passing verification of REQ-001 in production, from this source (or none, as written before sources)."""
+    a = copy.deepcopy(STATE["records"]["REQ-001"]["assessments"][0])
+    a["state"] = "passed"
+    a["evidence"][0]["claim"] = "All 4 selected test cases passed"
+    del a["reason"]
+    return {**a, **({"source": source} if source else {})}
+
+
+def failed(source: str) -> dict[str, Any]:
+    return {**copy.deepcopy(STATE["records"]["REQ-001"]["assessments"][0]), "source": source}
+
+
+def with_results(*assessments: dict[str, Any], manual: bool = True) -> query.Model:
+    """The example with REQ-001's production results replaced, and bound to manual QA as well as tests."""
+    docs = documents()
+    docs["state/production.json"]["records"]["REQ-001"]["assessments"] = list(assessments)
+    if manual:
+        for doc in docs.values():
+            for r in doc.get("records", []) if isinstance(doc.get("records"), list) else []:
+                if r["id"] == "REQ-001":
+                    r["observe"]["manual-qa:observations"] = {"path": "qa/observations/*.yaml"}
+    return query.load(docs)
+
+
+class TestCombinedResults:
+    def test_a_bound_source_without_a_result_keeps_the_record_unverified(self) -> None:
+        m = with_results(passed("tests"))
+        assert m.status("REQ-001") == {"production": {"verification": "not_checked"}}
+        unverified = query.gaps(m)["coverage"]["unverified"][0]
+        assert unverified["results"] == {
+            "production": [
+                {"source": "tests", "state": "passed"},
+                {"source": "manual-qa:observations", "state": "not_checked", "missing": True},
+            ]
+        }
+
+    def test_a_failure_from_any_source_fails_the_record(self) -> None:
+        m = with_results(passed("tests"), failed("manual-qa:observations"))
+        assert m.status("REQ-001") == {"production": {"verification": "failed"}}
+        assert ids(query.gaps(m)["coverage"]["unverified"]) == ["REQ-001"]
+
+    def test_verified_only_when_every_bound_source_passed(self) -> None:
+        m = with_results(passed("tests"), passed("manual-qa:observations"))
+        assert m.status("REQ-001") == {"production": {"verification": "passed"}}
+        assert query.gaps(m)["coverage"]["unverified"] == []
+
+    @pytest.mark.parametrize(
+        ("states", "combined"),
+        [
+            (["inconclusive", "not_checked", "passed"], "inconclusive"),
+            (["not_checked", "passed"], "not_checked"),
+            (["failed", "inconclusive"], "failed"),
+        ],
+    )
+    def test_the_state_that_needs_most_attention_wins(self, states: list[str], combined: str) -> None:
+        assert query.combine("verification", [{"state": s} for s in states]) == combined
+
+    def test_an_assessment_written_before_sources_counts_as_the_tests_result(self) -> None:
+        assert with_results(passed(None), manual=False).status("REQ-001") == {"production": {"verification": "passed"}}
+
+    def test_a_result_from_a_source_no_longer_bound_still_counts(self) -> None:
+        m = with_results(passed("tests"), failed("manual-qa:observations"), manual=False)
+        assert m.status("REQ-001") == {"production": {"verification": "failed"}}
+
+    def test_show_lists_every_assessment_with_the_combined_state(self) -> None:
+        shown = query.show(with_results(passed("tests")), "REQ-001")["state"]["production"]
+        assert [a["source"] for a in shown["assessments"]] == ["tests"]
+        assert shown["status"] == {"verification": "not_checked"}
+        assert shown["missing"] == [{"dimension": "verification", "source": "manual-qa:observations"}]
+
+    def test_show_as_text_names_sources_and_the_combined_state(self) -> None:
+        m = with_results(passed("tests"), failed("manual-qa:observations"))
+        lines = show_text(query.show(m, "REQ-001")).splitlines()
+        assert any(line.startswith("    verification passed from tests - ") for line in lines)
+        assert any(line.startswith("    verification failed from manual-qa:observations: ") for line in lines)
+        assert "    combined: verification failed" in lines
+
+    def test_the_record_page_names_sources_and_a_bound_source_with_no_result(self) -> None:
+        page = views.record_page(with_results(passed("tests")), "REQ-001")
+        assert '<span class="muted mono">tests</span>' in page
+        assert '<span class="muted mono">manual-qa:observations</span>' in page
+        assert "No result yet from this source" in page
 
 
 class TestChanges:
