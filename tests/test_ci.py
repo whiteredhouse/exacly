@@ -85,8 +85,32 @@ def test_the_plan_is_commented_only_on_pull_requests_from_this_repository() -> N
     assert plan["if"] == (
         "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository"
     )
-    script = run_steps("plan")
-    assert 'exacly view plan --base "origin/$BASE"' in script
-    # The base branch's name reaches the script through the environment, never pasted into it.
-    assert "${{" not in script
-    assert "<!-- exacly-plan -->" in script
+    # The plan is written and commented by the action that other repositories use (tests/test_action.py).
+    assert {"uses": "./", "with": {"mode": "plan"}} in plan["steps"]
+
+
+def test_the_action_is_checked_on_exacly_itself() -> None:
+    action = next(step for step in JOBS["check"]["steps"] if step.get("uses") == "./")
+    # The state committed for an earlier revision can name records this change removed.
+    assert action["with"]["model"] == "spec/exacly/*.yaml reports/state/main.json"
+    assert "action.yml" in WORKFLOW[True]["pull_request"]["paths"]
+
+
+def test_the_action_checks_valid_and_invalid_consumer_models_on_linux_and_macos() -> None:
+    action = JOBS["action"]
+    assert action["runs-on"] == "${{ matrix.os }}"
+    assert {"ubuntu-latest", "macos-latest"} <= set(action["strategy"]["matrix"]["os"])
+    checks = [step for step in action["steps"] if step.get("uses") == "./"]
+    valid = next(step for step in checks if not step.get("continue-on-error", False))
+    invalid = next(step for step in checks if step.get("continue-on-error") is True)
+    assert valid["with"].get("mode", "check") == "check"
+    assert invalid["with"].get("mode", "check") == "check"
+    assert valid["with"]["model"] == "${{ runner.temp }}/exacly-consumer/model"
+    assert invalid["with"]["model"] == "${{ runner.temp }}/exacly-consumer/invalid.yaml"
+    # This workflow contract must contribute to REQ-015's observed verification result.
+    model = yaml.safe_load((ROOT / "spec" / "exacly" / "validation.yaml").read_text())
+    requirement = next(record for record in model["records"] if record["id"] == "REQ-015")
+    assert (
+        "tests/test_ci.py::test_the_action_checks_valid_and_invalid_consumer_models_on_linux_and_macos"
+        in requirement["observe"]["tests"]["cases"]
+    )

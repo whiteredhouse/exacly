@@ -42,6 +42,7 @@ Its ideas come from established practice:
 | [`spec/`](spec/README.md) | Specification versions, JSON Schemas, worked examples and data-driven test cases |
 | [`validator/`](validator/README.md) | `exacly-validate`, the Python validator |
 | [`skills/`](skills/exacly/SKILL.md) | The skill that tells coding agents how to work with a model |
+| [`action.yml`](action.yml) | The GitHub Action that checks a model and comments the plan in other repositories |
 | [`docs/`](docs/) | Research and pilot notes |
 
 ## Quick start
@@ -54,6 +55,46 @@ exacly-validate spec/examples/0.2/invoice-reminders
 ```
 
 In your own project, keep config in `spec/exacly/` and pass the commit it was validated at with `--revision "$(git rev-parse HEAD)"`.
+
+## In CI
+
+Other repositories run Exacly with the [action](action.yml) at this repository's root. `check` validates the model and fails the job when it doesn't conform. `plan` comments the change plan on each pull request, replacing its earlier comment. Both write their report to the job summary. The action installs Exacly from its own checkout with a pinned uv version and `uv.lock`; it does not require Exacly to be published on PyPI. uv and Python dependencies are downloaded as needed.
+
+Replace `<RELEASE_COMMIT_SHA>` in this workflow template with the full commit SHA of an Exacly release, or a commit on `main` that contains the action. Version tags will be published with the first release.
+
+```yaml
+# .github/workflows/exacly.yml
+name: Exacly
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: whiteredhouse/exacly@<RELEASE_COMMIT_SHA>
+        with:
+          model: spec/exacly
+  plan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    concurrency:
+      group: exacly-plan-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: whiteredhouse/exacly@<RELEASE_COMMIT_SHA>
+        with:
+          mode: plan
+          model: spec/exacly
+```
+
+`model` takes files, folders or patterns such as `spec/exacly/*.yaml`, one per line or separated by spaces. `plan` compares with the pull request's base branch, or with `base` when given. A pull request from a fork gets a read-only token, so its plan stays in the job summary. CI exercises `check` on GitHub-hosted Linux and macOS runners, and `plan` on Linux. It sets up uv itself; self-hosted runners also need Git, Bash and, for commenting, the GitHub CLI (`gh`).
+
+In private repositories, `plan` needs Git authentication to fetch the base branch: keep checkout's default `persist-credentials: true`, or configure Git authentication separately. The action's `token` input authenticates comment API calls only.
 
 ## Development
 

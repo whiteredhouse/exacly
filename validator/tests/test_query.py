@@ -315,6 +315,39 @@ class TestCommand:
                     "month must be in 1..12"
                 )
 
+    def test_a_pattern_is_matched_against_each_revision(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        with tempfile.TemporaryDirectory() as folder, tempfile.TemporaryDirectory() as folder_outside:
+            repo = Path(folder)
+            model_dir = repo / "spec" / "exacly"
+            (model_dir / "state").mkdir(parents=True)
+            for name in ("model.yaml", "billing.yaml"):
+                (model_dir / name).write_text((EXAMPLE / name).read_text())
+            (model_dir / "state" / "notes.yaml").write_text("not: a model document\n")
+            (model_dir / ".notes.yaml").write_text("hidden: [not parsed\n")  # glob leaves hidden files out
+            for args in (
+                ["init", "-q"],
+                ["add", "."],
+                ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "b"],
+            ):
+                subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+            (model_dir / "billing.yaml").unlink()
+            monkeypatch.chdir(repo)
+            code, out, err = run("impact", "--base", "HEAD", "-m", "spec/exacly/*.yaml", "--json")
+            assert code == 0, err
+            removed = json.loads(out)["records"]["removed"]
+            assert "REQ-001" in ids(removed) and len(removed) == 10
+            monkeypatch.chdir(folder_outside)
+            code, out, _ = run("impact", "--base", "HEAD", "-m", str(model_dir / "*.yaml"), "--json")
+            assert code == 0 and len(json.loads(out)["records"]["removed"]) == 10
+            # Through a symbolic link to the repository, as macOS's /var is to /private/var.
+            linked = Path(folder_outside) / "linked"
+            linked.symlink_to(repo)
+            code, out, err = run("impact", "--base", "HEAD", "-m", str(linked / "spec" / "exacly" / "*.yaml"), "--json")
+            assert code == 0, err
+            assert len(json.loads(out)["records"]["removed"]) == 10
+            code, _, err = run("gaps", "-m", str(model_dir / "*.json"))
+            assert code == 1 and "matches no files" in err
+
     def test_impact_against_a_git_revision(self, monkeypatch: pytest.MonkeyPatch) -> None:
         with tempfile.TemporaryDirectory() as folder, tempfile.TemporaryDirectory() as folder_outside:
             repo = Path(folder)
