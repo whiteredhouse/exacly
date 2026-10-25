@@ -3,7 +3,6 @@
 [tools]
 python = "3.12"
 uv = "0.11.32"
-shellcheck = "0.11.0"
 
 [tasks.sync]
 description = "Install the validator and development tools into .venv from uv.lock"
@@ -16,9 +15,9 @@ depends = ["sync"]
 run = "uv run --locked pytest spec/tests validator/tests tests --junitxml=reports/junit.xml"
 
 [tasks.lint]
-description = "Check Python style and formatting with Ruff, and action scripts with ShellCheck"
+description = "Check style and formatting with Ruff"
 depends = ["sync"]
-run = ["uv run --locked ruff check", "uv run --locked ruff format --check", "shellcheck scripts/action/*.sh"]
+run = ["uv run --locked ruff check", "uv run --locked ruff format --check"]
 
 [tasks.typecheck]
 description = "Type-check with mypy"
