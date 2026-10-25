@@ -15,6 +15,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from exacly import query
+from exacly.core import binding_words, bindings, identity
 
 Doc = dict[str, Any]
 MARKER = "<!-- exacly-plan -->"  # Lets CI find and replace its earlier comment.
@@ -89,10 +90,14 @@ def plan(change: Doc, gaps: Doc, base: str) -> str:
         if impact["recheck"]:
             lines += ["", "**Check again**", ""]
             for r in impact["recheck"]:
-                tests = r["observe"].get("tests")
+                tests = bindings(r, "tests")
                 if tests:
-                    cases = ", ".join(f"`{c}`" for c in tests.get("cases", [])) or "the job's result"
-                    lines.append(f"- `{r['id']}` {r['name']}: {cases} in `{tests['workflow']}`")
+                    where = "; ".join(
+                        (", ".join(f"`{c}`" for c in b.get("cases", [])) or "the job's result")
+                        + (f" in `{' '.join(identity('tests', b).values())}`" if identity("tests", b) else "")
+                        for b in tests
+                    )
+                    lines.append(f"- `{r['id']}` {r['name']}: {where}")
                 else:
                     lines.append(f"- `{r['id']}` {r['name']}: no tests binding, so check it by hand")
     errors, warnings = len(gaps["errors"]), len(gaps["warnings"])
@@ -222,7 +227,7 @@ def source_note(assessment: dict[str, Any]) -> str:
     """The source and binding that gave an assessment, under its chip."""
     if "source" not in assessment:
         return ""
-    binding = " ".join(assessment.get("binding", {}).values())
+    binding = binding_words(assessment.get("binding", {}))
     return f'<br><span class="muted mono">{e(assessment["source"] + (f" ({binding})" if binding else ""))}</span>'
 
 

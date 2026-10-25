@@ -61,6 +61,7 @@ records:
       - In a distribution context, a Requirement whose active implementer's reference exists at the revision is assessed as released there.
       - The serial increases by one on each write, and the lineage stays the same; earlier state for another model or context is refused.
       - Each assessment names its source, tests with the binding's workflow and job, or distribution.
+      - A record may have several tests bindings, each observed only by runs of its workflow and job; a run replaces only the results of the bindings it observed, and a binding's result goes when the binding leaves the config.
       - A write replaces only the assessments of the sources it observed, keeping another observer's, and drops observations and pending work for records and relationships that left the config.
       - An earlier verification or delivery assessment without a source is rewritten as tests or distribution; one of another dimension is kept and reported.
       - The state written is accepted by the validator.
