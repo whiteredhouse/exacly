@@ -60,17 +60,26 @@ exacly refresh spec/exacly --context main --state spec/exacly/state/main.json --
 
 ### Tests in another repository
 
-State is written only in the model's repository, from its main line (section 9), so the model's state job reads the other repository's results rather than that repository writing state. Have the other repository upload its JUnit report as an artifact. After refreshing from its own run, the state job downloads the report of the other repository's latest successful run on main and refreshes again, naming that run:
+State is written only in the model's repository, from its main line (section 9), so the model's state job reads the other repository's results rather than that repository writing state. Have the other repository upload its JUnit report as an artifact even when its tests fail (`if: always()` on the upload step). After refreshing from its own run, the state job takes the other repository's latest completed run on main, whatever its conclusion, downloads its report if there is one, and refreshes again, naming that run and the job's conclusion:
 
 ```sh
-run_id=$(gh run list -R acme/notes-cli --workflow ci.yml --branch main --status success -L 1 --json databaseId -q '.[0].databaseId')
-gh run download "$run_id" -R acme/notes-cli -n junit -D reports/notes-cli
-exacly refresh spec/exacly --context main --state reports/state/main.json --junit reports/notes-cli/*.xml \
-  --repository acme/notes-cli --workflow .github/workflows/ci.yml --job test \
-  --run-url "https://github.com/acme/notes-cli/actions/runs/$run_id"
+run_id=$(gh run list -R acme/notes-cli --workflow ci.yml --branch main --status completed -L 1 --json databaseId -q '.[0].databaseId')
+if [ -z "$run_id" ]; then
+  echo "::warning::acme/notes-cli has no completed run on main; its binding keeps its last result"
+else
+  # The job's conclusion, by the name GitHub shows for it: success, failure, cancelled, ...
+  status=$(gh run view "$run_id" -R acme/notes-cli --json jobs -q '.jobs[] | select(.name == "test") | .conclusion')
+  reports=()
+  if gh run download "$run_id" -R acme/notes-cli -n junit -D reports/notes-cli; then
+    reports=(reports/notes-cli/*.xml)
+  fi
+  exacly refresh spec/exacly --context main --state reports/state/main.json --junit "${reports[@]}" \
+    --repository acme/notes-cli --workflow .github/workflows/ci.yml --job test --job-status "${status:-unknown}" \
+    --run-url "https://github.com/acme/notes-cli/actions/runs/$run_id"
+fi
 ```
 
-`gh` needs a token that can read the other repository's Actions artifacts, such as a fine-grained token with read access to its actions. Only the model's repository holds a token that writes state. Each state write restates the other repository's latest result against the current config revision, and a scheduled run of the state job picks up the other repository's changes between pushes.
+A failed run's report gives its failed cases, so the requirement is no longer verified. A run with no report, such as one that failed before its tests ran, leaves a binding with `cases` not checked, saying that no selected test case ran, and fails a binding without `cases` by the job's conclusion. Neither keeps an older passing result. `gh` needs a token that can read the other repository's Actions artifacts, such as a fine-grained token with read access to its actions. Only the model's repository holds a token that writes state. Each state write restates the other repository's latest result against the current config revision, and a scheduled run of the state job picks up the other repository's changes between pushes.
 
 ## Questions
 
