@@ -49,7 +49,7 @@ Its ideas come from established practice:
 Validate the [invoice reminders example](spec/examples/0.2/invoice-reminders/), a small slice of a product written as 0.2 config:
 
 ```sh
-uv tool install "exacly @ git+https://github.com/whiteredhouse/exacly"
+uv tool install exacly
 exacly validate spec/examples/0.2/invoice-reminders
 ```
 
@@ -60,7 +60,7 @@ In your own project, keep config in `spec/exacly/` and pass the commit it was va
 `exacly mcp` runs an [MCP](https://modelcontextprotocol.io) server on stdio, so a coding agent can look up records, trace why they exist, and check what a change affects while it works. To add it in Claude Code, from the repository that holds the model:
 
 ```sh
-claude mcp add exacly -- exacly mcp
+claude mcp add exacly -- uvx exacly mcp
 ```
 
 Copy the [`exacly` skill](skills/exacly/SKILL.md) to `.claude/skills/exacly/` too: it tells the agent when to ask the model and how to keep config true to a change. [The MCP server](python/README.md#mcp-server) lists its tools.
@@ -92,10 +92,11 @@ Exacly is at 0.x and unstable: anything may change until 1.0, which comes with t
 Each part of Exacly has its own version, tagged as `<part>-vX.Y.Z`, as release-please and Changesets tag the parts of one repository:
 
 - **The specification**, `spec-vX.Y.Z`: the file in [`spec/versions/`](spec/versions/) and the `exacly:` line of every model document.
-- **The Python package**, `python-vX.Y.Z`: the `exacly` package and command, with validation, refresh, questions, views and the MCP server. Up to 0.1.0 it was `exacly-validate`, tagged `validator-vX.Y.Z`.
+- **The Python package**, `python-vX.Y.Z`: the `exacly` package and command, with validation, refresh, questions, views and the MCP server. Up to 0.1.0 it was `exacly-validate`, tagged `validator-vX.Y.Z`. Pushing a `python-v` tag publishes that version to [PyPI](https://pypi.org/project/exacly/), once the tag matches the version in `pyproject.toml`.
 - **The GitHub Action** lives in [whiteredhouse/exacly-action](https://github.com/whiteredhouse/exacly-action), tagged `vX.Y.Z` with a moving `v0`, as workflows expect. Each action release runs one package release.
 
 | Package | Spec versions it reads |
 | --- | --- |
 | 0.1.0 (`exacly-validate`) | 0.1, 0.2 |
 | 0.2.0 | 0.1, 0.2 |
+| 0.2.1, the first on [PyPI](https://pypi.org/project/exacly/) | 0.1, 0.2 |
