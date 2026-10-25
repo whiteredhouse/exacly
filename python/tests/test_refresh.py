@@ -14,7 +14,7 @@ from typing import Any
 
 import jsonschema
 import pytest
-from exacly import validate_documents
+from exacly import query, validate_documents
 from exacly.cli import refresh_main
 from exacly.core import schema_for
 from exacly.refresh import RefreshError, Run, read_junit, refresh
@@ -151,14 +151,58 @@ def test_many_failures_are_counted_rather_than_all_named() -> None:
 @pytest.mark.parametrize(
     ("cases", "reason"),
     [
-        (["tests/nothing::*"], "The binding selects no test case that ran."),
+        (["tests/nothing::*"], "The binding selects no test case that ran. Selected nothing: tests/nothing::*."),
         (["tests/cases.yaml::7.3*"], "Every selected test case was skipped."),
+        (
+            ["tests/cases.yaml::7.3*", "tests/gone"],
+            "Every selected test case was skipped. Selected nothing: tests/gone.",
+        ),
     ],
 )
 def test_nothing_run_is_not_checked_with_a_reason(cases: list[str], reason: str) -> None:
     docs = {"config": config(requirement("REQ-1", {**CI, "cases": cases}))}
     a = assessment(valid_state(refresh(docs, RESULTS, RUN)), "REQ-1")
     assert (a["state"], a["reason"], a["evidence"]) == ("not_checked", reason, [])
+
+
+@pytest.mark.parametrize(
+    ("cases", "state", "reason"),
+    [
+        (
+            ["tests/cases.yaml::7.1: a gap", "tests/cases.yaml::7.9: renamed"],
+            "inconclusive",
+            "Selected nothing: tests/cases.yaml::7.9: renamed.",
+        ),
+        (
+            ["tests/cases.yaml::schema: broken", "tests/cases.yaml::7.9: renamed"],
+            "failed",
+            "Failed: tests/cases.yaml::schema: broken. Selected nothing: tests/cases.yaml::7.9: renamed.",
+        ),
+        (["tests/cases.yaml::7.1*", "tests/old/*"], "inconclusive", "Selected nothing: tests/old/*."),
+        (["tests/cases.yaml::7.1: a gap", "tests/cases.yaml::7.2: another gap"], "passed", None),
+        (["tests/cases.yaml::7.1: a gap", "tests/cases.yaml::7.3: skipped one"], "passed", None),
+    ],
+)
+def test_every_pattern_must_select_a_case(cases: list[str], state: str, reason: str | None) -> None:
+    docs = {"config": config(requirement("REQ-1", {**CI, "cases": cases}))}
+    a = assessment(valid_state(refresh(docs, RESULTS, RUN)), "REQ-1")
+    assert (a["state"], a.get("reason")) == (state, reason)
+    assert len(a["evidence"]) == 1
+
+
+def test_many_patterns_that_select_nothing_are_counted() -> None:
+    cases = ["t::kept", *(f"t::gone {i}" for i in range(7))]
+    docs = {"config": config(requirement("REQ-1", {**CI, "cases": cases}))}
+    a = assessment(refresh(docs, {"t::kept": "passed"}, RUN), "REQ-1")
+    assert (a["state"], a["reason"]) == ("inconclusive", "Selected nothing: " + ", ".join(cases[1:6]) + " and 2 more.")
+
+
+def test_gaps_lists_an_inconclusive_requirement_as_unverified() -> None:
+    cases = ["tests/cases.yaml::7.1: a gap", "tests/cases.yaml::7.9: renamed"]
+    docs = {"config": config(requirement("REQ-1", {**CI, "cases": cases}))}
+    state = refresh(docs, RESULTS, RUN)
+    unverified = query.gaps(query.load({**docs, "state": state}, WHEN.date(), RUN.revision))["coverage"]["unverified"]
+    assert [(r["id"], r["verification"]) for r in unverified] == [("REQ-1", {"main": "inconclusive"})]
 
 
 @pytest.mark.parametrize(

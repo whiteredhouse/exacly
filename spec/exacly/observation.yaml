@@ -47,7 +47,7 @@ records:
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-24"
+    last_reviewed_at: "2026-10-25"
     statement: >-
       For each record with a tests binding, write a verification assessment for
       the observed commit from the test cases the binding selects, with the run
@@ -55,6 +55,7 @@ records:
     acceptance_criteria:
       - Every selected case passing gives passed; any failing gives failed, with the failing cases as the reason.
       - A binding whose selected cases did not run, or without cases and without the job's result, gives not checked, with the reason.
+      - A pattern that selects no case in the report gives inconclusive, naming the pattern, unless a selected case failed, which gives failed and names both.
       - A binding without cases takes the job's result.
       - A record without a binding gets no verification assessment.
       - In a distribution context, a Requirement whose active implementer's reference exists at the revision is assessed as released there.
