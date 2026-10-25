@@ -2,12 +2,64 @@
 
 Keep a product model true to what ships, across the software development lifecycle.
 
+```mermaid
+flowchart LR
+    config["<b>Config</b><br/>what you intend<br/><i>YAML, reviewed in pull requests</i>"]
+    product["<b>The product</b><br/>code, tests, deployments"]
+    state["<b>State</b><br/>what is proven<br/><i>written only by tooling</i>"]
+    config -- "plan and apply:<br/>work that closes the gap" --> product
+    product -- "refresh:<br/>observe and cite evidence" --> state
+    state -. "compare" .-> config
+```
+
 Exacly describes a product from business purpose down to the systems that run it: outcomes, capabilities, processes, requirements, information, applications and infrastructure, and how they relate. Teams and agents author that description as **config**. Tooling observes the real system (builds, tests, deployments, metrics) and records what it finds as **state**, with the evidence behind it. Comparing the two shows what is planned, what has shipped, and where the model and the product have drifted apart.
 
 The project has two parts:
 
 - **The [Exacly Specification](spec/README.md)**, which defines the model, its traceability rules and its validation rules, with JSON Schemas for config and state.
 - **Tools that follow the specification** through the lifecycle, so the model is checked and kept current as part of everyday development rather than written once and left to go stale.
+
+## In one example
+
+A team wants freelancers to get paid sooner, so the model says the reminder service must remind customers three days before an invoice is due. Here is that requirement and its links, cut down from the [invoice reminders example](spec/examples/0.2/invoice-reminders/billing.yaml):
+
+```yaml
+records:
+  - id: REQ-001
+    type: Requirement
+    name: Remind before due date
+    statement: >-
+      Send one reminder three days before the due date if the invoice remains
+      unpaid and the customer can receive email.
+    observe:
+      tests: { workflow: .github/workflows/ci.yml, cases: ["tests/reminders/*"] }
+  # ... OUT-001, CAP-001, PROC-001, APP-001 and the rest
+
+relationships:
+  - { source: REQ-001, type: supports, target: PROC-001 }
+  - { source: APP-001, type: implements, target: REQ-001 }
+```
+
+Anyone, or any agent, can now ask why the requirement exists:
+
+```console
+$ exacly trace REQ-001 -m spec/examples/0.2/invoice-reminders
+Why
+REQ-001 Requirement: Remind before due date (proposed)
+  supports -> PROC-001 Process: Collect an invoice payment (proposed)
+    uses_capability -> CAP-001 Capability: Collect payments (proposed)
+      contributes_to -> OUT-001 Outcome: Faster invoice payment (proposed)
+```
+
+and what is still missing:
+
+```console
+$ exacly gaps -m spec/examples/0.2/invoice-reminders
+Requirements not verified in any context (1)
+  REQ-001 Requirement: Remind before due date (proposed)
+```
+
+Nothing has run yet, so nothing is proven. Once the test cases under `tests/reminders/` pass in that workflow, `exacly refresh` reads their results and records the run as evidence in state, and the gap closes without anyone editing the model. If the tests later fail, the next refresh records that, and the requirement is back on the list.
 
 ## How it fits the lifecycle
 

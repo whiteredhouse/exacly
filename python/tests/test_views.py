@@ -41,7 +41,7 @@ class TestPlan:
         assert "| - | `INF-002` | Infrastructure |" in text
         assert "| - | | relationship | `APP-001 --depends_on--> INF-002` | |" in text
         assert "- `APP-001` Reminder service, its relationships changed" in text
-        assert "- `REQ-001` Remind before due date: the job's result in `ci.yml`" in text
+        assert "- `REQ-001` Remind before due date: `tests/reminders/*` in `.github/workflows/ci.yml`" in text
         assert "Validation: **conforms**, 0 errors," in text
 
     def test_a_change_to_a_relationship_alone(self) -> None:
