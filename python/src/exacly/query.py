@@ -96,8 +96,6 @@ class Model:
                 result = {"source": source_of(a), "state": a["state"]}
                 dims[a["dimension"]].append({**result, **({"binding": a["binding"]} if "binding" in a else {})})
             for dimension, listed in dims.items():
-                if dimension not in UNOBSERVED:
-                    continue
                 for source in sorted(bound(self.records[rid], dimension)):
                     expected = bindings(self.records[rid], source)
                     mine = [r for r in listed if r["source"] == source]
@@ -108,13 +106,14 @@ class Model:
                     for r in mine:
                         if not any(answers(r, key, single) for key in keys):
                             listed.remove(r)
-                    for key in keys:
+                    # Delivery has no state for not yet known, so a binding without a delivery result adds none.
+                    for key in keys if dimension in UNOBSERVED else []:
                         if not any(answers(r, key, single) for r in mine):
                             # A binding identified by its whole content is named only where it must be told apart.
                             named = key and (source in BINDING_IDENTITY or not single)
                             missing = {"source": source, **({"binding": key} if named else {})}
                             listed.append({**missing, "state": UNOBSERVED[dimension], "missing": True})
-            found[context] = dict(dims)
+            found[context] = {dimension: listed for dimension, listed in dims.items() if listed}
         return found
 
     def status(self, rid: str) -> dict[str, dict[str, str]]:

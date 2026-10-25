@@ -571,3 +571,39 @@ def test_a_result_that_names_no_binding_of_several_counts_toward_none() -> None:
     assert [r["binding"]["job"] for r in results] == ["unit", "e2e"] and all(r["missing"] for r in results)
     shown = query.show(m, "REQ-001")["state"]["production"]
     assert [a["state"] for a in shown["assessments"]] == ["failed"]
+
+
+def test_a_withdrawal_that_names_no_binding_of_several_deployments_counts_toward_none() -> None:
+    services: list[dict[str, Any]] = [{"service": "reminders", "environments": ["production"]}, {"service": "mailer"}]
+    evidence = {"locator": "deploys/1", "kind": "deployment", "claim": "Deployed", "observed_at": "2026-10-24"}
+
+    def delivery(state: str, binding: dict[str, Any] | None = None) -> dict[str, Any]:
+        return {
+            "dimension": "delivery",
+            "state": state,
+            "context": "production",
+            "at": "2026-10-24T09:00:00Z",
+            "source": "deployments",
+            **({"binding": binding} if binding else {}),
+            **({"reason": "Rolled back before the bindings were split"} if state == "withdrawn" else {}),
+            "evidence": [{**evidence, "applies_to": "production"}],
+        }
+
+    def with_deliveries(*assessments: dict[str, Any]) -> query.Model:
+        docs = documents()
+        docs["state/production.json"]["records"]["REQ-001"]["assessments"] = list(assessments)
+        for doc in docs.values():
+            for r in doc.get("records", []) if isinstance(doc.get("records"), list) else []:
+                if r["id"] == "REQ-001":
+                    r["observe"]["deployments"] = services
+        return query.load(docs)
+
+    legacy = delivery("withdrawn")
+    m = with_deliveries(legacy, *(delivery("released", s) for s in services))
+    assert m.status("REQ-001") == {"production": {"delivery": "released"}}
+    # A binding with no delivery result adds no state, so one release is all there is to combine.
+    m = with_deliveries(legacy, delivery("released", services[1]))
+    assert m.status("REQ-001") == {"production": {"delivery": "released"}}
+    assert "missing" not in query.show(m, "REQ-001")["state"]["production"]
+    query.gaps(m)
+    views.record_page(m, "REQ-001")
