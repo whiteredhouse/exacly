@@ -83,6 +83,12 @@ def observes(binding: Doc, run: Run) -> bool:
     return True
 
 
+def named(items: list[str]) -> str:
+    """Up to MAX_NAMED_FAILURES items, then how many more."""
+    more = f" and {len(items) - MAX_NAMED_FAILURES} more" if len(items) > MAX_NAMED_FAILURES else ""
+    return ", ".join(items[:MAX_NAMED_FAILURES]) + more
+
+
 def verification(binding: Doc, results: Mapping[str, str], run: Run) -> Doc:
     """The verification assessment a tests binding gives in this run."""
     evidence = {
@@ -105,26 +111,30 @@ def verification(binding: Doc, results: Mapping[str, str], run: Run) -> Doc:
         return {**assessment, "state": "failed", "evidence": [{**evidence, "claim": claim}], "reason": reason}
 
     selected = {cid: outcome for cid, outcome in results.items() if any(fnmatch.fnmatchcase(cid, p) for p in patterns)}
+    # A pattern that selects nothing is a missing observation, such as a renamed test (section 8).
+    empty = [p for p in patterns if not any(fnmatch.fnmatchcase(cid, p) for cid in results)]
+    missing = f" Selected nothing: {named(empty)}." if empty else ""
     failed = sorted(cid for cid, outcome in selected.items() if outcome == "failed")
     ran = [cid for cid, outcome in selected.items() if outcome != "skipped"]
     if not ran:
         # Nothing was checked, so there is no result to cite; the reason says why (section 8).
         reason = (
             "The binding selects no test case that ran." if not selected else "Every selected test case was skipped."
-        )
+        ) + missing
         return {**assessment, "state": "not_checked", "evidence": [], "reason": reason}
     if failed:
-        named = ", ".join(failed[:MAX_NAMED_FAILURES])
-        more = f" and {len(failed) - MAX_NAMED_FAILURES} more" if len(failed) > MAX_NAMED_FAILURES else ""
         claim = f"{len(failed)} of {len(ran)} selected test cases failed"
         return {
             **assessment,
             "state": "failed",
             "evidence": [{**evidence, "claim": claim}],
-            "reason": f"Failed: {named}{more}.",
+            "reason": f"Failed: {named(failed)}.{missing}",
         }
     skipped = len(selected) - len(ran)
     claim = f"All {len(ran)} selected test cases passed" + (f"; {skipped} skipped" if skipped else "")
+    if empty:
+        reason = missing.strip()
+        return {**assessment, "state": "inconclusive", "evidence": [{**evidence, "claim": claim}], "reason": reason}
     return {**assessment, "state": "passed", "evidence": [{**evidence, "claim": claim}]}
 
 
