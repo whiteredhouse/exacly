@@ -270,45 +270,6 @@ records:
         cases:
           - "tests/test_ci.py::*"
 
-  - id: REQ-015
-    type: Requirement
-    name: Check models in other repositories' CI
-    description: Other repositories validate their model and see each pull request's plan without copying Exacly's workflow.
-    owner: exacly-maintainers
-    lifecycle: active
-    evidence: []
-    last_reviewed_at: "2026-10-24"
-    statement: >-
-      Offer a GitHub Action that validates a model and fails when it doesn't conform, and that comments a pull
-      request's change plan, installing the validator from the action's own files and lock.
-    acceptance_criteria:
-      - check validates the given files or folders, writes the report to the job summary, and fails the step when the model doesn't conform.
-      - plan writes the change plan against the pull request's base branch, or a given one, to the job summary, fetching that branch even from a shallow checkout.
-      - plan comments only on pull requests from the same repository, replacing its earlier comment.
-      - The validator is installed with a pinned uv version from uv.lock, without development tools; an unknown mode is an error.
-      - Inputs reach the scripts only through the environment.
-      - Exacly's own CI runs check on Linux and macOS with valid and invalid consumer models, and plan on Linux for same-repository pull requests.
-    verification_method: Tests that read the action and run its scripts on a model in a temporary repository, in CI.
-    observe:
-      tests:
-        workflow: .github/workflows/spec.yml
-        cases:
-          - "tests/test_action.py::*"
-          - "tests/test_ci.py::test_the_action_is_checked_on_exacly_itself"
-          - "tests/test_ci.py::test_the_action_checks_valid_and_invalid_consumer_models_on_linux_and_macos"
-
-  - id: APP-006
-    type: Application
-    name: GitHub Action
-    description: The action at the repository's root, which other repositories use as whiteredhouse/exacly.
-    owner: exacly-maintainers
-    lifecycle: active
-    evidence: []
-    last_reviewed_at: "2026-10-24"
-    responsibility: Validate a model and comment its change plan in another repository's workflow.
-    interfaces: [uses whiteredhouse/exacly with mode check or plan]
-    implementation_ref: { locator: action.yml }
-
   - id: INFO-001
     type: Information
     name: Model config
@@ -398,9 +359,3 @@ relationships:
   - { source: APP-001, type: reads, target: INFO-002 }
   - { source: INF-002, type: stores, target: INFO-001, role: system_of_record }
   - { source: INF-002, type: stores, target: INFO-002, role: system_of_record }
-  - { source: REQ-015, type: supports, target: PROC-001 }
-  - { source: APP-006, type: implements, target: REQ-015 }
-  - { source: PROC-001, type: uses, target: APP-006 }
-  - { source: APP-006, type: depends_on, target: APP-001, conditions: Validates with the validator. }
-  - { source: APP-006, type: depends_on, target: APP-005, conditions: Writes the plan with the views. }
-  - { source: APP-006, type: depends_on, target: INF-001, conditions: Runs in the other repository's workflow. }

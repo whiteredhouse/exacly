@@ -10,8 +10,6 @@ on:
       - "mise.toml"
       - "tests/**"
       - ".github/workflows/spec.yml"
-      - "action.yml"
-      - "scripts/action/**"
   # Every push to main runs, whatever it changed, so that the latest main always gets a state job.
   # The state job's own commits carry [skip ci] and don't start another run.
   push:
@@ -28,47 +26,6 @@ jobs:
       - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
       - name: Test, lint, type-check, validate the examples, and refresh and validate Exacly's own state
         run: mise run check
-      - name: Validate Exacly's own model with the action that other repositories use
-        uses: ./
-        with:
-          # The config with the state this run refreshed, not the state committed for an earlier revision.
-          model: spec/exacly/*.yaml reports/state/main.json
-
-  action:
-    # Exercise the complete composite action, including uv setup, on every supported runner OS.
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Prepare a separate consumer model
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/exacly-consumer"
-          cp -R spec/examples/0.2/invoice-reminders "$RUNNER_TEMP/exacly-consumer/model"
-          printf 'exacly: 0.2.0\nrecords: [{id: OUT-001}]\n' > "$RUNNER_TEMP/exacly-consumer/invalid.yaml"
-      - name: Validate the consumer model
-        uses: ./
-        with:
-          model: ${{ runner.temp }}/exacly-consumer/model
-      - name: Reject an invalid consumer model
-        id: invalid
-        continue-on-error: true
-        uses: ./
-        with:
-          model: ${{ runner.temp }}/exacly-consumer/invalid.yaml
-      - name: Verify that invalid input failed
-        if: always()
-        shell: bash
-        env:
-          OUTCOME: ${{ steps.invalid.outcome }}
-        run: |
-          set -euo pipefail
-          test "$OUTCOME" = failure
-          grep -F "Result: does not conform" "$RUNNER_TEMP/exacly-report.txt"
 
   plan:
     # The change plan (section 10's change impact view) as a comment on the pull request, kept up to date.
@@ -84,10 +41,33 @@ jobs:
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # The action that other repositories use: it writes the plan against the base branch and comments it.
-      - uses: ./
         with:
-          mode: plan
+          fetch-depth: 0
+      - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
+      - name: Write the plan against the base branch
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          mise run sync
+          # The config alone: the committed state belongs to main and can name records this change removes.
+          uv run --locked exacly view plan --base "origin/$BASE" -m 'spec/exacly/*.yaml' > plan.md
+          cat plan.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Comment the plan, replacing the earlier one
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # Read every page: closing the pipe early can fail gh with SIGPIPE when duplicate comments exist.
+          comment="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- exacly-plan -->"))) | .id' \
+            | sed -n '1p')"
+          if [ -n "$comment" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$comment" -F body=@plan.md > /dev/null
+          else
+            gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F body=@plan.md > /dev/null
+          fi
 
   state:
     # State is written only by tooling and committed only from main (spec section 9).

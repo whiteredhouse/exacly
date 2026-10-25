@@ -42,7 +42,6 @@ Its ideas come from established practice:
 | [`spec/`](spec/README.md) | Specification versions, JSON Schemas, worked examples and data-driven test cases |
 | [`validator/`](validator/README.md) | `exacly-validate`, the Python validator |
 | [`skills/`](skills/exacly/SKILL.md) | The skill that tells coding agents how to work with a model |
-| [`action.yml`](action.yml) | The GitHub Action that checks a model and comments the plan in other repositories |
 | [`docs/`](docs/) | Research and pilot notes |
 
 ## Quick start
@@ -58,43 +57,15 @@ In your own project, keep config in `spec/exacly/` and pass the commit it was va
 
 ## In CI
 
-Other repositories run Exacly with the [action](action.yml) at this repository's root. `check` validates the model and fails the job when it doesn't conform. `plan` comments the change plan on each pull request, replacing its earlier comment. Both write their report to the job summary. The action installs Exacly from its own checkout with a pinned uv version and `uv.lock`; it does not require Exacly to be published on PyPI. uv and Python dependencies are downloaded as needed.
-
-Replace `<RELEASE_COMMIT_SHA>` in this workflow template with the full commit SHA of an Exacly release, or a commit on `main` that contains the action. Version tags will be published with the first release.
+Other repositories run Exacly with the [Exacly action](https://github.com/whiteredhouse/exacly-action): `check` validates the model and fails the job when it doesn't conform, and `plan` comments the change plan on each pull request.
 
 ```yaml
-# .github/workflows/exacly.yml
-name: Exacly
-on: pull_request
-permissions:
-  contents: read
-jobs:
-  check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: whiteredhouse/exacly@<RELEASE_COMMIT_SHA>
-        with:
-          model: spec/exacly
-  plan:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    concurrency:
-      group: exacly-plan-${{ github.event.pull_request.number }}
-      cancel-in-progress: true
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: whiteredhouse/exacly@<RELEASE_COMMIT_SHA>
-        with:
-          mode: plan
-          model: spec/exacly
+- uses: whiteredhouse/exacly-action@v0
+  with:
+    model: spec/exacly
 ```
 
-`model` takes files, folders or patterns such as `spec/exacly/*.yaml`, one per line or separated by spaces. `plan` compares with the pull request's base branch, or with `base` when given. A pull request from a fork gets a read-only token, so its plan stays in the job summary. CI exercises `check` on GitHub-hosted Linux and macOS runners, and `plan` on Linux. It sets up uv itself; self-hosted runners also need Git, Bash and, for commenting, the GitHub CLI (`gh`).
-
-In private repositories, `plan` needs Git authentication to fetch the base branch: keep checkout's default `persist-credentials: true`, or configure Git authentication separately. The action's `token` input authenticates comment API calls only.
+Its README has the full workflow and inputs.
 
 ## Development
 
@@ -107,3 +78,13 @@ mise run check
 ## Status
 
 Exacly is at 0.x and unstable: anything may change until 1.0, which comes with the first outside adopter. See [Versioning](spec/README.md#versioning).
+
+Each part of Exacly has its own version, tagged as `<part>-vX.Y.Z`, as release-please and Changesets tag the parts of one repository:
+
+- **The specification**, `spec-vX.Y.Z`: the file in [`spec/versions/`](spec/versions/) and the `exacly:` line of every model document.
+- **The validator**, `validator-vX.Y.Z`: the `exacly-validate` package with its `exacly-validate`, `exacly-refresh` and `exacly` commands and the MCP server.
+- **The GitHub Action** lives in [whiteredhouse/exacly-action](https://github.com/whiteredhouse/exacly-action), tagged `vX.Y.Z` with a moving `v0`, as workflows expect. Each action release runs one validator release.
+
+| Validator | Spec versions it reads |
+| --- | --- |
+| 0.1.0 | 0.1, 0.2 |
