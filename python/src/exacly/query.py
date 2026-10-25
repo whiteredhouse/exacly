@@ -102,11 +102,14 @@ class Model:
                     expected = bindings(self.records[rid], source)
                     mine = [r for r in listed if r["source"] == source]
                     single = len(expected) == 1
-                    for binding in expected:
-                        key = identity(source, binding)
-                        # A result names its binding, or names none and belongs to the record's only binding, or to
-                        # a tests binding with no identifying fields.
-                        if not any(r["binding"] == key if "binding" in r else single or not key for r in mine):
+                    keys = [identity(source, binding) for binding in expected]
+                    # A result that answers none of the bindings, such as one written before the record had several,
+                    # can't be told whose it is, so it counts toward none; the next refresh drops it.
+                    for r in mine:
+                        if not any(answers(r, key, single) for key in keys):
+                            listed.remove(r)
+                    for key in keys:
+                        if not any(answers(r, key, single) for r in mine):
                             # A binding identified by its whole content is named only where it must be told apart.
                             named = key and (source in BINDING_IDENTITY or not single)
                             missing = {"source": source, **({"binding": key} if named else {})}
@@ -152,6 +155,12 @@ def bound(record: Doc, dimension: str) -> set[str]:
         for kind in record.get("observe", {})
         if OBSERVES.get(kind, "verification" if ":" in kind else None) == dimension
     }
+
+
+def answers(result: Doc, key: Doc, single: bool) -> bool:
+    """Whether a result is that of the binding identified by `key`: it names the binding, or it names none and the
+    binding is the record's only one of its source, or a tests binding with no identifying fields."""
+    return bool(result["binding"] == key) if "binding" in result else single or not key
 
 
 def combine(dimension: str, results: list[Doc]) -> str:

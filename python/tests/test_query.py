@@ -553,3 +553,21 @@ class TestBindingsWithoutIdentifyingFields:
                 "binding": {"service": "reminders", "environments": ["production"]},
             }
         ]
+
+
+def test_a_result_that_names_no_binding_of_several_counts_toward_none() -> None:
+    # Written before the record had two tests bindings, so it can't be told whose it is.
+    legacy = failed("tests")
+    docs = documents()
+    docs["state/production.json"]["records"]["REQ-001"]["assessments"] = [legacy]
+    for doc in docs.values():
+        for r in doc.get("records", []) if isinstance(doc.get("records"), list) else []:
+            if r["id"] == "REQ-001":
+                one = r["observe"]["tests"]
+                r["observe"]["tests"] = [{**one, "job": "unit"}, {**one, "job": "e2e"}]
+    m = query.load(docs)
+    assert m.status("REQ-001") == {"production": {"verification": "not_checked"}}
+    results = m.results("REQ-001")["production"]["verification"]
+    assert [r["binding"]["job"] for r in results] == ["unit", "e2e"] and all(r["missing"] for r in results)
+    shown = query.show(m, "REQ-001")["state"]["production"]
+    assert [a["state"] for a in shown["assessments"]] == ["failed"]
