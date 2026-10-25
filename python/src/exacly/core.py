@@ -450,10 +450,21 @@ def bindings(record: Doc, source: str) -> list[Doc]:
     return [] if not found else found if isinstance(found, list) else [found]
 
 
-def identity(source: str, binding: Doc) -> dict[str, str]:
-    """The fields that identify a binding among its record's bindings of the same source, such as a tests binding's
-    repository, workflow and job. Empty for a source whose observer defines none."""
-    return {key: str(binding[key]) for key in BINDING_IDENTITY.get(source, ()) if binding.get(key)}
+def identity(source: str, binding: Doc) -> Doc:
+    """What identifies a binding among its record's bindings of the same source: the fields its observer defines, such
+    as a tests binding's repository, workflow and job, or its whole content for a source whose observer defines none,
+    such as runtime, measurement or an extension source (section 5)."""
+    if source not in BINDING_IDENTITY:
+        return dict(binding)
+    return {key: str(binding[key]) for key in BINDING_IDENTITY[source] if binding.get(key)}
+
+
+def binding_words(binding: Doc) -> str:
+    """A binding's identifying values as words, such as "acme/notes .github/workflows/ci.yml test"."""
+    return " ".join(
+        value if isinstance(value, str) else ", ".join(map(str, value)) if isinstance(value, list) else str(value)
+        for value in binding.values()
+    )
 
 
 def check_bindings(g: Graph, report: Report) -> None:
@@ -461,7 +472,7 @@ def check_bindings(g: Graph, report: Report) -> None:
     source defines them, otherwise by their whole content."""
     for rid, r in g.records.items():
         for source in r.get("observe", {}):
-            keys = [identity(source, b) if source in BINDING_IDENTITY else b for b in bindings(r, source)]
+            keys = [identity(source, b) for b in bindings(r, source)]
             repeated = [key for i, key in enumerate(keys) if key in keys[:i]]
             for key in repeated:
                 named = ", ".join(f"{k} {v}" for k, v in key.items()) or "no identifying fields"

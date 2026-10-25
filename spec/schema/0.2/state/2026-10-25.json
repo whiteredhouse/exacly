@@ -216,10 +216,7 @@
         "binding": {
           "type": "object",
           "minProperties": 1,
-          "additionalProperties": {
-            "type": "string"
-          },
-          "description": "Which of the record's bindings for the source was observed, by the binding fields that identify it, such as a tests binding's workflow and job."
+          "description": "Which of the record's bindings for the source was observed, by the binding fields that identify it, such as a tests binding's repository, workflow and job, or by the binding's whole content where its observer defines no identifying fields."
         }
       },
       "allOf": [

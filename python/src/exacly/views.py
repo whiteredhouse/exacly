@@ -15,7 +15,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from exacly import query
-from exacly.core import bindings, identity
+from exacly.core import binding_words, bindings, identity
 
 Doc = dict[str, Any]
 MARKER = "<!-- exacly-plan -->"  # Lets CI find and replace its earlier comment.
@@ -227,7 +227,7 @@ def source_note(assessment: dict[str, Any]) -> str:
     """The source and binding that gave an assessment, under its chip."""
     if "source" not in assessment:
         return ""
-    binding = " ".join(assessment.get("binding", {}).values())
+    binding = binding_words(assessment.get("binding", {}))
     return f'<br><span class="muted mono">{e(assessment["source"] + (f" ({binding})" if binding else ""))}</span>'
 
 

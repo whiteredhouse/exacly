@@ -534,6 +534,20 @@ def test_a_binding_without_a_repository_is_observed_by_any_repositorys_run() -> 
     assert a["state"] == "passed" and a["binding"] == CI
 
 
+def test_a_run_that_names_no_repository_observes_only_bindings_that_name_none() -> None:
+    unnamed = {**CI, "cases": ["tests/cases.yaml::7.*"]}
+    docs = {"config": config(requirement("REQ-1", [SERVER, CLIENT]), requirement("REQ-2", unnamed))}
+    state = valid_state(refresh(docs, RESULTS, RUN))
+    assert "REQ-1" not in state["records"]
+    assert assessment(state, "REQ-2")["state"] == "passed"
+
+
+def test_a_run_that_names_no_workflow_or_job_observes_bindings_that_name_them() -> None:
+    docs = {"config": config(requirement("REQ-1", {**CI, "cases": ["tests/cases.yaml::7.*"]}))}
+    for missing in ("workflow", "job"):
+        assert assessment(refresh(docs, RESULTS, Run(**{**RUN.__dict__, missing: None})), "REQ-1")["state"] == "passed"
+
+
 def test_a_run_of_another_repository_leaves_the_assessments_as_they_were() -> None:
     docs = two_repositories()
     earlier = refresh(docs, RESULTS, SERVER_RUN)

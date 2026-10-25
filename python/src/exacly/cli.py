@@ -26,7 +26,7 @@ from typing import Any
 import yaml
 
 from exacly import mcp, query, views
-from exacly.core import bindings, identity, is_state, validate_documents
+from exacly.core import binding_words, bindings, identity, is_state, validate_documents
 from exacly.refresh import RefreshError, Run, read_junit, refresh, unattributed
 
 SUFFIXES = {".yaml", ".yml", ".json"}
@@ -269,7 +269,7 @@ def source_words(assessment: dict[str, Any]) -> str:
     """The source and binding that gave an assessment, such as " from tests (.github/workflows/ci.yml test)"."""
     if "source" not in assessment:
         return ""
-    binding = " ".join(assessment.get("binding", {}).values())
+    binding = binding_words(assessment.get("binding", {}))
     return f" from {assessment['source']}" + (f" ({binding})" if binding else "")
 
 

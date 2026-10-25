@@ -80,9 +80,12 @@ def read_junit(paths: Iterable[Path]) -> dict[str, str]:
 
 
 def observes(binding: Doc, run: Run) -> bool:
-    """A binding is observed by this run when it names this run's repository, workflow and job, or leaves out any the
-    run doesn't name."""
-    for key, value in (("repository", run.repository), ("workflow", run.workflow), ("job", run.job)):
+    """A binding is observed by this run when it names this run's repository, workflow and job, or leaves them out.
+    A binding that names a repository needs a run that names the same one, so that a run of unknown origin can't
+    stand in for every repository's tests; a workflow or job the run doesn't name matches any, as in a local run."""
+    if binding.get("repository") is not None and binding["repository"] != run.repository:
+        return False
+    for key, value in (("workflow", run.workflow), ("job", run.job)):
         if value is not None and binding.get(key) is not None and binding[key] != value:
             return False
     return True

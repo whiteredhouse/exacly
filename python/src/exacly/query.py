@@ -18,7 +18,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from exacly.core import PARTS, Edge, Graph, Report, bindings, identity, is_state, validate_documents
+from exacly.core import BINDING_IDENTITY, PARTS, Edge, Graph, Report, bindings, identity, is_state, validate_documents
 from exacly.refresh import LEGACY_SOURCES
 
 Doc = dict[str, Any]
@@ -101,14 +101,15 @@ class Model:
                 for source in sorted(bound(self.records[rid], dimension)):
                     expected = bindings(self.records[rid], source)
                     mine = [r for r in listed if r["source"] == source]
+                    single = len(expected) == 1
                     for binding in expected:
                         key = identity(source, binding)
                         # A result names its binding, or names none and belongs to the record's only binding, or to
-                        # one with no identifying fields.
-                        if not any(
-                            r["binding"] == key if "binding" in r else len(expected) == 1 or not key for r in mine
-                        ):
-                            missing = {"source": source, **({"binding": key} if key else {})}
+                        # a tests binding with no identifying fields.
+                        if not any(r["binding"] == key if "binding" in r else single or not key for r in mine):
+                            # A binding identified by its whole content is named only where it must be told apart.
+                            named = key and (source in BINDING_IDENTITY or not single)
+                            missing = {"source": source, **({"binding": key} if named else {})}
                             listed.append({**missing, "state": UNOBSERVED[dimension], "missing": True})
             found[context] = dict(dims)
         return found

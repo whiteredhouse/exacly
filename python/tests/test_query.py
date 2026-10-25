@@ -497,3 +497,59 @@ class TestCommand:
             assert run(
                 "impact", "--base", "HEAD", "-m", str(model_dir / "billing.yaml"), "-m", str(model_dir / "model.yaml")
             )[1].startswith("~ INF-003 Infrastructure: ")
+
+
+def runtime_results(*bound: dict[str, Any] | None) -> query.Model:
+    """The example with REQ-001 bound to two runtime services, and one healthy production result for each binding
+    given (None for a result that names no binding)."""
+    services = [{"service": "reminders", "environments": ["production"]}, {"service": "mailer"}]
+    docs = documents()
+    evidence = {
+        "locator": "https://status.example",
+        "kind": "runtime_observation",
+        "claim": "Up",
+        "observed_at": "2026-10-24",
+    }
+    docs["state/production.json"]["records"]["REQ-001"]["assessments"] = [
+        {
+            "dimension": "operation",
+            "state": "healthy",
+            "context": "production",
+            "at": "2026-10-24T09:00:00Z",
+            "source": "runtime",
+            **({"binding": binding} if binding else {}),
+            "evidence": [{**evidence, "applies_to": "production"}],
+        }
+        for binding in bound
+    ]
+    for doc in docs.values():
+        for r in doc.get("records", []) if isinstance(doc.get("records"), list) else []:
+            if r["id"] == "REQ-001":
+                r["observe"]["runtime"] = services
+    return query.load(docs)
+
+
+class TestBindingsWithoutIdentifyingFields:
+    def test_a_result_naming_no_binding_answers_neither_of_two(self) -> None:
+        m = runtime_results(None)
+        assert m.status("REQ-001") == {"production": {"operation": "unknown"}}
+        missing = [r for r in m.results("REQ-001")["production"]["operation"] if r.get("missing")]
+        assert [r["binding"]["service"] for r in missing] == ["reminders", "mailer"]
+
+    def test_results_naming_each_binding_by_its_content_answer_them(self) -> None:
+        m = runtime_results({"service": "reminders", "environments": ["production"]}, {"service": "mailer"})
+        assert m.status("REQ-001") == {"production": {"operation": "healthy"}}
+        lines = show_text(query.show(m, "REQ-001")).splitlines()
+        assert any("from runtime (reminders production)" in line for line in lines)
+        views.record_page(m, "REQ-001")
+
+    def test_a_result_for_one_binding_leaves_the_other_missing(self) -> None:
+        m = runtime_results({"service": "mailer"})
+        assert m.status("REQ-001") == {"production": {"operation": "unknown"}}
+        assert query.show(m, "REQ-001")["state"]["production"]["missing"] == [
+            {
+                "dimension": "operation",
+                "source": "runtime",
+                "binding": {"service": "reminders", "environments": ["production"]},
+            }
+        ]
