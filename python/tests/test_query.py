@@ -253,6 +253,28 @@ class TestCombinedResults:
         m = with_results(passed("tests"), failed("manual-qa:observations"), manual=False)
         assert m.status("REQ-001") == {"production": {"verification": "failed"}}
 
+    def test_a_bound_source_with_no_delivery_result_leaves_delivery_as_observed(self) -> None:
+        docs = documents()
+        evidence = {"locator": "https://pypi.example/invoicing/1.0", "kind": "implementation", "claim": "Published"}
+        released = {
+            "dimension": "delivery",
+            "state": "released",
+            "context": "production",
+            "at": "2026-10-24T09:00:00Z",
+            "source": "distribution",
+            "evidence": [{**evidence, "observed_at": "2026-10-24", "applies_to": "production"}],
+        }
+        docs["state/production.json"]["records"]["REQ-001"]["assessments"] = [released]
+        for doc in docs.values():
+            for r in doc.get("records", []) if isinstance(doc.get("records"), list) else []:
+                if r["id"] == "REQ-001":
+                    r["observe"]["deployments"] = {"service": "reminders", "environments": ["production"]}
+        m = query.load(docs)
+        assert m.status("REQ-001") == {"production": {"delivery": "released"}}
+        assert "missing" not in query.show(m, "REQ-001")["state"]["production"]
+        query.gaps(m)
+        views.record_page(m, "REQ-001")
+
     def test_show_lists_every_assessment_with_the_combined_state(self) -> None:
         shown = query.show(with_results(passed("tests")), "REQ-001")["state"]["production"]
         assert [a["source"] for a in shown["assessments"]] == ["tests"]

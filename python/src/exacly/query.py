@@ -46,7 +46,8 @@ PRECEDENCE = {
     "operation": ("unavailable", "degraded", "unknown", "healthy"),
     "outcome_evaluation": ("target_not_met", "inconclusive", "not_evaluated", "target_met"),
 }
-# The result of a source bound to a record that has none yet in a context where the dimension was assessed.
+# The result of a source bound to a record that has none yet in a context where the dimension was assessed. Delivery
+# has no state for not yet known, so a bound source with no delivery result leaves delivery as observed.
 UNOBSERVED = {"verification": "not_checked", "operation": "unknown", "outcome_evaluation": "not_evaluated"}
 
 
@@ -95,6 +96,8 @@ class Model:
                 result = {"source": source_of(a), "state": a["state"]}
                 dims[a["dimension"]].append({**result, **({"binding": a["binding"]} if "binding" in a else {})})
             for dimension, listed in dims.items():
+                if dimension not in UNOBSERVED:
+                    continue
                 seen = {r["source"] for r in listed}
                 for source in sorted(bound(self.records[rid], dimension) - seen):
                     listed.append({"source": source, "state": UNOBSERVED[dimension], "missing": True})
