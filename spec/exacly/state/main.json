@@ -2,25 +2,29 @@
   "exacly": "0.2.0",
   "namespace": "exacly",
   "context": "main",
-  "config_revision": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
-  "serial": 11,
+  "config_revision": "fb74bd83f8ccadc419512a57e74b687796648bb8",
+  "serial": 12,
   "lineage": "c6586339-c553-47a5-9f79-d9ef18dd85a6",
-  "written_at": "2026-10-25T22:12:12Z",
+  "written_at": "2026-10-25T22:33:34Z",
   "records": {
     "REQ-001": {
       "assessments": [
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
-          "at": "2026-10-25T22:12:12Z",
+          "context": "fb74bd83f8ccadc419512a57e74b687796648bb8",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "tests",
+          "binding": {
+            "workflow": ".github/workflows/spec.yml"
+          },
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40239034561",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40240711525",
               "kind": "test",
               "observed_at": "2026-10-25",
-              "applies_to": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
-              "claim": "All 62 selected test cases passed"
+              "applies_to": "fb74bd83f8ccadc419512a57e74b687796648bb8",
+              "claim": "All 66 selected test cases passed"
             }
           ]
         },
@@ -28,12 +32,13 @@
           "dimension": "delivery",
           "state": "released",
           "context": "main",
-          "at": "2026-10-25T22:12:12Z",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "distribution",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/blob/2e38c326bf2a6feff5e00218c9be8c9e683f6053/python/src/exacly",
+              "locator": "https://github.com/whiteredhouse/exacly/blob/fb74bd83f8ccadc419512a57e74b687796648bb8/python/src/exacly",
               "kind": "implementation",
-              "claim": "Validator (APP-001) is at python/src/exacly in revision 2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "claim": "Validator (APP-001) is at python/src/exacly in revision fb74bd83f8ccadc419512a57e74b687796648bb8",
               "observed_at": "2026-10-25",
               "applies_to": "main"
             }
@@ -46,14 +51,18 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
-          "at": "2026-10-25T22:12:12Z",
+          "context": "fb74bd83f8ccadc419512a57e74b687796648bb8",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "tests",
+          "binding": {
+            "workflow": ".github/workflows/spec.yml"
+          },
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40239034561",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40240711525",
               "kind": "test",
               "observed_at": "2026-10-25",
-              "applies_to": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "applies_to": "fb74bd83f8ccadc419512a57e74b687796648bb8",
               "claim": "All 12 selected test cases passed"
             }
           ]
@@ -62,12 +71,13 @@
           "dimension": "delivery",
           "state": "released",
           "context": "main",
-          "at": "2026-10-25T22:12:12Z",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "distribution",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/blob/2e38c326bf2a6feff5e00218c9be8c9e683f6053/python/src/exacly",
+              "locator": "https://github.com/whiteredhouse/exacly/blob/fb74bd83f8ccadc419512a57e74b687796648bb8/python/src/exacly",
               "kind": "implementation",
-              "claim": "Validator (APP-001) is at python/src/exacly in revision 2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "claim": "Validator (APP-001) is at python/src/exacly in revision fb74bd83f8ccadc419512a57e74b687796648bb8",
               "observed_at": "2026-10-25",
               "applies_to": "main"
             }
@@ -80,14 +90,18 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
-          "at": "2026-10-25T22:12:12Z",
+          "context": "fb74bd83f8ccadc419512a57e74b687796648bb8",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "tests",
+          "binding": {
+            "workflow": ".github/workflows/spec.yml"
+          },
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40239034561",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40240711525",
               "kind": "test",
               "observed_at": "2026-10-25",
-              "applies_to": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "applies_to": "fb74bd83f8ccadc419512a57e74b687796648bb8",
               "claim": "All 39 selected test cases passed"
             }
           ]
@@ -96,12 +110,13 @@
           "dimension": "delivery",
           "state": "released",
           "context": "main",
-          "at": "2026-10-25T22:12:12Z",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "distribution",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/blob/2e38c326bf2a6feff5e00218c9be8c9e683f6053/python/src/exacly",
+              "locator": "https://github.com/whiteredhouse/exacly/blob/fb74bd83f8ccadc419512a57e74b687796648bb8/python/src/exacly",
               "kind": "implementation",
-              "claim": "Validator (APP-001) is at python/src/exacly in revision 2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "claim": "Validator (APP-001) is at python/src/exacly in revision fb74bd83f8ccadc419512a57e74b687796648bb8",
               "observed_at": "2026-10-25",
               "applies_to": "main"
             }
@@ -114,14 +129,18 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
-          "at": "2026-10-25T22:12:12Z",
+          "context": "fb74bd83f8ccadc419512a57e74b687796648bb8",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "tests",
+          "binding": {
+            "workflow": ".github/workflows/spec.yml"
+          },
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40239034561",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40240711525",
               "kind": "test",
               "observed_at": "2026-10-25",
-              "applies_to": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "applies_to": "fb74bd83f8ccadc419512a57e74b687796648bb8",
               "claim": "All 10 selected test cases passed"
             }
           ]
@@ -130,12 +149,13 @@
           "dimension": "delivery",
           "state": "released",
           "context": "main",
-          "at": "2026-10-25T22:12:12Z",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "distribution",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/blob/2e38c326bf2a6feff5e00218c9be8c9e683f6053/python/src/exacly",
+              "locator": "https://github.com/whiteredhouse/exacly/blob/fb74bd83f8ccadc419512a57e74b687796648bb8/python/src/exacly",
               "kind": "implementation",
-              "claim": "Validator (APP-001) is at python/src/exacly in revision 2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "claim": "Validator (APP-001) is at python/src/exacly in revision fb74bd83f8ccadc419512a57e74b687796648bb8",
               "observed_at": "2026-10-25",
               "applies_to": "main"
             }
@@ -148,14 +168,18 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
-          "at": "2026-10-25T22:12:12Z",
+          "context": "fb74bd83f8ccadc419512a57e74b687796648bb8",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "tests",
+          "binding": {
+            "workflow": ".github/workflows/spec.yml"
+          },
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40239034561",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40240711525",
               "kind": "test",
               "observed_at": "2026-10-25",
-              "applies_to": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "applies_to": "fb74bd83f8ccadc419512a57e74b687796648bb8",
               "claim": "All 12 selected test cases passed"
             }
           ]
@@ -164,12 +188,13 @@
           "dimension": "delivery",
           "state": "released",
           "context": "main",
-          "at": "2026-10-25T22:12:12Z",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "distribution",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/blob/2e38c326bf2a6feff5e00218c9be8c9e683f6053/python/src/exacly",
+              "locator": "https://github.com/whiteredhouse/exacly/blob/fb74bd83f8ccadc419512a57e74b687796648bb8/python/src/exacly",
               "kind": "implementation",
-              "claim": "Validator (APP-001) is at python/src/exacly in revision 2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "claim": "Validator (APP-001) is at python/src/exacly in revision fb74bd83f8ccadc419512a57e74b687796648bb8",
               "observed_at": "2026-10-25",
               "applies_to": "main"
             }
@@ -182,14 +207,18 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
-          "at": "2026-10-25T22:12:12Z",
+          "context": "fb74bd83f8ccadc419512a57e74b687796648bb8",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "tests",
+          "binding": {
+            "workflow": ".github/workflows/spec.yml"
+          },
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40239034561",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40240711525",
               "kind": "test",
               "observed_at": "2026-10-25",
-              "applies_to": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "applies_to": "fb74bd83f8ccadc419512a57e74b687796648bb8",
               "claim": "All 10 selected test cases passed"
             }
           ]
@@ -198,12 +227,13 @@
           "dimension": "delivery",
           "state": "released",
           "context": "main",
-          "at": "2026-10-25T22:12:12Z",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "distribution",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/blob/2e38c326bf2a6feff5e00218c9be8c9e683f6053/python/src/exacly",
+              "locator": "https://github.com/whiteredhouse/exacly/blob/fb74bd83f8ccadc419512a57e74b687796648bb8/python/src/exacly",
               "kind": "implementation",
-              "claim": "Validator (APP-001) is at python/src/exacly in revision 2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "claim": "Validator (APP-001) is at python/src/exacly in revision fb74bd83f8ccadc419512a57e74b687796648bb8",
               "observed_at": "2026-10-25",
               "applies_to": "main"
             }
@@ -216,14 +246,18 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
-          "at": "2026-10-25T22:12:12Z",
+          "context": "fb74bd83f8ccadc419512a57e74b687796648bb8",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "tests",
+          "binding": {
+            "workflow": ".github/workflows/spec.yml"
+          },
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40239034561",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40240711525",
               "kind": "test",
               "observed_at": "2026-10-25",
-              "applies_to": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "applies_to": "fb74bd83f8ccadc419512a57e74b687796648bb8",
               "claim": "All 11 selected test cases passed"
             }
           ]
@@ -232,12 +266,13 @@
           "dimension": "delivery",
           "state": "released",
           "context": "main",
-          "at": "2026-10-25T22:12:12Z",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "distribution",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/blob/2e38c326bf2a6feff5e00218c9be8c9e683f6053/python/src/exacly",
+              "locator": "https://github.com/whiteredhouse/exacly/blob/fb74bd83f8ccadc419512a57e74b687796648bb8/python/src/exacly",
               "kind": "implementation",
-              "claim": "Validator (APP-001) is at python/src/exacly in revision 2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "claim": "Validator (APP-001) is at python/src/exacly in revision fb74bd83f8ccadc419512a57e74b687796648bb8",
               "observed_at": "2026-10-25",
               "applies_to": "main"
             }
@@ -250,14 +285,18 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
-          "at": "2026-10-25T22:12:12Z",
+          "context": "fb74bd83f8ccadc419512a57e74b687796648bb8",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "tests",
+          "binding": {
+            "workflow": ".github/workflows/spec.yml"
+          },
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40239034561",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40240711525",
               "kind": "test",
               "observed_at": "2026-10-25",
-              "applies_to": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "applies_to": "fb74bd83f8ccadc419512a57e74b687796648bb8",
               "claim": "All 9 selected test cases passed"
             }
           ]
@@ -266,12 +305,13 @@
           "dimension": "delivery",
           "state": "released",
           "context": "main",
-          "at": "2026-10-25T22:12:12Z",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "distribution",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/blob/2e38c326bf2a6feff5e00218c9be8c9e683f6053/python/src/exacly",
+              "locator": "https://github.com/whiteredhouse/exacly/blob/fb74bd83f8ccadc419512a57e74b687796648bb8/python/src/exacly",
               "kind": "implementation",
-              "claim": "Validator (APP-001) is at python/src/exacly in revision 2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "claim": "Validator (APP-001) is at python/src/exacly in revision fb74bd83f8ccadc419512a57e74b687796648bb8",
               "observed_at": "2026-10-25",
               "applies_to": "main"
             }
@@ -284,14 +324,18 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
-          "at": "2026-10-25T22:12:12Z",
+          "context": "fb74bd83f8ccadc419512a57e74b687796648bb8",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "tests",
+          "binding": {
+            "workflow": ".github/workflows/spec.yml"
+          },
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40239034561",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40240711525",
               "kind": "test",
               "observed_at": "2026-10-25",
-              "applies_to": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "applies_to": "fb74bd83f8ccadc419512a57e74b687796648bb8",
               "claim": "The job succeeded"
             }
           ]
@@ -300,12 +344,13 @@
           "dimension": "delivery",
           "state": "released",
           "context": "main",
-          "at": "2026-10-25T22:12:12Z",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "distribution",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/blob/2e38c326bf2a6feff5e00218c9be8c9e683f6053/.github/workflows/spec.yml",
+              "locator": "https://github.com/whiteredhouse/exacly/blob/fb74bd83f8ccadc419512a57e74b687796648bb8/.github/workflows/spec.yml",
               "kind": "implementation",
-              "claim": "GitHub Actions (INF-001) is at .github/workflows/spec.yml in revision 2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "claim": "GitHub Actions (INF-001) is at .github/workflows/spec.yml in revision fb74bd83f8ccadc419512a57e74b687796648bb8",
               "observed_at": "2026-10-25",
               "applies_to": "main"
             }
@@ -318,15 +363,19 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
-          "at": "2026-10-25T22:12:12Z",
+          "context": "fb74bd83f8ccadc419512a57e74b687796648bb8",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "tests",
+          "binding": {
+            "workflow": ".github/workflows/spec.yml"
+          },
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40239034561",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40240711525",
               "kind": "test",
               "observed_at": "2026-10-25",
-              "applies_to": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
-              "claim": "All 32 selected test cases passed"
+              "applies_to": "fb74bd83f8ccadc419512a57e74b687796648bb8",
+              "claim": "All 38 selected test cases passed"
             }
           ]
         },
@@ -334,12 +383,13 @@
           "dimension": "delivery",
           "state": "released",
           "context": "main",
-          "at": "2026-10-25T22:12:12Z",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "distribution",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/blob/2e38c326bf2a6feff5e00218c9be8c9e683f6053/python/src/exacly/refresh.py",
+              "locator": "https://github.com/whiteredhouse/exacly/blob/fb74bd83f8ccadc419512a57e74b687796648bb8/python/src/exacly/refresh.py",
               "kind": "implementation",
-              "claim": "Refresh (APP-002) is at python/src/exacly/refresh.py in revision 2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "claim": "Refresh (APP-002) is at python/src/exacly/refresh.py in revision fb74bd83f8ccadc419512a57e74b687796648bb8",
               "observed_at": "2026-10-25",
               "applies_to": "main"
             }
@@ -352,14 +402,18 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
-          "at": "2026-10-25T22:12:12Z",
+          "context": "fb74bd83f8ccadc419512a57e74b687796648bb8",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "tests",
+          "binding": {
+            "workflow": ".github/workflows/spec.yml"
+          },
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40239034561",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40240711525",
               "kind": "test",
               "observed_at": "2026-10-25",
-              "applies_to": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "applies_to": "fb74bd83f8ccadc419512a57e74b687796648bb8",
               "claim": "All 9 selected test cases passed"
             }
           ]
@@ -368,12 +422,13 @@
           "dimension": "delivery",
           "state": "released",
           "context": "main",
-          "at": "2026-10-25T22:12:12Z",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "distribution",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/blob/2e38c326bf2a6feff5e00218c9be8c9e683f6053/.github/workflows/spec.yml",
+              "locator": "https://github.com/whiteredhouse/exacly/blob/fb74bd83f8ccadc419512a57e74b687796648bb8/.github/workflows/spec.yml",
               "kind": "implementation",
-              "claim": "GitHub Actions (INF-001) is at .github/workflows/spec.yml in revision 2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "claim": "GitHub Actions (INF-001) is at .github/workflows/spec.yml in revision fb74bd83f8ccadc419512a57e74b687796648bb8",
               "observed_at": "2026-10-25",
               "applies_to": "main"
             }
@@ -386,15 +441,19 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
-          "at": "2026-10-25T22:12:12Z",
+          "context": "fb74bd83f8ccadc419512a57e74b687796648bb8",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "tests",
+          "binding": {
+            "workflow": ".github/workflows/spec.yml"
+          },
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40239034561",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40240711525",
               "kind": "test",
               "observed_at": "2026-10-25",
-              "applies_to": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
-              "claim": "All 32 selected test cases passed"
+              "applies_to": "fb74bd83f8ccadc419512a57e74b687796648bb8",
+              "claim": "All 44 selected test cases passed"
             }
           ]
         },
@@ -402,12 +461,13 @@
           "dimension": "delivery",
           "state": "released",
           "context": "main",
-          "at": "2026-10-25T22:12:12Z",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "distribution",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/blob/2e38c326bf2a6feff5e00218c9be8c9e683f6053/python/src/exacly/query.py",
+              "locator": "https://github.com/whiteredhouse/exacly/blob/fb74bd83f8ccadc419512a57e74b687796648bb8/python/src/exacly/query.py",
               "kind": "implementation",
-              "claim": "Query (APP-003) is at python/src/exacly/query.py in revision 2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "claim": "Query (APP-003) is at python/src/exacly/query.py in revision fb74bd83f8ccadc419512a57e74b687796648bb8",
               "observed_at": "2026-10-25",
               "applies_to": "main"
             }
@@ -420,14 +480,18 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
-          "at": "2026-10-25T22:12:12Z",
+          "context": "fb74bd83f8ccadc419512a57e74b687796648bb8",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "tests",
+          "binding": {
+            "workflow": ".github/workflows/spec.yml"
+          },
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40239034561",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40240711525",
               "kind": "test",
               "observed_at": "2026-10-25",
-              "applies_to": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "applies_to": "fb74bd83f8ccadc419512a57e74b687796648bb8",
               "claim": "All 14 selected test cases passed"
             }
           ]
@@ -436,12 +500,13 @@
           "dimension": "delivery",
           "state": "released",
           "context": "main",
-          "at": "2026-10-25T22:12:12Z",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "distribution",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/blob/2e38c326bf2a6feff5e00218c9be8c9e683f6053/python/src/exacly/mcp.py",
+              "locator": "https://github.com/whiteredhouse/exacly/blob/fb74bd83f8ccadc419512a57e74b687796648bb8/python/src/exacly/mcp.py",
               "kind": "implementation",
-              "claim": "MCP server (APP-004) is at python/src/exacly/mcp.py in revision 2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "claim": "MCP server (APP-004) is at python/src/exacly/mcp.py in revision fb74bd83f8ccadc419512a57e74b687796648bb8",
               "observed_at": "2026-10-25",
               "applies_to": "main"
             }
@@ -454,14 +519,18 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
-          "at": "2026-10-25T22:12:12Z",
+          "context": "fb74bd83f8ccadc419512a57e74b687796648bb8",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "tests",
+          "binding": {
+            "workflow": ".github/workflows/spec.yml"
+          },
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40239034561",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40240711525",
               "kind": "test",
               "observed_at": "2026-10-25",
-              "applies_to": "2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "applies_to": "fb74bd83f8ccadc419512a57e74b687796648bb8",
               "claim": "All 17 selected test cases passed"
             }
           ]
@@ -470,19 +539,20 @@
           "dimension": "delivery",
           "state": "released",
           "context": "main",
-          "at": "2026-10-25T22:12:12Z",
+          "at": "2026-10-25T22:33:34Z",
+          "source": "distribution",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/blob/2e38c326bf2a6feff5e00218c9be8c9e683f6053/python/src/exacly/views.py",
+              "locator": "https://github.com/whiteredhouse/exacly/blob/fb74bd83f8ccadc419512a57e74b687796648bb8/python/src/exacly/views.py",
               "kind": "implementation",
-              "claim": "Views (APP-005) is at python/src/exacly/views.py in revision 2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "claim": "Views (APP-005) is at python/src/exacly/views.py in revision fb74bd83f8ccadc419512a57e74b687796648bb8",
               "observed_at": "2026-10-25",
               "applies_to": "main"
             },
             {
-              "locator": "https://github.com/whiteredhouse/exacly/blob/2e38c326bf2a6feff5e00218c9be8c9e683f6053/.github/workflows/spec.yml",
+              "locator": "https://github.com/whiteredhouse/exacly/blob/fb74bd83f8ccadc419512a57e74b687796648bb8/.github/workflows/spec.yml",
               "kind": "implementation",
-              "claim": "GitHub Actions (INF-001) is at .github/workflows/spec.yml in revision 2e38c326bf2a6feff5e00218c9be8c9e683f6053",
+              "claim": "GitHub Actions (INF-001) is at .github/workflows/spec.yml in revision fb74bd83f8ccadc419512a57e74b687796648bb8",
               "observed_at": "2026-10-25",
               "applies_to": "main"
             }
