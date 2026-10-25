@@ -63,7 +63,7 @@ records:
       tests:
         workflow: .github/workflows/spec.yml
         cases:
-          - "validator/tests/test_query.py::*"
+          - "python/tests/test_query.py::*"
 
   - id: REQ-013
     type: Requirement
@@ -89,7 +89,7 @@ records:
       tests:
         workflow: .github/workflows/spec.yml
         cases:
-          - "validator/tests/test_mcp.py::*"
+          - "python/tests/test_mcp.py::*"
 
   - id: REQ-014
     type: Requirement
@@ -116,7 +116,7 @@ records:
       tests:
         workflow: .github/workflows/spec.yml
         cases:
-          - "validator/tests/test_views.py::*"
+          - "python/tests/test_views.py::*"
           - "tests/test_ci.py::test_the_plan_is_commented_*"
 
   - id: APP-003
@@ -128,8 +128,8 @@ records:
     evidence: []
     last_reviewed_at: "2026-10-24"
     responsibility: Answer questions about a model from its config and state.
-    interfaces: [exacly command, exacly_validate.query Python API]
-    implementation_ref: { locator: validator/src/exacly_validate/query.py }
+    interfaces: [exacly command, exacly.query Python API]
+    implementation_ref: { locator: python/src/exacly/query.py }
 
   - id: APP-004
     type: Application
@@ -141,7 +141,7 @@ records:
     last_reviewed_at: "2026-10-24"
     responsibility: Answer coding agents' questions about a model over the Model Context Protocol.
     interfaces: [exacly mcp command (MCP over stdio), skills/exacly/SKILL.md]
-    implementation_ref: { locator: validator/src/exacly_validate/mcp.py }
+    implementation_ref: { locator: python/src/exacly/mcp.py }
 
   - id: APP-005
     type: Application
@@ -153,7 +153,7 @@ records:
     last_reviewed_at: "2026-10-24"
     responsibility: Show a model to people, as a pull request plan and as static pages.
     interfaces: [exacly view plan, exacly view site, pull request comment from CI]
-    implementation_ref: { locator: validator/src/exacly_validate/views.py }
+    implementation_ref: { locator: python/src/exacly/views.py }
 
 relationships:
   - { source: CAP-003, type: contributes_to, target: OUT-001 }

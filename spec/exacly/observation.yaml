@@ -66,19 +66,19 @@ records:
       tests:
         workflow: .github/workflows/spec.yml
         cases:
-          - "validator/tests/test_refresh.py::*"
+          - "python/tests/test_refresh.py::*"
 
   - id: APP-002
     type: Application
     name: Refresh
-    description: The exacly-refresh command.
+    description: The exacly refresh command.
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
     last_reviewed_at: "2026-10-24"
     responsibility: Observe the sources a model's bindings name and write state.
-    interfaces: [exacly-refresh command, exacly_validate.refresh Python API]
-    implementation_ref: { locator: validator/src/exacly_validate/refresh.py }
+    interfaces: [exacly refresh command, exacly.refresh Python API]
+    implementation_ref: { locator: python/src/exacly/refresh.py }
 
   - id: MEAS-001
     type: Measure

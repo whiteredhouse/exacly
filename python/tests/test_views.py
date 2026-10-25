@@ -1,6 +1,6 @@
 """Checks the section 10 views: the pull request plan and the site, over the invoice reminders example.
 
-Run with `mise run test`, or from the repository root: uv run pytest validator/tests
+Run with `mise run test`, or from the repository root: uv run pytest python/tests
 """
 
 import contextlib
@@ -11,8 +11,8 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
-from exacly_validate import query, views
-from exacly_validate.cli import exacly_main
+from exacly import query, views
+from exacly.cli import exacly_main
 from test_query import STATE, TestChanges, documents, model
 
 
@@ -156,13 +156,13 @@ class TestSite:
         evidence += [
             {**evidence[0], "locator": "javascript:alert(document.domain)", "claim": "Script"},
             {**evidence[0], "locator": " JavaScript:alert(1)", "claim": "Spaced"},
-            {**evidence[0], "locator": "validator/tests/test_views.py", "claim": "A file"},
+            {**evidence[0], "locator": "python/tests/test_views.py", "claim": "A file"},
             {**evidence[0], "locator": "https://[invalid", "claim": "Malformed"},
         ]
         page = views.record_page(query.load(docs), "REQ-001")
         assert all(href.startswith("https://") or ":" not in href for href in links(page)), links(page)
         assert "Script <code>javascript:alert(document.domain)</code>" in page
-        assert "A file <code>validator/tests/test_views.py</code>" in page
+        assert "A file <code>python/tests/test_views.py</code>" in page
         assert "Malformed <code>https://[invalid</code>" in page
         assert '<a href="https://ci.example/runs/7">' in page
 

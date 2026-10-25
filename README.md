@@ -16,9 +16,9 @@ Exacly borrows the plan and apply loop from infrastructure as code, and the spec
 | Step | What it does | Status |
 | --- | --- | --- |
 | **Describe** | Author config in YAML: records, relationships, exceptions and how each record can be observed. Start from a description (greenfield) or from an existing repo and documents (brownfield). | Spec 0.2 |
-| **Validate** | Check config against the schema, the relationship rules and the traceability rules. | [`exacly-validate`](validator/README.md), 0.1 and 0.2 |
-| **Refresh** | Observe the real system and write state: assessments per environment and the evidence behind them. | [`exacly-refresh`](validator/README.md#refresh), from test results |
-| **Ask** | Show a record, trace why it exists and what realizes it, list what a change affects and what the model is missing. | [`exacly`](validator/README.md#questions) show, trace, impact and gaps; [views](validator/README.md#views) as a pull request plan and a site; an [MCP server and skill](validator/README.md#for-coding-agents) for agents |
+| **Validate** | Check config against the schema, the relationship rules and the traceability rules. | [`exacly validate`](python/README.md#validate), 0.1 and 0.2 |
+| **Refresh** | Observe the real system and write state: assessments per environment and the evidence behind them. | [`exacly refresh`](python/README.md#refresh), from test results |
+| **Ask** | Show a record, trace why it exists and what realizes it, list what a change affects and what the model is missing. | [`exacly`](python/README.md#questions) show, trace, impact and gaps; [views](python/README.md#views) as a pull request plan and a site; an [MCP server and skill](#with-coding-agents) for agents |
 | **Plan** | Compare config with state and list the work needed to make them agree. | Planned |
 | **Apply** | Turn the plan into tasks for people or agents. The next refresh closes them. | Planned |
 
@@ -40,7 +40,7 @@ Its ideas come from established practice:
 | Path | Contents |
 | --- | --- |
 | [`spec/`](spec/README.md) | Specification versions, JSON Schemas, worked examples and data-driven test cases |
-| [`validator/`](validator/README.md) | `exacly-validate`, the Python validator |
+| [`python/`](python/README.md) | `exacly`, the command and Python package: validate, refresh, questions, views and the MCP server |
 | [`skills/`](skills/exacly/SKILL.md) | The skill that tells coding agents how to work with a model |
 | [`docs/`](docs/) | Research and pilot notes |
 
@@ -49,11 +49,21 @@ Its ideas come from established practice:
 Validate the [invoice reminders example](spec/examples/0.2/invoice-reminders/), a small slice of a product written as 0.2 config:
 
 ```sh
-uv tool install "exacly-validate @ git+https://github.com/whiteredhouse/exacly"
-exacly-validate spec/examples/0.2/invoice-reminders
+uv tool install "exacly @ git+https://github.com/whiteredhouse/exacly"
+exacly validate spec/examples/0.2/invoice-reminders
 ```
 
 In your own project, keep config in `spec/exacly/` and pass the commit it was validated at with `--revision "$(git rev-parse HEAD)"`.
+
+## With coding agents
+
+`exacly mcp` runs an [MCP](https://modelcontextprotocol.io) server on stdio, so a coding agent can look up records, trace why they exist, and check what a change affects while it works. To add it in Claude Code, from the repository that holds the model:
+
+```sh
+claude mcp add exacly -- exacly mcp
+```
+
+Copy the [`exacly` skill](skills/exacly/SKILL.md) to `.claude/skills/exacly/` too: it tells the agent when to ask the model and how to keep config true to a change. [The MCP server](python/README.md#mcp-server) lists its tools.
 
 ## In CI
 
@@ -82,9 +92,10 @@ Exacly is at 0.x and unstable: anything may change until 1.0, which comes with t
 Each part of Exacly has its own version, tagged as `<part>-vX.Y.Z`, as release-please and Changesets tag the parts of one repository:
 
 - **The specification**, `spec-vX.Y.Z`: the file in [`spec/versions/`](spec/versions/) and the `exacly:` line of every model document.
-- **The validator**, `validator-vX.Y.Z`: the `exacly-validate` package with its `exacly-validate`, `exacly-refresh` and `exacly` commands and the MCP server.
-- **The GitHub Action** lives in [whiteredhouse/exacly-action](https://github.com/whiteredhouse/exacly-action), tagged `vX.Y.Z` with a moving `v0`, as workflows expect. Each action release runs one validator release.
+- **The package**, `exacly-vX.Y.Z`: the `exacly` Python package and command, with validation, refresh, questions, views and the MCP server. Up to 0.1.0 it was `exacly-validate`, tagged `validator-vX.Y.Z`.
+- **The GitHub Action** lives in [whiteredhouse/exacly-action](https://github.com/whiteredhouse/exacly-action), tagged `vX.Y.Z` with a moving `v0`, as workflows expect. Each action release runs one package release.
 
-| Validator | Spec versions it reads |
+| Package | Spec versions it reads |
 | --- | --- |
-| 0.1.0 | 0.1, 0.2 |
+| 0.1.0 (`exacly-validate`) | 0.1, 0.2 |
+| 0.2.0 | 0.1, 0.2 |

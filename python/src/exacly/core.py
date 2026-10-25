@@ -144,7 +144,7 @@ class Report:
 
 def schema_dirs() -> list[Path]:
     """Schemas bundled in the installed package, then the repository's spec/schema."""
-    bundled = Path(str(resources.files("exacly_validate") / "schemas"))
+    bundled = Path(str(resources.files("exacly") / "schemas"))
     return [bundled, Path(__file__).resolve().parents[3] / "spec" / "schema"]
 
 
