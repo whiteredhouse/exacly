@@ -1,0 +1,63 @@
+name: Release
+
+# Pushing a python-vX.Y.Z tag publishes the exacly package X.Y.Z to PyPI.
+# PyPI trusts this workflow and the pypi environment (trusted publishing), so no token is stored.
+on:
+  push:
+    tags: ["python-v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
+      - name: Check the tag matches the package version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="$(uv version --short)"
+          if [ "$TAG" != "python-v$version" ]; then
+            echo "::error::Tag $TAG does not match the package version $version in pyproject.toml"
+            exit 1
+          fi
+      - name: Test, lint and type-check
+        run: mise run test && mise run lint && mise run typecheck
+      - name: Build the sdist and wheel
+        run: uv build
+      - name: Run the built wheel outside the repository
+        run: |
+          set -euo pipefail
+          wheel="$(ls "$PWD"/dist/*.whl)"
+          example="$PWD/spec/examples/0.2/invoice-reminders"
+          cd "$RUNNER_TEMP"
+          uvx --isolated --from "$wheel" exacly validate "$example"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/exacly/${{ steps.version.outputs.version }}
+    permissions:
+      # Only this job can mint the token PyPI exchanges for an upload.
+      id-token: write
+    steps:
+      - id: version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: echo "version=${TAG#python-v}" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3

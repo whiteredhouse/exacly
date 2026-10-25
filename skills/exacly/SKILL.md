@@ -9,7 +9,7 @@ The repository describes its product as an Exacly model: **config** that people 
 
 Ask the model with the `exacly_*` MCP tools when they are available, or the `exacly` command otherwise (add `--json` for data). Both read `spec/exacly` and give the same answers.
 
-If neither is available, install the command with `uv tool install "exacly @ git+https://github.com/whiteredhouse/exacly"`; in the Exacly repository itself, `uv run exacly` works.
+If neither is available, run it with `uvx exacly` or install it with `uv tool install exacly`; in the Exacly repository itself, `uv run exacly` works.
 
 | Question | MCP tool | Command |
 | --- | --- | --- |

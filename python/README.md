@@ -8,8 +8,11 @@ The `exacly` command and Python package work with an Exacly model, either a 0.1 
 - [`exacly mcp`](#mcp-server) answers the same questions for coding agents.
 
 ```sh
-uv tool install "exacly @ git+https://github.com/whiteredhouse/exacly"
+uv tool install exacly    # or: pipx install exacly, pip install exacly
+uvx exacly validate spec/exacly    # or run it once without installing
 ```
+
+Exacly is at 0.x and the specification is a Draft, so commands, output and the model may change in any release until 1.0. Pin a version (`exacly==0.2.1`) where a change would break you. To run the latest main instead, install `"exacly @ git+https://github.com/whiteredhouse/exacly"`.
 
 Before 0.2.0 the package was `exacly-validate`, with `exacly-validate` and `exacly-refresh` commands. Those commands still run, with a note, until the next release.
 
@@ -26,7 +29,7 @@ exacly validate docs/exacly/product-map.yaml --json --date 2026-10-23
 
 Given a folder, it reads every YAML and JSON file under it, skipping hidden folders, so a README or the copied spec beside them is ignored. Files and folders can also be given one by one. A document is state when it has state's fields (`context`, `config_revision`, `serial` or `lineage`); every other document is config. `--revision` is the config revision being validated. State computed against another revision is reported. An abbreviated Git commit hash matches the full one; any other revision name, such as `release-1`, must match exactly.
 
-`pip install` works the same way. The package carries the spec's schemas, so it runs anywhere. In Python, `exacly.validate_documents({name: doc, ...}, date, revision)` returns the report for a set of documents, and `exacly.validate(doc, date)` for one document. Neither changes its input.
+The package carries the spec's schemas, so it runs anywhere. In Python, `exacly.validate_documents({name: doc, ...}, date, revision)` returns the report for a set of documents, and `exacly.validate(doc, date)` for one document. Neither changes its input.
 
 It exits 0 when the model conforms, with or without exceptions, and 1 when it does not.
 
@@ -84,7 +87,7 @@ On each pull request from this repository, CI comments the plan and replaces its
 `exacly mcp` answers the same questions as an [MCP](https://modelcontextprotocol.io) server on stdio, with one tool per question: `exacly_show`, `exacly_trace`, `exacly_impact` and `exacly_gaps`. Each result has the text answer as content and the JSON answer as structured content. Every call reads the model again, so an agent sees its own edits. In Claude Code, from the repository that holds the model:
 
 ```sh
-claude mcp add exacly -- exacly mcp
+claude mcp add exacly -- uvx exacly mcp
 ```
 
 This repository's [`.mcp.json`](../.mcp.json) does the same with `uv run`. The [`exacly` skill](../skills/exacly/SKILL.md) tells an agent when to ask and how to keep config true to a change: look up the records first, change Requirements with the behaviour, and check what the branch affects before a pull request. Copy it to `.claude/skills/exacly/` in your repository.
