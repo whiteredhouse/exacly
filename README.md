@@ -108,8 +108,12 @@ mise run check
 
 Exacly is at 0.x and unstable: anything may change until 1.0, which comes with the first outside adopter. See [Versioning](spec/README.md#versioning).
 
-The specification and the tools have separate versions, as OpenAPI and its tools do. A spec version, such as 0.2.0, is a file in [`spec/versions/`](spec/versions/) and the `exacly:` line of every model document. A tool version, such as 0.1.0, is a Git tag `vX.Y.Z` with a release note, and covers `exacly-validate`, `exacly` and the action together. A moving tag `v0` points at the latest 0.x release.
+Each part of Exacly has its own version, tagged as `<part>-vX.Y.Z`, as release-please and Changesets tag the parts of one repository:
 
-| Tool release | Spec versions it reads |
+- **The specification**, `spec-vX.Y.Z`: the file in [`spec/versions/`](spec/versions/) and the `exacly:` line of every model document.
+- **The validator**, `validator-vX.Y.Z`: the `exacly-validate` package with its `exacly-validate`, `exacly-refresh` and `exacly` commands and the MCP server.
+- **The GitHub Action** lives in [whiteredhouse/exacly-action](https://github.com/whiteredhouse/exacly-action), tagged `vX.Y.Z` with a moving `v0`, as workflows expect. Each action release runs one validator release.
+
+| Validator | Spec versions it reads |
 | --- | --- |
 | 0.1.0 | 0.1, 0.2 |
