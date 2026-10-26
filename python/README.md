@@ -221,3 +221,29 @@ The repository uses [mise](https://mise.jdx.dev/) for its tools (Python and uv) 
 | `mise run check` | All of the above |
 
 To try a model against your working copy, run `uv run exacly validate path/to/spec/exacly`.
+
+## Assess an implementation target
+
+`exacly assess` answers a narrower question than the context summary: which observations establish verification and delivery for this exact implementation and scope?
+
+Keep target files outside the model folder, since model folders recursively load YAML and JSON:
+
+```yaml
+# targets/main.yaml
+context: main
+model_revision: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+revision: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+```
+
+```sh
+exacly assess REQ-001 -m spec/exacly --target targets/main.yaml --date 2026-10-26
+exacly assess REQ-001 -m spec/exacly --target targets/main.yaml --json
+```
+
+A target requires `context`, `model_revision` and at least one of `revision` or `builds`. `builds` maps component names to identity-field maps, for example `app: {digest: 'sha256:…'}` and `backend: {revision: '…'}`. Optional `environment`, `platform` and `release` restrict the question. For delivery, an omitted environment selects delivery to the named `context`; for verification, omitting it makes no environmental verification claim. Every requested identity must be established by each observation used. Build compositions match exactly; revisions use the validator's Git-abbreviation matching. An observation scoped to an environment, platform or release cannot establish a broader claim: select that scope explicitly (delivery environment defaults to context). For manual QA, include its exact builds, release, environment and selected platform.
+
+New refresh observations carry their own `subject` with model and implementation revision; distribution observations also name the environment. Manual QA carries the model revision, builds, release, environment and platform from its target. Earlier refresh test observations can establish their documented config/source revision; generic legacy delivery cannot establish an implementation identity. No identity is recovered from prose or a newer enclosing state's config revision.
+
+The report includes applicable assessments, exclusions with reasons, and missing bound sources. Expired or unsupported positive evidence does not count. Delivery with no applicable result is displayed as `not_observed`, a derived label rather than a stored delivery state. All required bindings must have applicable results; source-level tests do not establish direct artifact testing or deployed-system verification. The command is read-only and returns 0 when it answers the question, including when verification is not established; invalid input returns 2. `--date` sets the as-of date for expiry, defaulting to today.
+
+Context summaries used by `show`, `trace`, `gaps` and generated views also guard against combining refresh tests from different revisions. Use `assess` for implementation-specific conclusions; context summaries are not release gates. Original observations stay available when they are excluded from a selected target.

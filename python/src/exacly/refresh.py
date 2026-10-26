@@ -102,6 +102,7 @@ def verification(binding: Doc, results: Mapping[str, str], run: Run) -> Doc:
         "applies_to": run.revision,
     }
     assessment: Doc = {"dimension": "verification", "state": None, "context": run.revision, "at": timestamp(run)}
+    assessment["subject"] = {"model_revision": run.revision, "revision": run.revision}
     assessment["source"] = "tests"
     if identity("tests", binding):
         assessment["binding"] = identity("tests", binding)
@@ -175,6 +176,7 @@ def delivery(
         "context": run.context,
         "at": timestamp(run),
         "source": "distribution",
+        "subject": {"model_revision": run.revision, "revision": run.revision, "environment": run.context},
         "evidence": evidence,
     }
 
