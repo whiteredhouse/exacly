@@ -206,7 +206,7 @@ def usable(
         return None, f"names the builds {names}, but the target assesses {', '.join(sorted(target['builds']))}"
     if doc["builds"] != target["builds"]:
         return None, None
-    if doc["model_revision"] != target["model_revision"] and stale(doc["model_revision"], rid):
+    if stale(doc["model_revision"], rid):
         return None, f"stale: {rid}'s criteria at {doc['model_revision']} differ from the current ones"
     output = root / doc["output"]["file"]
     if not output.is_file():
@@ -252,7 +252,8 @@ def assessment(
         "x-criteria": {str(n): r["result"] for n, (r, _) in sorted(results.items())},
     }
     if due:
-        scope = all(n in by_state["passed"] for n in due) and not by_state["failed"] and not unsure
+        # The release's scope is its due criteria: a failure outside them fails the record, not the release.
+        scope = all(n in by_state["passed"] for n in due)
         details["x-release-scope"] = "passed" if scope else "open"
     used = sorted({id(o): o for _, o in results.values()}.values(), key=lambda o: o.at)
     evidence = [
@@ -317,8 +318,8 @@ def observe(
         return at is None or list(at.get(rid, [])) != current.get(rid)
 
     def stale(earlier_revision: str, rid: str) -> bool:
-        # The due set is checked below to be numbered as the current criteria are, so an observation is compared
-        # with those.
+        # Every observation is compared with the current criteria, including one at the target's revision: the due
+        # set is checked against them only for the records it lists.
         return earlier_revision != revision and differ(earlier_revision, rid)
 
     if target["model_revision"] != revision:
@@ -356,7 +357,10 @@ def observe(
                 why: str | None = f"can't be read: {doc}"
                 if not isinstance(doc, Exception):
                     obs, why = usable(name, doc, rid, platforms, target, current[rid], root, stale)
-                on: str | None = doc.get("platform") if isinstance(doc, dict) and platforms else None
+                # A platform that isn't text, such as a list, makes the observation invalid; it is noted on every
+                # platform rather than used as a key.
+                given = doc.get("platform") if isinstance(doc, dict) and platforms else None
+                on: str | None = given if isinstance(given, str) else None
                 if obs is not None:
                     found[on].append(obs)
                 elif why is not None and (not isinstance(doc, dict) or doc.get("record") in (rid, None)):

@@ -338,3 +338,35 @@ def test_a_declared_extension_checks_its_bindings() -> None:
     undeclared = documents(record)
     del undeclared["config"]["model"]["extensions"]
     assert validate_documents(undeclared, WHEN.date()).as_dict()["errors"] == []
+
+
+@pytest.mark.parametrize("criteria", [None, {"REQ-1": ["An older first criterion.", *CRITERIA[1:]]}])
+def test_an_observation_at_the_targets_revision_is_stale_when_the_criteria_changed_since(
+    root: Path, criteria: dict[str, list[str]] | None
+) -> None:
+    # The target lists no due criteria, so only the observation's own check can catch the change.
+    observation(root, "run", None, {1: "passed", 2: "passed", 3: "passed"}, model_revision="1a2b3c4")
+    record = manual_requirement()
+    record["observe"][manual_qa.SOURCE] = {"path": "qa/observations/*.yaml"}
+    target = {**TARGET, "model_revision": "1a2b3c4", "due": {}}
+    state, notes = observe(root, target, docs=documents(record), criteria_at=lambda revision: criteria)
+    [a] = state["records"]["REQ-1"]["assessments"]
+    assert a["state"] == "not_checked"
+    assert notes == [
+        "REQ-1: qa/observations/run.yaml is not used: stale: REQ-1's criteria at 1a2b3c4 differ from the current ones"
+    ]
+
+
+def test_a_failure_outside_the_due_criteria_fails_the_record_but_not_the_release(root: Path) -> None:
+    observation(root, "ios", "ios", {1: "passed", 2: "passed", 3: "failed"})
+    ios = by_platform(observe(root)[0])["ios"]
+    assert ios["state"] == "failed" and ios["x-release-scope"] == "passed"
+    assert manual_qa.findings(ios) == ["release 1.4 scope passed on ios, but the record is not verified"]
+
+
+def test_a_platform_that_is_not_text_is_reported_rather_than_crashing(root: Path) -> None:
+    doc = observation(root, "ios", "ios", {1: "passed", 2: "passed"})
+    (root / "qa" / "observations" / "ios.yaml").write_text(yaml.safe_dump({**doc, "platform": ["ios"]}))
+    state, notes = observe(root)
+    assert len(notes) == 1 and "ios.yaml is not used: not a valid observation: /platform" in notes[0]
+    assert all(a["state"] == "not_checked" and a["x-unused"] for a in by_platform(state).values())
