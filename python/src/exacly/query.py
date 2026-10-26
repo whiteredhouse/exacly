@@ -518,7 +518,7 @@ def assess(model: Model, rid: str, target: Target) -> Doc:
             reason = "binding no longer matches the configured source"
         if (
             reason is None
-            and a["state"] == positive[a["dimension"]]
+            and (a["state"] == positive[a["dimension"]] or bool(a["evidence"]))
             and not supported(a, kinds[a["dimension"]], model.report.date)
         ):
             reason = "no applicable, unexpired supporting evidence"

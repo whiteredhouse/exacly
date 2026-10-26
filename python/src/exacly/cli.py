@@ -26,7 +26,7 @@ from typing import Any
 
 import yaml
 
-from exacly import manual_qa, mcp, query, views
+from exacly import manual_qa, mcp, policy, query, views
 from exacly.applicability import Target
 from exacly.core import binding_words, bindings, identity, is_state, validate_documents
 from exacly.refresh import RefreshError, Run, read_junit, refresh, unattributed
@@ -557,6 +557,10 @@ def exacly_main(argv: list[str] | None = None) -> int:
     assess.add_argument("record")
     assess.add_argument("--target", required=True, type=Path, help="target YAML/JSON outside the model folder")
     assess.add_argument("--date", type=dt.date.fromisoformat, default=dt.date.today())
+    gate = commands.add_parser("gate", parents=[common], help="evaluate read-only readiness prerequisites")
+    gate.add_argument("--policy", required=True, type=Path, help="policy YAML/JSON outside the model folder")
+    gate.add_argument("--target", required=True, type=Path, help="explicit implementation target YAML/JSON")
+    gate.add_argument("--date", type=dt.date.fromisoformat, default=dt.date.today())
     show = commands.add_parser("show", parents=[common], help="one record: relationships, state and findings")
     show.add_argument("record")
     trace = commands.add_parser("trace", parents=[common], help="why a record exists, and how it is realized")
@@ -573,6 +577,16 @@ def exacly_main(argv: list[str] | None = None) -> int:
     view.add_argument("--base", metavar="REV", help="plan: the Git revision the change is against (default: main)")
     view.add_argument("--out", type=Path, metavar="DIR", help="site: the folder to write (default: reports/site)")
     args = parser.parse_args(argv)
+    if args.command == "gate":
+        try:
+            target = Target(read(args.target))
+            model = query.load(load(args.model or [DEFAULT_MODEL]), args.date)
+            answer = policy.evaluate(model, read(args.policy), target)
+        except (query.QueryError, ValueError) as error:
+            print(f"exacly gate: {error}", file=sys.stderr)
+            return 2
+        print(json.dumps(answer, indent=2, default=str) if args.json else policy.as_text(answer))
+        return 0 if answer["result"] == "satisfied" else 1
     if args.command == "assess":
         try:
             target = Target(read(args.target))
