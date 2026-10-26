@@ -18,9 +18,10 @@ from __future__ import annotations
 import copy
 import datetime as dt
 import fnmatch
+import functools
 import uuid
 import xml.etree.ElementTree as ET
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -186,10 +187,20 @@ def with_source(assessment: Doc) -> Doc:
     return {**assessment, "source": LEGACY_SOURCES[assessment["dimension"]]}
 
 
-def answers(assessment: Doc, binding: dict[str, str], single: bool) -> bool:
+def answers(assessment: Doc, binding: Doc, single: bool) -> bool:
     """Whether a tests assessment is this binding's result: it names the binding, or it names none and the binding is
     the record's only one or has no identifying fields."""
     return assessment["binding"] == binding if "binding" in assessment else single or not binding
+
+
+def observed_again(sources: set[str], seen: list[Doc], current: list[Doc], single: bool, assessment: Doc) -> bool:
+    """Whether a run that observed `sources` and the tests bindings `seen` replaces an earlier assessment: one of
+    those sources, a tests result of a binding it observed, or one of a tests binding no longer in the config."""
+    if assessment.get("source") in sources:
+        return True
+    return assessment.get("source") == "tests" and (
+        any(answers(assessment, b, single) for b in seen) or not any(answers(assessment, b, single) for b in current)
+    )
 
 
 def unattributed(state: Doc) -> list[str]:
@@ -202,18 +213,24 @@ def unattributed(state: Doc) -> list[str]:
     ]
 
 
-def refresh(
-    documents: Mapping[str, Any],
-    results: Mapping[str, str],
-    run: Run,
-    previous: Doc | None = None,
-    distribution: bool = False,
-    root: Path = Path(),
-) -> Doc:
-    """The state document for `run.context`, observed from config `documents` and test `results`.
+@dataclass
+class Carried:
+    """What a state write starts from: the config, and the earlier state's observations that stay."""
 
-    `previous` is the context's earlier state, whose lineage is kept and whose serial is increased.
-    """
+    namespace: str
+    version: str
+    records: dict[str, Doc]
+    relationships: list[Doc]
+    observed: Doc
+    kept_relationships: list[Doc]
+    kept_pending: list[Doc]
+    lineage: str
+    serial: int
+
+
+def carry(documents: Mapping[str, Any], context: str, previous: Doc | None) -> Carried:
+    """The config from `documents`, and from `previous`, the context's earlier state, its lineage and next serial
+    and the observations whose record or relationship is still in the config."""
     configs = [d for d in documents.values() if isinstance(d, dict) and not is_state(d)]
     models = [d["model"] for d in configs if "model" in d]
     if len(models) != 1:
@@ -233,10 +250,10 @@ def refresh(
     ]
 
     if previous is not None:
-        if previous.get("namespace") != namespace or previous.get("context") != run.context:
+        if previous.get("namespace") != namespace or previous.get("context") != context:
             raise RefreshError(
                 f"earlier state is for {previous.get('namespace')} in {previous.get('context')}, "
-                f"not {namespace} in {run.context}"
+                f"not {namespace} in {context}"
             )
         lineage, serial = previous["lineage"], previous["serial"] + 1
     else:
@@ -258,7 +275,54 @@ def refresh(
         if (rel["id"] in ids if "id" in rel else (local(rel["source"]), rel["type"], local(rel["target"])) in keys)
     ]
     kept_pending = [work for work in earlier.get("pending", []) if local(work["record"]) in records]
+    return Carried(
+        namespace, version, records, relationships, observed, kept_relationships, kept_pending, lineage, serial
+    )
 
+
+def replace(carried: Carried, rid: str, fresh: list[Doc], replaced: Callable[[Doc], bool]) -> None:
+    """Put a record's fresh assessments in place of the earlier ones `replaced` selects; the others stay."""
+    if rid not in carried.observed and not fresh:
+        return
+    entry = carried.observed.setdefault(rid, {})
+    entry["assessments"] = [*(a for a in entry.get("assessments", []) if not replaced(a)), *fresh]
+    if not entry["assessments"] and not entry.get("evidence"):
+        del carried.observed[rid]
+
+
+def assemble(carried: Carried, context: str, revision: str, written_at: str) -> Doc:
+    """The state document for `context` observed at the config `revision`."""
+    state: Doc = {
+        "exacly": carried.version,
+        "namespace": carried.namespace,
+        "context": context,
+        "config_revision": revision,
+        "serial": carried.serial,
+        "lineage": carried.lineage,
+        "written_at": written_at,
+        "records": dict(sorted(carried.observed.items())),
+    }
+    if carried.kept_relationships:
+        state["relationships"] = copy.deepcopy(carried.kept_relationships)
+    if carried.kept_pending:
+        state["pending"] = copy.deepcopy(carried.kept_pending)
+    return state
+
+
+def refresh(
+    documents: Mapping[str, Any],
+    results: Mapping[str, str],
+    run: Run,
+    previous: Doc | None = None,
+    distribution: bool = False,
+    root: Path = Path(),
+) -> Doc:
+    """The state document for `run.context`, observed from config `documents` and test `results`.
+
+    `previous` is the context's earlier state, whose lineage is kept and whose serial is increased.
+    """
+    carried = carry(documents, run.context, previous)
+    records, relationships = carried.records, carried.relationships
     for rid, record in records.items():
         tests = bindings(record, "tests")
         single = len(tests) == 1
@@ -274,39 +338,9 @@ def refresh(
             released = delivery(rid, records, relationships, run, root)
             if released:
                 fresh.append(released)
-        if rid not in observed and not fresh:
-            continue
+
         # Replace only the results this run observed: of each tests binding it observed, and of the other sources it
         # observed. Other assessments, such as another observer's or another job's, and evidence stay; a tests
         # result of a binding that has left the config goes.
-        entry = observed.setdefault(rid, {})
-        entry["assessments"] = [
-            *(
-                a
-                for a in entry.get("assessments", [])
-                if a.get("source") not in sources
-                and not (
-                    a.get("source") == "tests"
-                    and (any(answers(a, b, single) for b in seen) or not any(answers(a, b, single) for b in current))
-                )
-            ),
-            *fresh,
-        ]
-        if not entry["assessments"] and not entry.get("evidence"):
-            del observed[rid]
-
-    state: Doc = {
-        "exacly": version,
-        "namespace": namespace,
-        "context": run.context,
-        "config_revision": run.revision,
-        "serial": serial,
-        "lineage": lineage,
-        "written_at": timestamp(run),
-        "records": dict(sorted(observed.items())),
-    }
-    if kept_relationships:
-        state["relationships"] = copy.deepcopy(kept_relationships)
-    if kept_pending:
-        state["pending"] = copy.deepcopy(kept_pending)
-    return state
+        replace(carried, rid, fresh, functools.partial(observed_again, sources, seen, current, single))
+    return assemble(carried, run.context, run.revision, timestamp(run))

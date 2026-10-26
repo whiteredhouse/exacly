@@ -72,16 +72,44 @@ records:
         cases:
           - "python/tests/test_refresh.py::*"
 
+  - id: REQ-015
+    type: Requirement
+    name: Write state from manual observations
+    description: Verification by people who run the product comes from the observations they commit, through the manual-qa extension.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-26"
+    statement: >-
+      For each record with a manual-qa:observations binding, write one
+      verification assessment per platform from the observations that match
+      the target manifest's release and builds, replacing only that source's
+      assessments.
+    acceptance_criteria:
+      - An observation counts only for the target's release and exact builds; one that leaves out a target build is reported and not used.
+      - The latest result of each criterion on each platform wins, so a later run that leaves a failed criterion out keeps the failure; two results for one criterion at one time are an error.
+      - A platform passes only when every criterion passed; when every criterion due in the release passed and others are open, it is inconclusive and names them.
+      - A platform with no usable observation is not checked, naming the release and builds.
+      - An observation whose criteria were numbered at a revision where they differ, whose retained output is missing or doesn't match its digest, or whose failure has no reason is reported and not used.
+      - A tests refresh keeps the manual assessments, and a manual observation keeps the tests assessments.
+      - When the model declares the extension, its bindings are checked against the extension's schema.
+    verification_method: Manual-qa tests in CI.
+    observe:
+      tests:
+        workflow: .github/workflows/spec.yml
+        cases:
+          - "python/tests/test_manual_qa.py::*"
+
   - id: APP-002
     type: Application
     name: Refresh
-    description: The exacly refresh command.
+    description: The exacly refresh and exacly observe commands.
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
     last_reviewed_at: "2026-10-24"
     responsibility: Observe the sources a model's bindings name and write state.
-    interfaces: [exacly refresh command, exacly.refresh Python API]
+    interfaces: [exacly refresh command, exacly observe command, exacly.refresh and exacly.manual_qa Python APIs]
     implementation_ref: { locator: python/src/exacly/refresh.py }
 
   - id: MEAS-001
@@ -105,6 +133,8 @@ relationships:
   - { source: PROC-002, type: uses, target: APP-002 }
   - { source: REQ-010, type: supports, target: PROC-002 }
   - { source: APP-002, type: implements, target: REQ-010 }
+  - { source: REQ-015, type: supports, target: PROC-002 }
+  - { source: APP-002, type: implements, target: REQ-015 }
   - { source: APP-002, type: reads, target: INFO-001 }
   - { source: APP-002, type: writes, target: INFO-002 }
   - { source: APP-002, type: depends_on, target: INF-001, conditions: Only to read the results of a finished run. }

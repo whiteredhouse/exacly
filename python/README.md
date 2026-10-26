@@ -58,6 +58,66 @@ exacly refresh spec/exacly --context main --state spec/exacly/state/main.json --
 - **Earlier state.** An existing state file is read first. Its lineage is kept and its serial increases by one. A write replaces only the assessments of the sources it observed: refreshing tests keeps an earlier release, another observer's assessments such as a manual check, other evidence, and records it did not observe, such as a binding for another workflow. An earlier verification or delivery assessment without a source was written by refresh, so it is read as `tests` or `distribution` and rewritten with it; one of another dimension without a source is kept and named on stderr, since its origin is unknown. Observations and pending work for records or relationships that left the config are dropped. State for another model or context is refused.
 - **GitHub Actions.** There, the revision, workflow, job, run link and source link default to the current run.
 
+### Manual verification
+
+Some requirements are verified by a person running the product, such as a check on a real phone against the deployed backend. The `manual-qa` extension writes those results into state from files people commit, never by hand. Declare it in the model (`extensions: [manual-qa]`) and bind the record to its observations:
+
+```yaml
+observe:
+  manual-qa:observations:
+    path: qa/observations/*.yaml   # relative to the repository root, outside the model folder
+    platforms: [ios, android]      # optional; each must pass for the record to count as verified
+```
+
+A target manifest per context says what is being assessed now. The release process changes it:
+
+```yaml
+# qa/targets/production.yaml
+context: production
+model_revision: 4f1c2e9          # the config revision the due criteria are numbered at
+release: "1.4"
+builds:
+  app: { version: 1.4.0, digest: "sha256:9b2d..." }
+  backend: { revision: b7f3e21 }
+due:                              # criteria in scope for this release, numbered from 1
+  REQ-001: [1, 2]
+```
+
+Each run a tester does is one observation, with its output retained beside it:
+
+```yaml
+# qa/observations/2026-10-25T14-12-ios.yaml
+observed_by: jane-tester
+observed_at: "2026-10-25T14:12:00Z"
+record: REQ-001
+release: "1.4"
+model_revision: 4f1c2e9
+platform: ios
+device: iPhone 15, iOS 26.1       # descriptive only
+builds:
+  app: { version: 1.4.0, digest: "sha256:9b2d..." }
+  backend: { revision: b7f3e21 }
+results:
+  1: { result: passed }
+  2: { result: failed, reason: Uploaded twice after the connection dropped. }
+output:
+  file: qa/observations/2026-10-25T14-12-ios.log
+  digest: "sha256:51ac..."        # sha256 of the file
+  locator: https://chat.example/thread/42   # optional, where it was first shared
+```
+
+```sh
+exacly observe manual-qa spec/exacly --target qa/targets/production.yaml --state spec/exacly/state/production.json
+```
+
+It writes one verification assessment per platform of each binding, with source `manual-qa:observations`, and replaces only that source's assessments, so a tests refresh and a manual observation keep each other's results.
+
+- **What counts.** An observation counts only for the manifest's release and exactly its builds: every build named, each the same. One that leaves out a build, names another platform, has an invalid field such as a failed result without a reason, or whose output is missing or doesn't match its digest, is not used and is named on stderr and in the assessment's `x-unused`. One for another release or other builds is history and is skipped. One read at another `model_revision` counts only when the record's criteria are the same there; otherwise it is stale. A manifest whose due criteria are numbered at a revision where they differ is refused.
+- **Per criterion.** The latest result of each criterion on each platform wins, by `observed_at`, so a later run that leaves a failed criterion out doesn't hide the failure. Two results for one criterion at the same time are an error that names both files.
+- **States.** A platform is failed when any criterion's latest result failed, inconclusive when one was inconclusive, passed when every criterion passed, and not checked when it has no usable observation, naming the release and builds. When every criterion due in the release passed but others are open, it is inconclusive and names them, with `x-release-scope: passed`, so the release can ship while the record is not yet verified.
+- **Details.** Each assessment carries `x-platform`, `x-release`, `x-builds`, `x-criteria` (each criterion's latest result) and, when the release has due criteria, `x-release-scope`. Its evidence is each observation's retained output with its digest. `exacly gaps` lists what the extension finds in them under "From extension observers": a release whose scope passed while the record is not verified, and observations that were not used.
+- **Bindings.** When the model declares the extension, the validator checks each `manual-qa:observations` binding (`11.extension-binding`): `path`, and optionally `platforms`, nothing else.
+
 ## Questions
 
 `exacly` answers questions about a model from its config and state, as text for people or JSON (`--json`) for agents and other tools. It reads `spec/exacly` unless `-m PATH` names other documents or folders.
@@ -106,6 +166,7 @@ This repository's [`.mcp.json`](../.mcp.json) does the same with `uv run`. The [
    - Unresolved references in relationships, exceptions and assessments (`11.unresolved`). A reference to another model is `namespace:ID`; a reference to this model may be qualified with its own namespace.
    - Relationship endpoints section 6 does not allow, and `contains` or `supersedes` between different types (`11.endpoint`). From 0.2, `stores` runs from Infrastructure to Information.
    - Duplicate edges (`11.duplicate-edge`).
+   - A declared extension's bindings that break its schema (`11.extension-binding`), such as a `manual-qa:observations` binding with a field it doesn't define.
    - Two bindings of one source on a record that can't be told apart (`11.duplicate-binding`): tests bindings by their `workflow` and `job`, other bindings by their whole content.
    - Containment or replacement cycles (`11.cycle`).
 3. **State (0.2).** Each state document is read against the config.

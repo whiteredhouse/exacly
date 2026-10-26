@@ -18,6 +18,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from exacly import manual_qa
 from exacly.core import BINDING_IDENTITY, PARTS, Edge, Graph, Report, bindings, identity, is_state, validate_documents
 from exacly.refresh import LEGACY_SOURCES
 
@@ -48,6 +49,8 @@ PRECEDENCE = {
 }
 # The result of a source bound to a record that has none yet in a context where the dimension was assessed. Delivery
 # has no state for not yet known, so a bound source with no delivery result leaves delivery as observed.
+# Each extension source's evaluator: what it finds in one of its assessments, such as a release whose scope passed.
+EVALUATORS = {manual_qa.SOURCE: manual_qa.findings}
 UNOBSERVED = {"verification": "not_checked", "operation": "unknown", "outcome_evaluation": "not_evaluated"}
 
 
@@ -336,12 +339,22 @@ def gaps(model: Model) -> Doc:
     pending = [
         {"context": context, **work} for context, state in model.states.items() for work in state.get("pending", [])
     ]
+    # What an extension's evaluator finds in its own assessments, which core coverage can't read.
+    observers = [
+        {"record": rid, "context": context, "source": a["source"], "message": message}
+        for rid in sorted(model.records)
+        for context, assessments in sorted(model.assessments(rid).items())
+        for a in assessments
+        if a.get("source") in EVALUATORS
+        for message in EVALUATORS[a["source"]](a)
+    ]
     return {
         "result": model.report.result,
         "errors": [finding(f) for f in model.report.errors],
         "warnings": [finding(f) for f in model.report.warnings],
         "waived": [finding(f) for f in model.report.waived],
         "coverage": coverage,
+        "observers": observers,
         "pending": pending,
         "contexts": {
             c: {"config_revision": s["config_revision"], "serial": s["serial"]} for c, s in model.states.items()
