@@ -152,4 +152,4 @@ Each part of Exacly has its own version, tagged as `<part>-vX.Y.Z`, as release-p
 | 0.1.0 (`exacly-validate`) | 0.1, 0.2 |
 | 0.2.0 | 0.1, 0.2 |
 | 0.2.1, the first on [PyPI](https://pypi.org/project/exacly/) | 0.1, 0.2 |
-| 0.3.0: assessment sources, combined results, lists of bindings | 0.1, 0.2 |
+| 0.3.0: assessment sources, combined results, lists of bindings, the manual-qa extension | 0.1, 0.2 |
