@@ -5,7 +5,9 @@ The `exacly` command and Python package work with an Exacly model, either a 0.1 
 - [`exacly validate`](#validate) checks the model and prints the section 11 validation report.
 - [`exacly refresh`](#refresh) writes state from what the model's bindings observe.
 - [`exacly show`, `trace`, `impact` and `gaps`](#questions) answer questions about the model, and [`exacly view`](#views) renders them for people.
-- [`exacly mcp`](#mcp-server) answers the same questions for coding agents.
+- [`exacly assess`](#assess-an-implementation-target) projects observations onto an explicit implementation and scope.
+- [`exacly gate`](#evaluate-readiness-policy) evaluates a named readiness policy against that target, separately from conformance.
+- [`exacly mcp`](#mcp-server) answers show, trace, impact and gaps questions for coding agents.
 
 ```sh
 uv tool install exacly    # or: pipx install exacly, pip install exacly
@@ -247,3 +249,31 @@ New refresh observations carry their own `subject` with model and implementation
 The report includes applicable assessments, exclusions with reasons, and missing bound sources. Expired or unsupported positive evidence does not count. Delivery with no applicable result is displayed as `not_observed`, a derived label rather than a stored delivery state. All required bindings must have applicable results; source-level tests do not establish direct artifact testing or deployed-system verification. The command is read-only and returns 0 when it answers the question, including when verification is not established; invalid input returns 2. `--date` sets the as-of date for expiry, defaulting to today.
 
 Context summaries used by `show`, `trace`, `gaps` and generated views also guard against combining refresh tests from different revisions. Use `assess` for implementation-specific conclusions; context summaries are not release gates. Original observations stay available when they are excluded from a selected target.
+
+## Evaluate readiness policy
+
+`exacly gate` evaluates declared prerequisites against an explicit target using the same applicability rules as `assess`. It does not deploy anything or modify config, state, policy, or targets. Keep policies outside model folders:
+
+```yaml
+# policies/main-readiness.yaml
+name: main-readiness
+version: '1'
+requirements:
+  - record: REQ-001
+    dimensions: [verification, delivery]
+```
+
+```sh
+exacly gate -m spec/exacly --policy policies/main-readiness.yaml --target targets/main.yaml
+exacly gate -m spec/exacly --policy policies/main-readiness.yaml --target targets/main.yaml --date 2026-10-26 --json
+```
+
+Each check names a Requirement and requires `verification` (passed) or `delivery` (released), or both. Checks can be repeated for different records, but overlapping checks—including qualified references to the same record—and repeated dimensions are rejected. Name, version and requirements are mandatory; empty policies and unknown fields are rejected. Increment the policy version when its prerequisites change.
+
+- **`satisfied`:** all requested checks have applicable support and every required binding has a result.
+- **`not_satisfied`:** an applicable check failed, or delivery is explicitly withdrawn, planned, or in progress. A negative result dominates unknown prerequisites.
+- **`unknown`:** a result is absent, not checked, inconclusive, expired, unsupported, or has mismatched/ambiguous identity or scope. A nonconforming model also prevents a readiness conclusion and includes its validation findings.
+
+Exit status is 0 only for `satisfied`; 1 for `not_satisfied` or `unknown`; 2 for invalid policy, target, or unreadable/schema-invalid input. Unknown readiness can therefore block CI without pretending a test failed. Expired negative evidence is retained historically but cannot establish a current failure. A recorded negative assessment without evidence can still express a failure by its required reason, as allowed by the specification.
+
+Reports identify policy name/version, selected target, as-of date, individual checks, evidence, excluded assessments, and missing bindings. Delivery environment defaults to target context when omitted; verification without environment establishes only the selected source-level result. An environment-specific gate requires environment-specific verification evidence. A source check plus publication gate does not establish production behavior. The command evaluates only the explicit policy; it is not a general proof of release safety, artifact provenance, or complete acceptance-criteria coverage.
