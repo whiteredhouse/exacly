@@ -33,7 +33,7 @@ RUN = Run(
 CI = {"workflow": ".github/workflows/ci.yml", "job": "check"}
 
 
-def requirement(rid: str, tests: dict[str, Any] | None = None) -> dict[str, Any]:
+def requirement(rid: str, tests: dict[str, Any] | list[dict[str, Any]] | None = None) -> dict[str, Any]:
     record: dict[str, Any] = {
         "id": rid,
         "type": "Requirement",
@@ -223,11 +223,19 @@ def test_a_record_without_a_binding_gets_no_verification() -> None:
 
 
 def test_a_binding_for_another_workflow_is_not_observed_and_keeps_its_earlier_entry() -> None:
-    docs = {"config": config(requirement("REQ-1", {**CI, "workflow": ".github/workflows/nightly.yml"}))}
-    earlier = refresh({"config": config(requirement("REQ-1", CI))}, RESULTS, RUN)
-    later = refresh(docs, RESULTS, Run(**{**RUN.__dict__, "revision": "1c2d3e4"}), previous=earlier)
+    docs = {"config": config(requirement("REQ-1", CI))}
+    earlier = refresh(docs, RESULTS, RUN)
+    nightly = Run(**{**RUN.__dict__, "revision": "1c2d3e4", "workflow": ".github/workflows/nightly.yml"})
+    later = refresh(docs, RESULTS, nightly, previous=earlier)
     assert later["records"] == earlier["records"]
     assert assessment(later, "REQ-1")["context"] == "0b6ad3b"
+
+
+def test_a_binding_moved_to_another_workflow_drops_the_earlier_result() -> None:
+    earlier = refresh({"config": config(requirement("REQ-1", CI))}, RESULTS, RUN)
+    docs = {"config": config(requirement("REQ-1", {**CI, "workflow": ".github/workflows/nightly.yml"}))}
+    later = refresh(docs, RESULTS, Run(**{**RUN.__dict__, "revision": "1c2d3e4"}), previous=earlier)
+    assert later["records"] == {}
 
 
 def test_each_write_increases_the_serial_and_keeps_the_lineage() -> None:
@@ -458,3 +466,67 @@ def test_an_assessment_of_another_dimension_without_a_source_is_kept_and_reporte
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             assert refresh_main([*args, "--revision", "0b6ad3b", "--job-status", "success"]) == 0
     assert "name no source" in err.getvalue() and "REQ-1 operation" in err.getvalue()
+
+
+UNIT = {"workflow": CI["workflow"], "job": "unit", "cases": ["tests/cases.yaml::7.1*"]}
+E2E = {"workflow": CI["workflow"], "job": "e2e", "cases": ["e2e::*"]}
+UNIT_RUN = Run(**{**RUN.__dict__, "job": "unit"})
+E2E_RUN = Run(**{**RUN.__dict__, "job": "e2e", "url": "https://ci.example/runs/3"})
+
+
+def two_jobs() -> dict[str, Any]:
+    return {"config": config(requirement("REQ-1", [UNIT, E2E]))}
+
+
+def combined(docs: dict[str, Any], state: dict[str, Any]) -> tuple[dict[str, Any], query.Model]:
+    model = query.load({**docs, "state": state}, WHEN.date(), RUN.revision)
+    return model.status("REQ-1"), model
+
+
+def test_one_jobs_run_leaves_the_other_binding_not_checked() -> None:
+    docs = two_jobs()
+    state = valid_state(refresh(docs, RESULTS, UNIT_RUN))
+    assert [a["binding"]["job"] for a in state["records"]["REQ-1"]["assessments"]] == ["unit"]
+    status, model = combined(docs, state)
+    assert status == {"main": {"verification": "not_checked"}}
+    missing = query.show(model, "REQ-1")["state"]["main"]["missing"]
+    assert missing == [
+        {"dimension": "verification", "source": "tests", "binding": {"workflow": CI["workflow"], "job": "e2e"}}
+    ]
+
+
+def test_each_jobs_run_keeps_the_others_result() -> None:
+    docs = two_jobs()
+    unit = refresh(docs, RESULTS, UNIT_RUN)
+    both = valid_state(refresh(docs, {"e2e::login": "passed"}, E2E_RUN, previous=unit))
+    status, model = combined(docs, both)
+    assert status == {"main": {"verification": "passed"}}
+    assert query.gaps(model)["coverage"]["unverified"] == []
+    shown = query.show(model, "REQ-1")["state"]["main"]["assessments"]
+    assert [(a["binding"]["job"], a["state"]) for a in shown] == [("unit", "passed"), ("e2e", "passed")]
+
+    failing = valid_state(refresh(docs, {**RESULTS, "tests/cases.yaml::7.1: a gap": "failed"}, UNIT_RUN, both))
+    assert combined(docs, failing)[0] == {"main": {"verification": "failed"}}
+    kept = [a for a in failing["records"]["REQ-1"]["assessments"] if a["binding"]["job"] == "e2e"]
+    assert kept == [a for a in both["records"]["REQ-1"]["assessments"] if a["binding"]["job"] == "e2e"]
+
+
+def test_a_run_that_names_no_workflow_or_job_observes_bindings_that_name_them() -> None:
+    docs = {"config": config(requirement("REQ-1", {**CI, "cases": ["tests/cases.yaml::7.*"]}))}
+    for missing in ("workflow", "job"):
+        assert assessment(refresh(docs, RESULTS, Run(**{**RUN.__dict__, missing: None})), "REQ-1")["state"] == "passed"
+
+
+def test_a_run_of_another_job_leaves_the_assessments_as_they_were() -> None:
+    docs = two_jobs()
+    earlier = refresh(docs, RESULTS, UNIT_RUN)
+    other = Run(**{**RUN.__dict__, "job": "docs"})
+    assert refresh(docs, {}, other, previous=earlier)["records"] == earlier["records"]
+
+
+def test_the_result_of_a_binding_that_left_the_config_goes() -> None:
+    docs = two_jobs()
+    both = refresh(docs, {"e2e::login": "passed"}, E2E_RUN, previous=refresh(docs, RESULTS, UNIT_RUN))
+    unit_only = {"config": config(requirement("REQ-1", [UNIT]))}
+    later = valid_state(refresh(unit_only, {}, Run(**{**RUN.__dict__, "job": "docs"}), both))
+    assert [a["binding"]["job"] for a in later["records"]["REQ-1"]["assessments"]] == ["unit"]

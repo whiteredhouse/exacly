@@ -46,6 +46,8 @@ SAME_TYPE = {"contains", "supersedes"}
 PARTS = ("records", "relationships", "exceptions")  # The parts of config that several documents may share.
 DELIVERY_EVIDENCE = {"implementation", "deployment"}
 VERIFICATION_EVIDENCE = {"test", "decision"}
+# The binding fields that tell a record's bindings of one source apart, where the source's observer defines them.
+BINDING_IDENTITY = {"tests": ("workflow", "job")}
 
 Doc = dict[str, Any]
 
@@ -442,6 +444,41 @@ def traceability_gap(
     return None
 
 
+def bindings(record: Doc, source: str) -> list[Doc]:
+    """A record's bindings for one source: a binding, or a list of them (section 5)."""
+    found = record.get("observe", {}).get(source)
+    return [] if not found else found if isinstance(found, list) else [found]
+
+
+def identity(source: str, binding: Doc) -> Doc:
+    """What identifies a binding among its record's bindings of the same source: the fields its observer defines, such
+    as a tests binding's workflow and job, or its whole content for a source whose observer defines none,
+    such as runtime, measurement or an extension source (section 5)."""
+    if source not in BINDING_IDENTITY:
+        return dict(binding)
+    return {key: str(binding[key]) for key in BINDING_IDENTITY[source] if binding.get(key)}
+
+
+def binding_words(binding: Doc) -> str:
+    """A binding's identifying values as words, such as ".github/workflows/ci.yml test"."""
+    return " ".join(
+        value if isinstance(value, str) else ", ".join(map(str, value)) if isinstance(value, list) else str(value)
+        for value in binding.values()
+    )
+
+
+def check_bindings(g: Graph, report: Report) -> None:
+    """Section 5: a record's bindings of one source must be told apart, by their identifying fields where the
+    source defines them, otherwise by their whole content."""
+    for rid, r in g.records.items():
+        for source in r.get("observe", {}):
+            keys = [identity(source, b) for b in bindings(r, source)]
+            repeated = [key for i, key in enumerate(keys) if key in keys[:i]]
+            for key in repeated:
+                named = ", ".join(f"{k} {v}" for k, v in key.items()) or "no identifying fields"
+                report.add(ERROR, "11.duplicate-binding", rid, f"two {source} bindings with the same {named}")
+
+
 def check_storage(g: Graph, report: Report) -> None:
     """Rule 7.9: active Information SHOULD have exactly one system of record, so a gap is a warning."""
     for rid in g.of_type("Information"):
@@ -699,6 +736,7 @@ def validate_documents(documents: Mapping[str, Any], date: dt.date, revision: st
     assessments = check_states(g, states, revision, report)
     check_traceability(g, assessments, report)
     check_storage(g, report)
+    check_bindings(g, report)
     check_hygiene(g, merged, report)
     apply_exceptions(g, merged, report)
     for f in report.findings:

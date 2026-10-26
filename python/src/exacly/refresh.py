@@ -25,13 +25,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from exacly.core import is_state, version_of
+from exacly.core import bindings, identity, is_state, version_of
 
 Doc = dict[str, Any]
 CASE_PROPERTY = "exacly-case"
 MAX_NAMED_FAILURES = 5
-# The fields that tell a record's tests bindings apart, recorded on each assessment.
-BINDING_IDENTITY = ("workflow", "job")
 # The source an assessment written before sources were recorded came from: this observer wrote only these.
 LEGACY_SOURCES = {"verification": "tests", "delivery": "distribution"}
 
@@ -104,9 +102,8 @@ def verification(binding: Doc, results: Mapping[str, str], run: Run) -> Doc:
     }
     assessment: Doc = {"dimension": "verification", "state": None, "context": run.revision, "at": timestamp(run)}
     assessment["source"] = "tests"
-    identity = {key: str(binding[key]) for key in BINDING_IDENTITY if binding.get(key)}
-    if identity:
-        assessment["binding"] = identity
+    if identity("tests", binding):
+        assessment["binding"] = identity("tests", binding)
     patterns = binding.get("cases")
     job = f"job {binding['job']}" if binding.get("job") else "job"
     if not patterns:
@@ -189,6 +186,12 @@ def with_source(assessment: Doc) -> Doc:
     return {**assessment, "source": LEGACY_SOURCES[assessment["dimension"]]}
 
 
+def answers(assessment: Doc, binding: dict[str, str], single: bool) -> bool:
+    """Whether a tests assessment is this binding's result: it names the binding, or it names none and the binding is
+    the record's only one or has no identifying fields."""
+    return assessment["binding"] == binding if "binding" in assessment else single or not binding
+
+
 def unattributed(state: Doc) -> list[str]:
     """The assessments in a state that name no source, as `<record> <dimension>`: their origin is unknown."""
     return [
@@ -257,23 +260,36 @@ def refresh(
     kept_pending = [work for work in earlier.get("pending", []) if local(work["record"]) in records]
 
     for rid, record in records.items():
-        binding = record.get("observe", {}).get("tests")
-        fresh, sources = [], set()
-        if binding and observes(binding, run):
-            fresh.append(verification(binding, results, run))
-            sources.add("tests")
+        tests = bindings(record, "tests")
+        single = len(tests) == 1
+        current = [identity("tests", b) for b in tests]
+        fresh, sources, seen = [], set(), []
+        for binding in tests:
+            if observes(binding, run):
+                fresh.append(verification(binding, results, run))
+                seen.append(identity("tests", binding))
         if distribution and record["type"] == "Requirement":
             # Delivery is observed either way: without a present implementer, an earlier release no longer holds.
             sources.add("distribution")
             released = delivery(rid, records, relationships, run, root)
             if released:
                 fresh.append(released)
-        if not sources or (rid not in observed and not fresh):
+        if rid not in observed and not fresh:
             continue
-        # Replace only the sources this run observed; other assessments, such as another observer's, and evidence stay.
+        # Replace only the results this run observed: of each tests binding it observed, and of the other sources it
+        # observed. Other assessments, such as another observer's or another job's, and evidence stay; a tests
+        # result of a binding that has left the config goes.
         entry = observed.setdefault(rid, {})
         entry["assessments"] = [
-            *(a for a in entry.get("assessments", []) if a.get("source") not in sources),
+            *(
+                a
+                for a in entry.get("assessments", [])
+                if a.get("source") not in sources
+                and not (
+                    a.get("source") == "tests"
+                    and (any(answers(a, b, single) for b in seen) or not any(answers(a, b, single) for b in current))
+                )
+            ),
             *fresh,
         ]
         if not entry["assessments"] and not entry.get("evidence"):

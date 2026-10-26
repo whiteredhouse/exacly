@@ -26,7 +26,7 @@ from typing import Any
 import yaml
 
 from exacly import mcp, query, views
-from exacly.core import is_state, validate_documents
+from exacly.core import binding_words, bindings, identity, is_state, validate_documents
 from exacly.refresh import RefreshError, Run, read_junit, refresh, unattributed
 
 SUFFIXES = {".yaml", ".yml", ".json"}
@@ -264,7 +264,7 @@ def source_words(assessment: dict[str, Any]) -> str:
     """The source and binding that gave an assessment, such as " from tests (.github/workflows/ci.yml test)"."""
     if "source" not in assessment:
         return ""
-    binding = " ".join(assessment.get("binding", {}).values())
+    binding = binding_words(assessment.get("binding", {}))
     return f" from {assessment['source']}" + (f" ({binding})" if binding else "")
 
 
@@ -326,7 +326,7 @@ def show_text(answer: dict[str, Any]) -> str:
                 f"    {a['dimension']} {a['state']}{source_words(a)}{reason}" + (f" - {cited}" if cited else "")
             )
         for m in observed.get("missing", []):
-            lines.append(f"    {m['dimension']} has no result from {m['source']}, which is bound to it")
+            lines.append(f"    {m['dimension']} has no result{source_words(m)}, which is bound to it")
         if len(observed.get("assessments", [])) > len(observed.get("status", {})) or observed.get("missing"):
             combined = ", ".join(f"{d} {s}" for d, s in sorted(observed["status"].items()))
             lines.append(f"    combined: {combined}")
@@ -367,13 +367,12 @@ def impact_text(answer: dict[str, Any]) -> str:
     lines += [f"  {label(r)}\n    {views.via(r['path'], ' -> ')}" for r in answer["affected"]] or ["  nothing else"]
     lines += ["", "Outcomes: " + (", ".join(answer["outcomes"]) or "none reached"), "", "Check again"]
     for r in answer["recheck"]:
-        tests = r["observe"].get("tests")
-        how = (
-            f"{tests['workflow']}" + (f" cases {', '.join(tests['cases'])}" if tests.get("cases") else "")
-            if tests
-            else "no tests binding"
+        tests = bindings(r, "tests")
+        how = "; ".join(
+            " ".join(identity("tests", b).values()) + (f" cases {', '.join(b['cases'])}" if b.get("cases") else "")
+            for b in tests
         )
-        lines.append(f"  {r['id']} {r['name']}: {how}")
+        lines.append(f"  {r['id']} {r['name']}: {how or 'no tests binding'}")
     if not answer["recheck"]:
         lines.append("  no Requirement")
     return "\n".join(lines)

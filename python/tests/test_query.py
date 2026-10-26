@@ -497,3 +497,113 @@ class TestCommand:
             assert run(
                 "impact", "--base", "HEAD", "-m", str(model_dir / "billing.yaml"), "-m", str(model_dir / "model.yaml")
             )[1].startswith("~ INF-003 Infrastructure: ")
+
+
+def runtime_results(*bound: dict[str, Any] | None) -> query.Model:
+    """The example with REQ-001 bound to two runtime services, and one healthy production result for each binding
+    given (None for a result that names no binding)."""
+    services = [{"service": "reminders", "environments": ["production"]}, {"service": "mailer"}]
+    docs = documents()
+    evidence = {
+        "locator": "https://status.example",
+        "kind": "runtime_observation",
+        "claim": "Up",
+        "observed_at": "2026-10-24",
+    }
+    docs["state/production.json"]["records"]["REQ-001"]["assessments"] = [
+        {
+            "dimension": "operation",
+            "state": "healthy",
+            "context": "production",
+            "at": "2026-10-24T09:00:00Z",
+            "source": "runtime",
+            **({"binding": binding} if binding else {}),
+            "evidence": [{**evidence, "applies_to": "production"}],
+        }
+        for binding in bound
+    ]
+    for doc in docs.values():
+        for r in doc.get("records", []) if isinstance(doc.get("records"), list) else []:
+            if r["id"] == "REQ-001":
+                r["observe"]["runtime"] = services
+    return query.load(docs)
+
+
+class TestBindingsWithoutIdentifyingFields:
+    def test_a_result_naming_no_binding_answers_neither_of_two(self) -> None:
+        m = runtime_results(None)
+        assert m.status("REQ-001") == {"production": {"operation": "unknown"}}
+        missing = [r for r in m.results("REQ-001")["production"]["operation"] if r.get("missing")]
+        assert [r["binding"]["service"] for r in missing] == ["reminders", "mailer"]
+
+    def test_results_naming_each_binding_by_its_content_answer_them(self) -> None:
+        m = runtime_results({"service": "reminders", "environments": ["production"]}, {"service": "mailer"})
+        assert m.status("REQ-001") == {"production": {"operation": "healthy"}}
+        lines = show_text(query.show(m, "REQ-001")).splitlines()
+        assert any("from runtime (reminders production)" in line for line in lines)
+        views.record_page(m, "REQ-001")
+
+    def test_a_result_for_one_binding_leaves_the_other_missing(self) -> None:
+        m = runtime_results({"service": "mailer"})
+        assert m.status("REQ-001") == {"production": {"operation": "unknown"}}
+        assert query.show(m, "REQ-001")["state"]["production"]["missing"] == [
+            {
+                "dimension": "operation",
+                "source": "runtime",
+                "binding": {"service": "reminders", "environments": ["production"]},
+            }
+        ]
+
+
+def test_a_result_that_names_no_binding_of_several_counts_toward_none() -> None:
+    # Written before the record had two tests bindings, so it can't be told whose it is.
+    legacy = failed("tests")
+    docs = documents()
+    docs["state/production.json"]["records"]["REQ-001"]["assessments"] = [legacy]
+    for doc in docs.values():
+        for r in doc.get("records", []) if isinstance(doc.get("records"), list) else []:
+            if r["id"] == "REQ-001":
+                one = r["observe"]["tests"]
+                r["observe"]["tests"] = [{**one, "job": "unit"}, {**one, "job": "e2e"}]
+    m = query.load(docs)
+    assert m.status("REQ-001") == {"production": {"verification": "not_checked"}}
+    results = m.results("REQ-001")["production"]["verification"]
+    assert [r["binding"]["job"] for r in results] == ["unit", "e2e"] and all(r["missing"] for r in results)
+    shown = query.show(m, "REQ-001")["state"]["production"]
+    assert [a["state"] for a in shown["assessments"]] == ["failed"]
+
+
+def test_a_withdrawal_that_names_no_binding_of_several_deployments_counts_toward_none() -> None:
+    services: list[dict[str, Any]] = [{"service": "reminders", "environments": ["production"]}, {"service": "mailer"}]
+    evidence = {"locator": "deploys/1", "kind": "deployment", "claim": "Deployed", "observed_at": "2026-10-24"}
+
+    def delivery(state: str, binding: dict[str, Any] | None = None) -> dict[str, Any]:
+        return {
+            "dimension": "delivery",
+            "state": state,
+            "context": "production",
+            "at": "2026-10-24T09:00:00Z",
+            "source": "deployments",
+            **({"binding": binding} if binding else {}),
+            **({"reason": "Rolled back before the bindings were split"} if state == "withdrawn" else {}),
+            "evidence": [{**evidence, "applies_to": "production"}],
+        }
+
+    def with_deliveries(*assessments: dict[str, Any]) -> query.Model:
+        docs = documents()
+        docs["state/production.json"]["records"]["REQ-001"]["assessments"] = list(assessments)
+        for doc in docs.values():
+            for r in doc.get("records", []) if isinstance(doc.get("records"), list) else []:
+                if r["id"] == "REQ-001":
+                    r["observe"]["deployments"] = services
+        return query.load(docs)
+
+    legacy = delivery("withdrawn")
+    m = with_deliveries(legacy, *(delivery("released", s) for s in services))
+    assert m.status("REQ-001") == {"production": {"delivery": "released"}}
+    # A binding with no delivery result adds no state, so one release is all there is to combine.
+    m = with_deliveries(legacy, delivery("released", services[1]))
+    assert m.status("REQ-001") == {"production": {"delivery": "released"}}
+    assert "missing" not in query.show(m, "REQ-001")["state"]["production"]
+    query.gaps(m)
+    views.record_page(m, "REQ-001")

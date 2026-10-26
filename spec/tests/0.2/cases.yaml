@@ -75,7 +75,25 @@ suites:
           - { op: replace, path: /records/5/observe/deployments, value: {} }
         valid: false
         errors:
-          - { at: /records/5/observe/deployments, keyword: minProperties }
+          - { at: /records/5/observe/deployments, keyword: anyOf }
+
+      - description: A source may have a list of bindings, such as tests in two jobs
+        patch:
+          - op: replace
+            path: /records/3/observe/tests
+            value:
+              - { workflow: .github/workflows/ci.yml, job: unit, cases: ["tests/reminders/*"] }
+              - { workflow: .github/workflows/ci.yml, job: e2e, cases: ["e2e/reminders/*"] }
+        valid: true
+
+      - description: A list of bindings is not empty, and holds no empty binding
+        patch:
+          - { op: replace, path: /records/3/observe/tests, value: [] }
+          - { op: replace, path: /records/5/observe/deployments, value: [{}] }
+        valid: false
+        errors:
+          - { at: /records/3/observe/tests, keyword: anyOf }
+          - { at: /records/5/observe/deployments, keyword: anyOf }
 
       - description: A record may be observe-only
         patch:
@@ -186,14 +204,19 @@ suites:
         errors:
           - { at: /records/REQ-001/assessments/1/source, keyword: pattern }
 
-      - description: A binding names at least one field, each as text
+      - description: A binding names at least one field
         patch:
           - { op: add, path: /records/REQ-001/assessments/1/binding, value: {} }
-          - { op: add, path: /records/REQ-001/assessments/0/binding, value: { job: 3 } }
         valid: false
         errors:
           - { at: /records/REQ-001/assessments/1/binding, keyword: minProperties }
-          - { at: /records/REQ-001/assessments/0/binding/job, keyword: type }
+
+      - description: A binding may be named by its whole content, such as a runtime binding's environments
+        patch:
+          - op: add
+            path: /records/REQ-001/assessments/0/binding
+            value: { service: reminders, environments: [production] }
+        valid: true
 
       - description: Other fields on an assessment start with x-
         patch:
