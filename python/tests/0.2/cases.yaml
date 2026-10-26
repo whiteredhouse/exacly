@@ -367,15 +367,14 @@ cases:
     result: conforms
     findings: []
 
-  - description: "7.8: claims are read from state; verified needs a supported release"
+  - description: "7.8: supported verification conforms before delivery"
     base: active
     patch:
       - { op: remove, path: /production/records/REQ-001/assessments/0 }
-    result: does not conform
-    findings:
-      - { severity: error, rule: "7.8", record: REQ-001 }
+    result: conforms
+    findings: []
 
-  - description: "7.8: claims in different state documents are combined"
+  - description: "7.8: delivery and verification in different contexts stand independently"
     base: active
     patch:
       - op: add
@@ -406,7 +405,6 @@ cases:
       - { op: add, path: /production/records/REQ-001/assessments/0/evidence/0/expires_at, value: "2026-10-21" }
     result: does not conform
     findings:
-      - { severity: error, rule: "7.8", record: REQ-001 }
       - { severity: error, rule: "7.8", record: REQ-001 }
       - { severity: warning, rule: "11.evidence-expired", record: REQ-001, document: production }
 
@@ -444,8 +442,8 @@ cases:
   - description: An exception in config waives a claim error from state
     base: active
     patch:
-      - { op: remove, path: /production/records/REQ-001/assessments/0 }
-      - { op: add, path: /billing/exceptions, value: [{ rule: "7.8", record: REQ-001, reason: Deployment records are being migrated, owner: billing-team, expires_at: "2027-03-01" }] }
+      - { op: replace, path: /production/records/REQ-001/assessments/1/evidence/0/kind, value: implementation }
+      - { op: add, path: /billing/exceptions, value: [{ rule: "7.8", record: REQ-001, reason: Verification records are being migrated, owner: billing-team, expires_at: "2027-03-01" }] }
     result: conforms with exceptions
     findings: []
     waived:
@@ -466,7 +464,6 @@ cases:
       - { op: replace, path: /production/records/REQ-001/assessments/0/evidence/0/kind, value: test }
     result: does not conform
     findings:
-      - { severity: error, rule: "7.8", record: REQ-001, document: production }
       - { severity: error, rule: "7.8", record: REQ-001, document: production }
 
   - description: Relationship and exception findings name the config document they are in

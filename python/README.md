@@ -33,6 +33,8 @@ The package carries the spec's schemas, so it runs anywhere. In Python, `exacly.
 
 It exits 0 when the model conforms, with or without exceptions, and 1 when it does not.
 
+Verification and delivery are independent: passing bound tests can conform before any release or deployment is observed. A positive claim still needs its own applicable evidence and, for a Requirement, an identified implementer. Missing delivery remains visible in coverage; it does not invalidate the test observation.
+
 Conformance does not establish measurement readiness or observation completeness. An active Outcome linked to a proposed Measure can conform, as can config without state. Validation checks supplied documents; it does not execute observation bindings. [Measurement coverage acceptance criteria](../docs/measurement-coverage-acceptance-criteria.md) describe planned findings beyond these checks.
 
 ## Refresh

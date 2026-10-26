@@ -130,8 +130,8 @@ def test_selected_cases_that_all_pass_verify_the_record() -> None:
     ]
     assert "reason" not in a
     report = validate_documents({**docs, "state": state}, WHEN.date(), RUN.revision).as_dict()
-    # Verified without a release is a 7.8 error: delivery needs its own evidence.
-    assert [(f["rule"], f["record"]) for f in report["errors"]] == [("7.8", "REQ-1")]
+    assert report["errors"] == []
+    assert not any(a["dimension"] == "delivery" for a in state["records"]["REQ-1"]["assessments"])
 
 
 def test_a_failing_case_fails_the_record_and_names_it() -> None:
