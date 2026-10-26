@@ -530,3 +530,23 @@ def test_the_result_of_a_binding_that_left_the_config_goes() -> None:
     unit_only = {"config": config(requirement("REQ-1", [UNIT]))}
     later = valid_state(refresh(unit_only, {}, Run(**{**RUN.__dict__, "job": "docs"}), both))
     assert [a["binding"]["job"] for a in later["records"]["REQ-1"]["assessments"]] == ["unit"]
+
+
+@pytest.mark.parametrize("unsupported", ["implementer", "empty", "kind", "context", "expired"])
+def test_verification_before_delivery_still_needs_implementer_and_evidence(unsupported: str) -> None:
+    docs = {"config": config(requirement("REQ-1", {**CI, "cases": ["tests/cases.yaml::7.*"]}))}
+    state = refresh(docs, RESULTS, RUN)
+    a = assessment(state, "REQ-1")
+    if unsupported == "implementer":
+        docs["config"]["relationships"] = [r for r in docs["config"]["relationships"] if r["type"] != "implements"]
+    elif unsupported == "empty":
+        a["evidence"] = []
+    elif unsupported == "kind":
+        a["evidence"][0]["kind"] = "implementation"
+    elif unsupported == "context":
+        a["evidence"][0]["applies_to"] = "another-revision"
+    else:
+        a["evidence"][0]["expires_at"] = "2026-10-23"
+    report = validate_documents({**docs, "state": state}, WHEN.date()).as_dict()
+    assert report["result"] == "does not conform"
+    assert any(f["rule"] == ("schema" if unsupported == "empty" else "7.8") for f in report["errors"])
