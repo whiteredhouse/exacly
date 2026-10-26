@@ -258,3 +258,12 @@ def test_shared_abbreviation_does_not_hide_conflicting_full_revisions() -> None:
     answer = query.assess(m, "REQ-1", target(revision="abcdef0"))
     assert answer["status"]["verification"] == "not_checked"
     assert any("ambiguous" in e["reason"] for e in answer["excluded"])
+
+
+@pytest.mark.parametrize(("scope", "value"), [("environment", "staging"), ("platform", "ios"), ("release", "1.0")])
+def test_narrow_delivery_scope_requires_matching_selection(scope: str, value: str) -> None:
+    docs = documents()
+    docs["state"]["records"]["REQ-1"]["assessments"][1]["subject"][scope] = value
+    m = query.load(docs, WHEN)
+    assert query.assess(m, "REQ-1", target())["status"]["delivery"] == "not_observed"
+    assert query.assess(m, "REQ-1", target(**{scope: value}))["status"]["delivery"] == "released"

@@ -73,7 +73,12 @@ def subject_of(assessment: Doc) -> Doc:
 def mismatch(assessment: Doc, target: Target) -> str | None:
     """Explain why this observation cannot establish the requested identity/scope, or return None."""
     subject = subject_of(assessment)
-    for key, wanted in target.data.items():
+    selection = dict(target.data)
+    # Delivery is always to a target. Its environment defaults to the selected context; source verification
+    # without an environment remains a source-only claim, not verification of that deployed environment.
+    if assessment["dimension"] == "delivery":
+        selection.setdefault("environment", target.data["context"])
+    for key, wanted in selection.items():
         if key == "context":
             continue
         if key not in subject:
@@ -83,8 +88,7 @@ def mismatch(assessment: Doc, target: Target) -> str | None:
         if not same:
             return f"{key} does not match target"
     # A check limited to one environment/platform/release does not prove the unrestricted claim.
-    if assessment["dimension"] == "verification":
-        for key in ("environment", "platform", "release"):
-            if key in subject and key not in target.data:
-                return f"observation is limited to {key}; select it explicitly"
+    for key in ("environment", "platform", "release"):
+        if key in subject and key not in selection:
+            return f"observation is limited to {key}; select it explicitly"
     return None
