@@ -51,9 +51,11 @@ run = """
 set -e
 revision="$(git rev-parse HEAD)"
 uv run --locked python -c 'import json, sys; print(json.dumps(dict(context="main", model_revision=sys.argv[1], revision=sys.argv[1])))' "$revision" > reports/target.json
+gate_status=0
 uv run --locked exacly gate -m 'spec/exacly/*.yaml' -m reports/state/main.json \
-  --policy ci/verification.yaml --target reports/target.json --json > reports/verification.json
+  --policy ci/verification.yaml --target reports/target.json --json > reports/verification.json || gate_status=$?
 cat reports/verification.json
+exit "$gate_status"
 """
 
 [tasks.check]

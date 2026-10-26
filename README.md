@@ -137,7 +137,7 @@ The repository uses [mise](https://mise.jdx.dev/) for Python, uv and tasks. Run 
 mise run check
 ```
 
-The check also evaluates [`ci/verification.yaml`](ci/verification.yaml) against a target for the checked commit. It requires verification of every active Requirement, independently of delivery. Results and the selected target are written under `reports/`. See [release notes](CHANGELOG.md) for package changes.
+The check also evaluates [`ci/verification.yaml`](ci/verification.yaml) against a target for the checked commit. It requires verification of every active Requirement, independently of delivery. The model binds stable test-case IDs rather than a workflow name, so both the Spec and Release workflows can supply those results. Results and the selected target are written under `reports/`. See [release notes](CHANGELOG.md) for package changes.
 
 ## Status
 
