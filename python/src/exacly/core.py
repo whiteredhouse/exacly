@@ -548,7 +548,12 @@ def check_claims(g: Graph, assessments: list[Doc], report: Report) -> None:
             if not supported(a, VERIFICATION_EVIDENCE, report.date):
                 message = f"claimed verified in {a['context']} without test or decision evidence for it"
                 report.add(ERROR, "7.8", rid, message, a.get("document"))
-        if verified and not any(supported(a, DELIVERY_EVIDENCE, report.date) for a in delivered):
+        # Product maps retain the 0.1 rule; independent dimensions belong to config/state in 0.2.
+        if (
+            minor_version(report.doc.get("exacly")) == "0.1"
+            and verified
+            and not any(supported(a, DELIVERY_EVIDENCE, report.date) for a in delivered)
+        ):
             message = "claimed verified, but no released delivery assessment has implementation or deployment evidence"
             report.add(ERROR, "7.8", rid, message, verified[0].get("document"))
 
