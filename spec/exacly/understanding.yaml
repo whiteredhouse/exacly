@@ -63,7 +63,6 @@ records:
     verification_method: Query tests in CI.
     observe:
       tests:
-        workflow: .github/workflows/spec.yml
         cases:
           - "python/tests/test_query.py::*"
 
@@ -89,7 +88,6 @@ records:
     verification_method: MCP server tests in CI.
     observe:
       tests:
-        workflow: .github/workflows/spec.yml
         cases:
           - "python/tests/test_mcp.py::*"
 
@@ -116,7 +114,6 @@ records:
     verification_method: View tests and workflow tests in CI.
     observe:
       tests:
-        workflow: .github/workflows/spec.yml
         cases:
           - "python/tests/test_views.py::*"
           - "tests/test_ci.py::test_the_plan_is_commented_*"
@@ -139,7 +136,6 @@ records:
     verification_method: Applicability tests and installed-package smoke exercise in CI.
     observe:
       tests:
-        workflow: .github/workflows/spec.yml
         cases: ["python/tests/test_applicability.py::*", "tests/test_release_smoke.py::*"]
 
   - id: REQ-017
@@ -161,7 +157,6 @@ records:
     verification_method: Policy tests, CI policy coverage test and installed-package smoke exercise.
     observe:
       tests:
-        workflow: .github/workflows/spec.yml
         cases: ["python/tests/test_policy.py::*", "tests/test_ci_policy.py::*", "tests/test_release_smoke.py::*"]
 
   - id: APP-003

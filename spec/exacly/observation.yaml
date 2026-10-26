@@ -68,7 +68,6 @@ records:
     verification_method: Refresh tests in CI.
     observe:
       tests:
-        workflow: .github/workflows/spec.yml
         cases:
           - "python/tests/test_refresh.py::*"
 
@@ -96,7 +95,6 @@ records:
     verification_method: Manual-qa tests in CI.
     observe:
       tests:
-        workflow: .github/workflows/spec.yml
         cases:
           - "python/tests/test_manual_qa.py::*"
 

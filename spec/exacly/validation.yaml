@@ -65,7 +65,6 @@ records:
     verification_method: Schema test cases and validator test cases in CI.
     observe:
       tests:
-        workflow: .github/workflows/spec.yml
         cases:
           - "spec/tests/*/cases.yaml::*"
           - "python/tests/*/cases.yaml::*fails*schema*"
@@ -88,7 +87,6 @@ records:
     verification_method: Validator test cases in CI.
     observe:
       tests:
-        workflow: .github/workflows/spec.yml
         cases:
           - "python/tests/*/cases.yaml::Duplicate*"
           - "python/tests/*/cases.yaml::IDs must be unique*"
@@ -117,7 +115,6 @@ records:
     verification_method: Validator test cases in CI.
     observe:
       tests:
-        workflow: .github/workflows/spec.yml
         cases:
           - "python/tests/*/cases.yaml::7.*"
           - "python/tests/*/cases.yaml::The worked example*"
@@ -139,7 +136,6 @@ records:
     verification_method: Validator test cases and command line tests in CI.
     observe:
       tests:
-        workflow: .github/workflows/spec.yml
         cases:
           - "python/tests/*/cases.yaml::*specification version*"
           - "python/tests/*/cases.yaml::*model boundary*"
@@ -161,7 +157,6 @@ records:
     verification_method: Validator test cases in CI.
     observe:
       tests:
-        workflow: .github/workflows/spec.yml
         cases:
           - "python/tests/*/cases.yaml::State *"
           - "python/tests/*/cases.yaml::Pending work*"
@@ -184,7 +179,6 @@ records:
     verification_method: Validator test cases in CI.
     observe:
       tests:
-        workflow: .github/workflows/spec.yml
         cases:
           - "python/tests/*/cases.yaml::*exception*"
 
@@ -204,7 +198,6 @@ records:
     verification_method: Validator test cases and command line tests in CI.
     observe:
       tests:
-        workflow: .github/workflows/spec.yml
         cases:
           - "python/tests/*/cases.yaml::*findings*"
           - "python/tests/*/cases.yaml::Findings*"
@@ -226,7 +219,6 @@ records:
     verification_method: Validator test cases in CI.
     observe:
       tests:
-        workflow: .github/workflows/spec.yml
         cases:
           - "python/tests/*/cases.yaml::*reviewed*"
           - "python/tests/*/cases.yaml::An unknown baseline*"
@@ -239,14 +231,15 @@ records:
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-23"
+    last_reviewed_at: "2026-10-26"
     statement: Run the test cases, lint, type checks, the examples and Exacly's own model on every pull request and push to main that touches them.
     acceptance_criteria:
       - The check job runs `mise run check` on pull requests and pushes to main.
       - The job fails when any test, lint rule, type check or validation fails.
-    verification_method: The checks' result in the workflow run on main.
+    verification_method: The result of the full checks in the Spec or Release workflow.
     observe:
-      tests: { workflow: .github/workflows/spec.yml }
+      # No case filter: take the full check job result in either workflow.
+      tests: { cases: [] }
 
   - id: REQ-011
     type: Requirement
@@ -269,7 +262,6 @@ records:
     verification_method: Tests that read the workflow and the repository's ignore rules, in CI.
     observe:
       tests:
-        workflow: .github/workflows/spec.yml
         cases:
           - "tests/test_ci.py::*"
 
