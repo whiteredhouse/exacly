@@ -2,6 +2,7 @@
 
 exacly validate PATH... [--revision REV] [--date YYYY-MM-DD] [--json]
 exacly refresh PATH... --context CONTEXT --state FILE [--junit FILE...] [--distribution] [run options]
+exacly observe manual-qa PATH... --target FILE --state FILE [--revision REV] [--root DIR]
 exacly show|trace|impact|gaps [-m PATH]... [--json] ...; exacly mcp [-m PATH]...
 exacly view plan [--base REV] | site [--out DIR]
 exacly-validate and exacly-refresh are the first two under their names before 0.2.0, kept for one release
@@ -25,7 +26,7 @@ from typing import Any
 
 import yaml
 
-from exacly import mcp, query, views
+from exacly import manual_qa, mcp, query, views
 from exacly.core import binding_words, bindings, identity, is_state, validate_documents
 from exacly.refresh import RefreshError, Run, read_junit, refresh, unattributed
 
@@ -260,6 +261,76 @@ def refresh_main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def criteria_at(paths: list[Path]) -> Callable[[str], dict[str, list[str]] | None]:
+    """Each record's acceptance criteria in the config at a Git revision, or None when it can't be read there."""
+
+    def at(revision: str) -> dict[str, list[str]] | None:
+        try:
+            documents = load_at(revision, paths)
+        except (subprocess.CalledProcessError, OSError, query.QueryError):
+            return None
+        return {
+            r["id"]: list(r.get("acceptance_criteria", []))
+            for doc in documents.values()
+            if isinstance(doc, dict) and not is_state(doc)
+            for r in doc.get("records", [])
+            if isinstance(r, dict) and "id" in r
+        }
+
+    return at
+
+
+def observe_main(argv: list[str]) -> int:
+    defaults = github_defaults()
+    parser = argparse.ArgumentParser(
+        prog="exacly observe",
+        description="Observe one extension source and write the state document for the context it names, replacing "
+        "only that source's assessments.",
+    )
+    parser.add_argument("source", choices=[manual_qa.EXTENSION], help="manual-qa: observations people commit")
+    parser.add_argument("paths", nargs="+", type=Path, metavar="PATH", help="config documents, or folders holding them")
+    parser.add_argument("--target", required=True, type=Path, help="the target manifest: context, release and builds")
+    parser.add_argument(
+        "--state", required=True, type=Path, help="state document to write; an earlier one is read first"
+    )
+    parser.add_argument(
+        "--revision", default=defaults["revision"], help="config revision observed, such as a Git commit"
+    )
+    parser.add_argument("--root", type=Path, default=Path(), help="repository root that observation paths start at")
+    args = parser.parse_args(argv)
+    if not args.revision:
+        parser.error("--revision is required outside GitHub Actions")
+    try:
+        documents = {name: doc for name, doc in load(args.paths).items() if not is_state(doc)}
+        target = manual_qa.read(args.target)
+    except (query.QueryError, OSError, ValueError, yaml.YAMLError) as error:
+        print(f"exacly observe: {error}", file=sys.stderr)
+        return 1
+    previous = json.loads(args.state.read_text()) if args.state.exists() else None
+    written_at = dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    try:
+        state, notes = manual_qa.observe(
+            documents, target, args.revision, written_at, previous, args.root, criteria_at(args.paths)
+        )
+    except RefreshError as error:
+        print(f"exacly observe: {error}", file=sys.stderr)
+        return 1
+    args.state.parent.mkdir(parents=True, exist_ok=True)
+    args.state.write_text(json.dumps(state, indent=2) + "\n")
+    counts = Counter(
+        a["state"]
+        for r in state["records"].values()
+        for a in r.get("assessments", [])
+        if a.get("source") == manual_qa.SOURCE
+    )
+    summary = ", ".join(f"{n} {k}" for k, n in sorted(counts.items())) or "no assessments"
+    where = f"{state['context']} serial {state['serial']} at {args.revision}"
+    print(f"Wrote {args.state}: {where}: {manual_qa.SOURCE} {summary}")
+    for note in notes:
+        print(f"exacly observe: {note}", file=sys.stderr)
+    return 0
+
+
 def source_words(assessment: dict[str, Any]) -> str:
     """The source and binding that gave an assessment, such as " from tests (.github/workflows/ci.yml test)"."""
     if "source" not in assessment:
@@ -396,6 +467,11 @@ def gaps_text(answer: dict[str, Any]) -> str:
         lines.append(f"{title} ({len(items)})")
         lines += [f"  {label(r)}" for r in items]
         lines.append("")
+    observers = answer.get("observers", [])
+    if observers:
+        lines.append(f"From extension observers ({len(observers)})")
+        lines += [f"  {o['record']} in {o['context']}, {o['source']}: {o['message']}" for o in observers]
+        lines.append("")
     lines.append(f"Pending work ({len(answer['pending'])})")
     lines += [f"  {w['context']}: {w['record']} {w['task']} since {w['opened_at']}" for w in answer["pending"]]
     return "\n".join(lines).rstrip()
@@ -454,6 +530,8 @@ def exacly_main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv and argv[0] in ("validate", "refresh"):
         return main(argv[1:]) if argv[0] == "validate" else refresh_main(argv[1:])
+    if argv and argv[0] == "observe":
+        return observe_main(argv[1:])
     parser = argparse.ArgumentParser(
         prog="exacly",
         description="Validate an Exacly model, write its state, and ask it about its records.",
@@ -471,6 +549,7 @@ def exacly_main(argv: list[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
     commands.add_parser("validate", help="validate the model and print the section 11 report")
     commands.add_parser("refresh", help="write state for one context from what the bindings observe")
+    commands.add_parser("observe", help="write state from an extension source, such as manual-qa observations")
     show = commands.add_parser("show", parents=[common], help="one record: relationships, state and findings")
     show.add_argument("record")
     trace = commands.add_parser("trace", parents=[common], help="why a record exists, and how it is realized")
