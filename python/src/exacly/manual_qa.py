@@ -284,6 +284,13 @@ def assessment(
     by_state = {s: sorted(n for n, (r, _) in results.items() if r["result"] == s) for s in ("passed", "failed")}
     unsure = sorted(n for n, (r, _) in results.items() if r["result"] == "inconclusive")
     a: Doc = {"dimension": "verification", "state": None, "context": target["context"], "at": at, "source": SOURCE}
+    a["subject"] = {
+        "model_revision": target["model_revision"],
+        "builds": target["builds"],
+        "release": target["release"],
+        "environment": target["context"],
+        **({"platform": platform} if platform else {}),
+    }
     details: Doc = {
         **({"x-platform": platform} if platform else {}),
         "x-release": release,

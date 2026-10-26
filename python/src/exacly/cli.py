@@ -27,6 +27,7 @@ from typing import Any
 import yaml
 
 from exacly import manual_qa, mcp, query, views
+from exacly.applicability import Target
 from exacly.core import binding_words, bindings, identity, is_state, validate_documents
 from exacly.refresh import RefreshError, Run, read_junit, refresh, unattributed
 
@@ -550,6 +551,12 @@ def exacly_main(argv: list[str] | None = None) -> int:
     commands.add_parser("validate", help="validate the model and print the section 11 report")
     commands.add_parser("refresh", help="write state for one context from what the bindings observe")
     commands.add_parser("observe", help="write state from an extension source, such as manual-qa observations")
+    assess = commands.add_parser(
+        "assess", parents=[common], help="assess a record for an explicit implementation target"
+    )
+    assess.add_argument("record")
+    assess.add_argument("--target", required=True, type=Path, help="target YAML/JSON outside the model folder")
+    assess.add_argument("--date", type=dt.date.fromisoformat, default=dt.date.today())
     show = commands.add_parser("show", parents=[common], help="one record: relationships, state and findings")
     show.add_argument("record")
     trace = commands.add_parser("trace", parents=[common], help="why a record exists, and how it is realized")
@@ -566,6 +573,16 @@ def exacly_main(argv: list[str] | None = None) -> int:
     view.add_argument("--base", metavar="REV", help="plan: the Git revision the change is against (default: main)")
     view.add_argument("--out", type=Path, metavar="DIR", help="site: the folder to write (default: reports/site)")
     args = parser.parse_args(argv)
+    if args.command == "assess":
+        try:
+            target = Target(read(args.target))
+            model = query.load(load(args.model or [DEFAULT_MODEL]), args.date)
+            answer = query.assess(model, args.record, target)
+        except (query.QueryError, ValueError) as error:
+            print(f"exacly assess: {error}", file=sys.stderr)
+            return 2
+        print(json.dumps(answer, indent=2, default=str) if args.json else assessment_text(answer))
+        return 0
     if args.command == "view":
         try:
             return view_main(args)
@@ -602,6 +619,25 @@ def renamed(command: str, run: Callable[[list[str] | None], int]) -> Callable[[]
 
 validate_renamed = renamed("validate", main)
 refresh_renamed = renamed("refresh", refresh_main)
+
+
+def assessment_text(answer: dict[str, Any]) -> str:
+    """A scoped result with the reasons observations did not count."""
+    lines = [
+        label(answer["record"]),
+        f"Target: {json.dumps(answer['target'], sort_keys=True)}",
+        f"As of: {answer['as_of']}",
+    ]
+    lines += [f"{dimension}: {state}" for dimension, state in answer["status"].items()]
+    lines += [
+        f"Excluded {e['assessment']['dimension']} from {e['assessment'].get('source', 'legacy')}: {e['reason']}"
+        for e in answer["excluded"]
+    ]
+    lines += [
+        f"Missing {m['dimension']} from {m['source']} {json.dumps(m.get('binding', {}), sort_keys=True)}"
+        for m in answer["missing"]
+    ]
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":

@@ -16,10 +16,26 @@ import difflib
 from collections import defaultdict, deque
 from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass, field
+from itertools import combinations
 from typing import Any
 
 from exacly import manual_qa
-from exacly.core import BINDING_IDENTITY, PARTS, Edge, Graph, Report, bindings, identity, is_state, validate_documents
+from exacly.applicability import Target, mismatch, subject_of
+from exacly.core import (
+    BINDING_IDENTITY,
+    DELIVERY_EVIDENCE,
+    PARTS,
+    VERIFICATION_EVIDENCE,
+    Edge,
+    Graph,
+    Report,
+    bindings,
+    identity,
+    is_state,
+    revisions_match,
+    supported,
+    validate_documents,
+)
 from exacly.refresh import LEGACY_SOURCES
 
 Doc = dict[str, Any]
@@ -95,8 +111,22 @@ class Model:
         found: dict[str, dict[str, list[Doc]]] = {}
         for context, assessments in self.assessments(rid).items():
             dims: dict[str, list[Doc]] = defaultdict(list)
+            tests = [
+                subject_of(a) for a in assessments if source_of(a) == "tests" and current_binding(self.records[rid], a)
+            ]
+            mixed = any(
+                not revisions_match(a.get("revision", ""), b.get("revision", "")) or a.get("builds") != b.get("builds")
+                for a, b in combinations(tests, 2)
+            )
             for a in assessments:
                 result = {"source": source_of(a), "state": a["state"]}
+                # Other jobs' results can survive a refresh at another config revision.
+                subject = subject_of(a)
+                if result["source"] == "tests" and (
+                    mixed
+                    or not revisions_match(subject.get("model_revision", ""), self.states[context]["config_revision"])
+                ):
+                    result["state"] = "not_checked"
                 dims[a["dimension"]].append({**result, **({"binding": a["binding"]} if "binding" in a else {})})
             for dimension, listed in dims.items():
                 for source in sorted(bound(self.records[rid], dimension)):
@@ -163,6 +193,15 @@ def answers(result: Doc, key: Doc, single: bool) -> bool:
     """Whether a result is that of the binding identified by `key`: it names the binding, or it names none and the
     binding is the record's only one of its source, or a tests binding with no identifying fields."""
     return bool(result["binding"] == key) if "binding" in result else single or not key
+
+
+def current_binding(record: Doc, assessment: Doc) -> bool:
+    """An identified result must answer a current binding when its source is still configured."""
+    source = source_of(assessment)
+    if not source:
+        return True
+    expected = bindings(record, source)
+    return not expected or any(answers(assessment, identity(source, b), len(expected) == 1) for b in expected)
 
 
 def combine(dimension: str, results: list[Doc]) -> str:
@@ -461,3 +500,68 @@ def change_impact(base: Model, head: Model) -> Doc:
             if head.records[rid]["type"] == "Requirement" and head.records[rid]["lifecycle"] != "retired":
                 result["recheck"].append({**head.summary(rid), "observe": head.records[rid].get("observe", {})})
     return {**diff, "impact": result}
+
+
+def assess(model: Model, rid: str, target: Target) -> Doc:
+    """Project observations onto one explicit implementation/scope, retaining exclusion explanations."""
+    record = model.record(rid)
+    rid = record["id"]
+    applicable, excluded, missing = [], [], []
+    candidates = model.assessments(rid).get(target.data["context"], [])
+    kinds = {"verification": VERIFICATION_EVIDENCE, "delivery": DELIVERY_EVIDENCE}
+    positive = {"verification": "passed", "delivery": "released"}
+    for a in candidates:
+        if a["dimension"] not in kinds:
+            continue
+        reason = mismatch(a, target)
+        if reason is None and not current_binding(record, a):
+            reason = "binding no longer matches the configured source"
+        if (
+            reason is None
+            and a["state"] == positive[a["dimension"]]
+            and not supported(a, kinds[a["dimension"]], model.report.date)
+        ):
+            reason = "no applicable, unexpired supporting evidence"
+        if reason:
+            excluded.append({"assessment": a, "reason": reason})
+        else:
+            applicable.append(a)
+    ambiguous = [
+        key
+        for key in ("model_revision", "revision")
+        if key in target.data
+        and any(not revisions_match(subject_of(a)[key], subject_of(b)[key]) for a, b in combinations(applicable, 2))
+    ]
+    if ambiguous:
+        excluded.extend({"assessment": a, "reason": f"ambiguous target {', '.join(ambiguous)}"} for a in applicable)
+        applicable = []
+    statuses: Doc = {}
+    for dimension in ("verification", "delivery"):
+        listed = [a for a in applicable if a["dimension"] == dimension]
+        for source in sorted(bound(record, dimension)):
+            expected = bindings(record, source)
+            for b in expected:
+                key = identity(source, b)
+                if not any(source_of(a) == source and answers(a, key, len(expected) == 1) for a in listed):
+                    missing.append({"dimension": dimension, "source": source, **({"binding": key} if key else {})})
+        states = [{"state": a["state"]} for a in listed]
+        if dimension == "verification" and any(m["dimension"] == dimension for m in missing):
+            states.append({"state": "not_checked"})
+        statuses[dimension] = (
+            combine(dimension, states) if states else ("not_checked" if dimension == "verification" else "not_observed")
+        )
+        if (
+            dimension == "delivery"
+            and statuses[dimension] == "released"
+            and any(m["dimension"] == dimension for m in missing)
+        ):
+            statuses[dimension] = "not_observed"
+    return {
+        "record": model.summary(rid),
+        "target": target.data,
+        "as_of": model.report.date.isoformat(),
+        "status": statuses,
+        "applicable": applicable,
+        "excluded": excluded,
+        "missing": missing,
+    }

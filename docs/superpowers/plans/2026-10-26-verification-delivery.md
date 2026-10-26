@@ -58,3 +58,4 @@
 - Authorized: all three PRs; execute inline in this chat.
 - Baseline: initial direct pytest run: 338 passed, 1 failed due to absent installed exacly metadata. Restore locked environment using `mise run sync`, then rerun.
 - Stage 1: RED confirmed refresh without delivery fails on rule 7.8; GREEN `mise run check`: 339 tests, lint, typing, examples and self-model passed. Ruling: preserve the historical 0.1 prerequisite; only the 0.2 config/state specification is changing.
+- Stage 2: RED confirmed mixed revisions incorrectly passed, missing delivery binding was hidden, and obsolete bindings poisoned projections. Added explicit subjects, conservative targets and exclusions, assess CLI, observer metadata, and schema iteration. Fresh review found obsolete-binding and abbreviated-hash ambiguities; fixed with regressions and pairwise identity checking. No policy implementation is included in this stage.
