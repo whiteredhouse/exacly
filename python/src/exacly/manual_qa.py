@@ -40,6 +40,13 @@ BUILDS = {
     "description": "Each build by name, such as app or backend, identified by fields such as version and digest.",
     "additionalProperties": {"type": "object", "minProperties": 1, "additionalProperties": TEXT},
 }
+# An RFC 3339 timestamp with its offset, checked here because jsonschema checks the date-time format only when an
+# optional package is installed.
+TIMESTAMP = {
+    "type": "string",
+    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$",
+}
+RESULT = {"enum": ["passed", "failed", "inconclusive"]}
 CRITERIA = {"type": "array", "items": {"type": "integer", "minimum": 1}, "uniqueItems": True}
 BINDING_SCHEMA: Doc = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -84,7 +91,7 @@ OBSERVATION_SCHEMA: Doc = {
     "additionalProperties": False,
     "properties": {
         "observed_by": TEXT,
-        "observed_at": {"type": "string", "format": "date-time", "description": "Two runs on one day must not tie."},
+        "observed_at": {**TIMESTAMP, "description": "A timestamp with its offset: two runs on one day must not tie."},
         "record": TEXT,
         "release": TEXT,
         "model_revision": {**TEXT, "description": "The config revision the criteria are numbered at."},
@@ -99,7 +106,7 @@ OBSERVATION_SCHEMA: Doc = {
                 "type": "object",
                 "required": ["result"],
                 "additionalProperties": False,
-                "properties": {"result": {"enum": ["passed", "failed", "inconclusive"]}, "reason": TEXT},
+                "properties": {"result": RESULT, "reason": TEXT},
                 "if": {"properties": {"result": {"enum": ["failed", "inconclusive"]}}},
                 "then": {"required": ["reason"]},
             },
@@ -112,6 +119,35 @@ OBSERVATION_SCHEMA: Doc = {
                 "file": {**TEXT, "description": "The retained output, relative to the repository root."},
                 "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
                 "locator": {**TEXT, "description": "Where the output was first shared, such as a chat thread."},
+            },
+        },
+    },
+}
+
+
+ASSESSMENT_SCHEMA: Doc = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "manual-qa:observations assessment fields",
+    "description": "The x- fields this source writes on a state assessment; the core fields are the state schema's.",
+    "type": "object",
+    "required": ["x-release", "x-builds", "x-criteria"],
+    "properties": {
+        "x-platform": TEXT,
+        "x-release": TEXT,
+        "x-builds": BUILDS,
+        "x-criteria": {
+            "type": "object",
+            "propertyNames": {"pattern": "^[1-9][0-9]*$"},
+            "additionalProperties": RESULT,
+        },
+        "x-release-scope": {"enum": ["passed", "open"]},
+        "x-unused": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["file", "why"],
+                "additionalProperties": False,
+                "properties": {"file": TEXT, "why": TEXT},
             },
         },
     },
@@ -195,6 +231,10 @@ def usable(
     found = problems(doc, OBSERVATION_SCHEMA)
     if found:
         return None, "not a valid observation: " + "; ".join(found)
+    try:
+        at = dt.datetime.fromisoformat(doc["observed_at"].replace("Z", "+00:00"))
+    except ValueError as error:
+        return None, f"not a valid observation: /observed_at: {error}"
     if doc["record"] != rid:
         return None, None
     if platforms is not None and doc.get("platform") not in platforms:
@@ -217,7 +257,6 @@ def usable(
     beyond = sorted(n for n in results if n > len(criteria))
     if beyond:
         return None, f"{numbers(beyond)} beyond {rid}'s {len(criteria)}"
-    at = dt.datetime.fromisoformat(doc["observed_at"].replace("Z", "+00:00"))
     return Observation(file, doc, at, results), None
 
 
@@ -382,6 +421,10 @@ def observe(
 def findings(assessment: Doc) -> list[str]:
     """What core gaps can't tell from the core state of one of this source's assessments: a release whose scope
     passed while other criteria are open, and observations that were not used."""
+    invalid = problems(assessment, ASSESSMENT_SCHEMA)
+    if invalid:
+        # Hand-edited or damaged state: say so rather than read fields that aren't there.
+        return [f"its {SOURCE} fields are not valid: " + "; ".join(invalid)]
     where = f" on {assessment['x-platform']}" if "x-platform" in assessment else ""
     found = []
     if assessment.get("x-release-scope") == "passed" and assessment["state"] != "passed":

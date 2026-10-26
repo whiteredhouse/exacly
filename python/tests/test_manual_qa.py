@@ -370,3 +370,26 @@ def test_a_platform_that_is_not_text_is_reported_rather_than_crashing(root: Path
     state, notes = observe(root)
     assert len(notes) == 1 and "ios.yaml is not used: not a valid observation: /platform" in notes[0]
     assert all(a["state"] == "not_checked" and a["x-unused"] for a in by_platform(state).values())
+
+
+@pytest.mark.parametrize("observed_at", ["not-a-date", "2026-10-25", "2026-10-25T14:12:00", "2026-13-25T14:12:00Z"])
+def test_an_observation_without_a_valid_timestamp_is_not_used(root: Path, observed_at: str) -> None:
+    observation(root, "ios-1", "ios", {1: "passed"}, at="2026-10-25T10:00:00Z")
+    observation(root, "ios-2", "ios", {1: "failed", 2: "passed"}, at=observed_at)
+    state, notes = observe(root)
+    assert len(notes) == 1 and "ios-2.yaml is not used: not a valid observation: /observed_at" in notes[0]
+    assert by_platform(state)["ios"]["x-criteria"] == {"1": "passed"}
+
+
+def test_the_validator_and_gaps_check_the_fields_on_this_sources_assessments(root: Path) -> None:
+    observation(root, "ios", "ios", {1: "passed", 2: "passed"})
+    state, _ = observe(root)
+    ios = next(a for a in state["records"]["REQ-1"]["assessments"] if a["x-platform"] == "ios")
+    del ios["x-release"]
+    ios["x-unused"] = [{"file": "qa/observations/x.yaml"}]
+    report = validate_documents({**documents(), "state": state}, WHEN.date(), REVISION).as_dict()
+    errors = [(e["rule"], e["record"]) for e in report["errors"]]
+    assert errors == [("11.extension-assessment", "REQ-1"), ("11.extension-assessment", "REQ-1")]
+    model = query.load({**documents(), "state": state}, WHEN.date(), REVISION)
+    [found] = [o["message"] for o in query.gaps(model)["observers"] if "fields are not valid" in o["message"]]
+    assert "'x-release' is a required property" in found

@@ -479,8 +479,9 @@ def check_bindings(g: Graph, report: Report) -> None:
                 report.add(ERROR, "11.duplicate-binding", rid, f"two {source} bindings with the same {named}")
 
 
-def check_extension_bindings(g: Graph, model: Doc, report: Report) -> None:
-    """A declared extension's bindings against the schema it ships (section 5: an extension defines its fields)."""
+def check_extensions(g: Graph, model: Doc, assessments: list[Doc], report: Report) -> None:
+    """A declared extension's bindings and the fields it writes on assessments, against the schemas it ships (section
+    5: an extension defines its fields)."""
     from exacly import manual_qa  # The extension builds on this module.
 
     if manual_qa.EXTENSION not in (model.get("extensions") or []):
@@ -489,6 +490,12 @@ def check_extension_bindings(g: Graph, model: Doc, report: Report) -> None:
         for binding in bindings(r, manual_qa.SOURCE):
             for problem in manual_qa.problems(binding, manual_qa.BINDING_SCHEMA):
                 report.add(ERROR, "11.extension-binding", rid, f"{manual_qa.SOURCE} binding {problem}")
+    for a in assessments:
+        if a.get("source") != manual_qa.SOURCE:
+            continue
+        for problem in manual_qa.problems(a, manual_qa.ASSESSMENT_SCHEMA):
+            message = f"{manual_qa.SOURCE} assessment in {a['context']} {problem}"
+            report.add(ERROR, "11.extension-assessment", g.local(a["subject"]) or a["subject"], message, a["document"])
 
 
 def check_storage(g: Graph, report: Report) -> None:
@@ -749,7 +756,7 @@ def validate_documents(documents: Mapping[str, Any], date: dt.date, revision: st
     check_traceability(g, assessments, report)
     check_storage(g, report)
     check_bindings(g, report)
-    check_extension_bindings(g, merged["model"], report)
+    check_extensions(g, merged["model"], assessments, report)
     check_hygiene(g, merged, report)
     apply_exceptions(g, merged, report)
     for f in report.findings:

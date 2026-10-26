@@ -92,7 +92,7 @@ records:
       - A platform with no usable observation is not checked, naming the release and builds.
       - An observation whose criteria were numbered at a revision where they differ, whose retained output is missing or doesn't match its digest, or whose failure has no reason is reported and not used.
       - A tests refresh keeps the manual assessments, and a manual observation keeps the tests assessments.
-      - When the model declares the extension, its bindings are checked against the extension's schema.
+      - When the model declares the extension, its bindings and the fields it writes on assessments are checked against the extension's schemas, and an observation without a valid timestamp is not used.
     verification_method: Manual-qa tests in CI.
     observe:
       tests:
