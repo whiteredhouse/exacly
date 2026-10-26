@@ -121,17 +121,72 @@ records:
           - "python/tests/test_views.py::*"
           - "tests/test_ci.py::test_the_plan_is_commented_*"
 
-  - id: APP-003
-    type: Application
-    name: Query
-    description: The exacly command's show, trace, impact and gaps, and the query core behind them.
+  - id: REQ-016
+    type: Requirement
+    name: Assess an explicit implementation target
+    description: Observations establish only the model revision, implementation and scope they actually assessed.
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-24"
+    last_reviewed_at: "2026-10-26"
+    statement: Project verification and delivery evidence onto an explicit target, preserving original observations and explaining exclusions and missing bindings.
+    acceptance_criteria:
+      - Different model revisions, implementation revisions, build compositions and scopes cannot jointly establish verification.
+      - Positive claims need applicable unexpired support; missing delivery remains unobserved rather than invalidating verification.
+      - Obsolete bindings and ambiguously abbreviated revisions cannot establish a passed result.
+      - Legacy tests establish only their documented tested revision, without inferring artifact or deployment identity.
+      - Text and JSON report applicable and excluded assessments and missing bindings without mutating inputs.
+    verification_method: Applicability tests and installed-package smoke exercise in CI.
+    observe:
+      tests:
+        workflow: .github/workflows/spec.yml
+        cases: ["python/tests/test_applicability.py::*", "tests/test_release_smoke.py::*"]
+
+  - id: REQ-017
+    type: Requirement
+    name: Evaluate readiness separately from conformance
+    description: A named policy checks explicit prerequisites for a selected implementation, without deploying or rewriting observations.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-26"
+    statement: Evaluate a versioned readiness policy using applicable verification and delivery assessments, distinguishing satisfied, known unmet and unknown prerequisites.
+    acceptance_criteria:
+      - Every required check needs applicable support; a known negative takes precedence over an unknown prerequisite.
+      - Invalid, empty or overlapping checks and non-Requirement records are rejected; a nonconforming model cannot establish readiness.
+      - Missing, mismatched, ambiguous or expired support leaves readiness unknown, with evidence and reasons retained.
+      - Exit status is 0 for satisfied, 1 for not satisfied or unknown, and 2 for invalid input.
+      - CI requires verification of every active Requirement, without requiring delivery before publication.
+      - Evaluation is read-only and reports policy identity, selected target and evaluation date.
+    verification_method: Policy tests, CI policy coverage test and installed-package smoke exercise.
+    observe:
+      tests:
+        workflow: .github/workflows/spec.yml
+        cases: ["python/tests/test_policy.py::*", "tests/test_ci_policy.py::*", "tests/test_release_smoke.py::*"]
+
+  - id: APP-003
+    type: Application
+    name: Query
+    description: The exacly command's show, trace, impact, gaps and scoped assess questions.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-26"
     responsibility: Answer questions about a model from its config and state.
     interfaces: [exacly command, exacly.query Python API]
     implementation_ref: { locator: python/src/exacly/query.py }
+
+  - id: APP-006
+    type: Application
+    name: Readiness policy evaluator
+    description: The read-only exacly gate command and its policy evaluator.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-26"
+    responsibility: Evaluate explicit policy prerequisites using scoped observations, separately from model conformance.
+    interfaces: [exacly gate command, exacly.policy Python API]
+    implementation_ref: { locator: python/src/exacly/policy.py }
 
   - id: APP-004
     type: Application
@@ -177,3 +232,9 @@ relationships:
   - { source: PROC-003, type: uses, target: APP-005 }
   - { source: APP-005, type: depends_on, target: APP-003, conditions: Every view is drawn from the query core's answers. }
   - { source: INF-001, type: implements, target: REQ-014 }
+  - { source: REQ-016, type: supports, target: PROC-003 }
+  - { source: APP-003, type: implements, target: REQ-016 }
+  - { source: REQ-017, type: supports, target: PROC-003 }
+  - { source: APP-006, type: implements, target: REQ-017 }
+  - { source: PROC-003, type: uses, target: APP-006 }
+  - { source: APP-006, type: depends_on, target: APP-003 }

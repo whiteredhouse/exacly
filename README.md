@@ -137,6 +137,8 @@ The repository uses [mise](https://mise.jdx.dev/) for Python, uv and tasks. Run 
 mise run check
 ```
 
+The check also evaluates [`ci/verification.yaml`](ci/verification.yaml) against a target for the checked commit. It requires verification of every active Requirement, independently of delivery. Results and the selected target are written under `reports/`. See [release notes](CHANGELOG.md) for package changes.
+
 ## Status
 
 Exacly is at 0.x and unstable: anything may change until 1.0, which comes with the first outside adopter. See [Versioning](spec/README.md#versioning).
@@ -153,3 +155,4 @@ Each part of Exacly has its own version, tagged as `<part>-vX.Y.Z`, as release-p
 | 0.2.0 | 0.1, 0.2 |
 | 0.2.1, the first on [PyPI](https://pypi.org/project/exacly/) | 0.1, 0.2 |
 | 0.3.0: assessment sources, combined results, lists of bindings, the manual-qa extension | 0.1, 0.2 |
+| 0.4.0: independent verification, explicit assessment targets and readiness policies | 0.1, 0.2 |

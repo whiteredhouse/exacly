@@ -107,11 +107,12 @@ records:
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-23"
+    last_reviewed_at: "2026-10-26"
     statement: Apply rules 7.1 to 7.9, reporting a gap in an active record as an error and in a proposed record as a warning, except 7.9, which is always a warning.
     acceptance_criteria:
       - Each section 7 rule has test cases for a gap and for its satisfied form.
       - Rule 7.8 reads claims from every state document and accepts only unexpired evidence for the claim's own context.
+      - In 0.2 supported verification can precede delivery; the historical 0.1 delivery prerequisite is preserved.
       - An active relationship to a retired record is an error.
     verification_method: Validator test cases in CI.
     observe:
@@ -257,13 +258,14 @@ records:
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-24"
+    last_reviewed_at: "2026-10-26"
     statement: Keep config and state in the repository, so main is the current baseline, branches are proposed changes, and tags are historical baselines; only CI writes state, and only from main.
     acceptance_criteria:
       - Config lives in spec/exacly/ and CI checks every change to it, or to the tooling, on pull requests and on main.
       - The workflow cannot write by default; only the state job can, and it runs only on pushes to main after the checks pass.
       - The state job commits only spec/exacly/state/main.json, never force-pushes, and marks its commit so it does not trigger CI.
       - Test reports and state computed by a check run are not committed.
+      - The check run requires applicable verification for every active Requirement, without requiring a release or deployment.
     verification_method: Tests that read the workflow and the repository's ignore rules, in CI.
     observe:
       tests:

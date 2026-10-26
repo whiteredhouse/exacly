@@ -14,7 +14,7 @@ uv tool install exacly    # or: pipx install exacly, pip install exacly
 uvx exacly validate spec/exacly    # or run it once without installing
 ```
 
-Exacly is at 0.x and the specification is a Draft, so commands, output and the model may change in any release until 1.0. Pin a version (`exacly==0.3.0`) where a change would break you. To run the latest main instead, install `"exacly @ git+https://github.com/whiteredhouse/exacly"`.
+Exacly is at 0.x and the specification is a Draft, so commands, output and the model may change in any release until 1.0. Pin a version (`exacly==0.4.0`) where a change would break you. To run the latest main instead, install `"exacly @ git+https://github.com/whiteredhouse/exacly"`.
 
 Before 0.2.0 the package was `exacly-validate`, with `exacly-validate` and `exacly-refresh` commands. Those commands still run, with a note, until the next release.
 
@@ -181,7 +181,7 @@ This repository's [`.mcp.json`](../.mcp.json) does the same with `uv run`. The [
    - A gap in an active record is an error. A gap in a proposed record is a warning, because proposed records may be incomplete.
    - Rule 7.1 (0.2) requires a linked Measure whose lifecycle is proposed or active; a retired Measure does not satisfy it. An active Outcome linked only to retired Measures has an error, and a proposed Outcome has a warning. The 0.1 validator retains its lifecycle-independent Measure link rule.
    - Rule 7.4's business path runs through `supports`, `uses_capability` and `contributes_to`.
-   - Rule 7.8 needs an implementer for a released or verified Requirement. Each released delivery assessment needs implementation or deployment evidence, and each passed verification needs test or decision evidence. The evidence must apply to that assessment's own context, because assessments do not carry forward to another release or environment, and must not have expired. A verified Requirement also needs at least one supported release. In 0.2 the assessments come from every state document read, so a release observed in production and a test run observed in CI combine.
+   - Rule 7.8 needs an implementer for a released or verified Requirement. Each released delivery assessment needs implementation or deployment evidence, and each passed verification needs test or decision evidence. The evidence must apply to that assessment's own context, because assessments do not carry forward to another release or environment, and must not have expired. In 0.2 verification and delivery are independent; each assessment stands on its own evidence. The historical 0.1 product-map rule still requires a supported release for a verified Requirement. Use explicit targets to evaluate implementation-specific readiness.
    - Rule 7.9 (0.2) asks for exactly one `stores` relationship with role `system_of_record` for each Information record. It is a SHOULD, so a gap is a warning for active and proposed records alike.
 5. **Section 11 warnings.**
    - Active records never reviewed or reviewed longer ago than the declared interval (`11.review-overdue`).

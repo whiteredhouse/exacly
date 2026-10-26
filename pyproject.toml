@@ -1,6 +1,6 @@
 [project]
 name = "exacly"
-version = "0.3.0"
+version = "0.4.0"
 description = "Validate, refresh and ask Exacly models (0.1 product maps, 0.2 config and state), for people and coding agents"
 # The README comes from python/README.md, with its links into the repository made absolute for PyPI.
 dynamic = ["readme"]
@@ -78,7 +78,7 @@ target-version = "py312"
 select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF"]
 
 [tool.mypy]
-files = ["python/src", "python/tests", "spec/tests", "tests"]
+files = ["python/src", "python/tests", "spec/tests", "tests", "ci"]
 strict = true
 
 # jsonpatch ships no type information; only the tests use it.
