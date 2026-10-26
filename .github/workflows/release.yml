@@ -25,8 +25,8 @@ jobs:
             echo "::error::Tag $TAG does not match the package version $version in pyproject.toml"
             exit 1
           fi
-      - name: Test, lint and type-check
-        run: mise run test && mise run lint && mise run typecheck
+      - name: Verify the release prerequisites
+        run: mise run check
       - name: Build the sdist and wheel
         run: uv build
       - name: Run the built wheel outside the repository
@@ -34,8 +34,10 @@ jobs:
           set -euo pipefail
           wheel="$(ls "$PWD"/dist/*.whl)"
           example="$PWD/spec/examples/0.2/invoice-reminders"
+          smoke="$PWD/ci/smoke.py"
           cd "$RUNNER_TEMP"
           uvx --isolated --from "$wheel" exacly validate "$example"
+          uv run --isolated --no-project --with "$wheel" python "$smoke" --example "$example"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist
@@ -61,3 +63,21 @@ jobs:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+
+  verify-publication:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
+      - name: Install the published version and exercise verification and gates
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG#python-v}"
+          example="$PWD/spec/examples/0.2/invoice-reminders"
+          smoke="$PWD/ci/smoke.py"
+          cd "$RUNNER_TEMP"
+          uv run --isolated --no-project --default-index https://pypi.org/simple \
+            --with "exacly==$version" python "$smoke" --example "$example"

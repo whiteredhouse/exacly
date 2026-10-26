@@ -40,10 +40,22 @@ mkdir -p reports/state
 rm -f reports/state/main.json
 if [ -f spec/exacly/state/main.json ]; then cp spec/exacly/state/main.json reports/state/main.json; fi
 uv run --locked exacly refresh spec/exacly/*.yaml --context main --state reports/state/main.json \
-  --junit reports/junit.xml --distribution --job-status success --revision "$revision"
+  --junit reports/junit.xml --job-status success --revision "$revision"
 uv run --locked exacly validate spec/exacly/*.yaml reports/state/main.json --revision "$revision"
+"""
+
+[tasks.verification]
+description = "Require current verification for every active Requirement, independently of delivery"
+depends = ["model"]
+run = """
+set -e
+revision="$(git rev-parse HEAD)"
+uv run --locked python -c 'import json, sys; print(json.dumps(dict(context="main", model_revision=sys.argv[1], revision=sys.argv[1])))' "$revision" > reports/target.json
+uv run --locked exacly gate -m 'spec/exacly/*.yaml' -m reports/state/main.json \
+  --policy ci/verification.yaml --target reports/target.json --json > reports/verification.json
+cat reports/verification.json
 """
 
 [tasks.check]
 description = "Everything CI runs"
-depends = ["model"]
+depends = ["verification"]
