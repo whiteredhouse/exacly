@@ -47,13 +47,14 @@ records:
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-25"
+    last_reviewed_at: "2026-10-27"
     statement: >-
       For each record with a tests binding, write a verification assessment for
       the observed commit from the test cases the binding selects, with the run
       as evidence, and increase the serial while keeping the lineage.
     acceptance_criteria:
       - Every selected case passing gives passed; any failing gives failed, with the failing cases as the reason.
+      - A mix of passing and skipped selected cases gives inconclusive with evidence and a reason naming skipped cases; skipped cases count as present for pattern matching, and missing-pattern diagnostics and failure precedence are preserved.
       - A binding whose selected cases did not run, or without cases and without the job's result, gives not checked, with the reason.
       - A pattern that selects no case in the report gives inconclusive, naming the pattern, unless a selected case failed, which gives failed and names both.
       - A binding without cases takes the job's result.
