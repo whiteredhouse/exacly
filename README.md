@@ -156,3 +156,4 @@ Each part of Exacly has its own version, tagged as `<part>-vX.Y.Z`, as release-p
 | 0.2.1, the first on [PyPI](https://pypi.org/project/exacly/) | 0.1, 0.2 |
 | 0.3.0: assessment sources, combined results, lists of bindings, the manual-qa extension | 0.1, 0.2 |
 | 0.4.0: independent verification, explicit assessment targets and readiness policies | 0.1, 0.2 |
+| 0.5.0: incomplete execution of case-bound tests gives inconclusive verification | 0.1, 0.2 |
