@@ -44,10 +44,12 @@ Conformance does not establish measurement readiness or observation completeness
 `exacly refresh` writes a model's state for one context from what its bindings observe (section 9). It reads test results as JUnit XML reports from one CI run. For each record with a `tests` binding, it writes a verification assessment for the observed config revision:
 - **passed** when every selected test case passed and every pattern in `cases` selected at least one case;
 - **failed** when any selected case failed, naming the failing cases in the reason;
-- **inconclusive** when the selected cases passed but some pattern selected nothing, such as a test that was renamed or no longer runs, naming those patterns in the reason;
+- **inconclusive** when some selected cases passed but others were skipped, or some pattern selected nothing, such as a test that was renamed or no longer runs; the reason names skipped cases and missing patterns;
 - **not checked** when no selected case ran, with the reason.
 
-A skipped case still counts as selected, so a test that exists but was skipped is not missing. Pass every report from the run, including each shard of a split test job: a pattern whose cases are in a report that was left out selects nothing.
+A skipped case still counts as selected, so a test that exists but was skipped is not missing. It cannot establish successful verification: mixed passing/skipped cases retain the run as evidence and report how many selected cases passed and skipped. Pytest expected failures (`xfail`) are also skipped outcomes in JUnit XML. Case IDs repeated across reports retain the existing merge rule: failure wins over pass, and pass wins over skip.
+
+Pass every report from the run, including each shard of a split test job: a pattern whose cases are in a report that was left out selects nothing. A nonempty wildcard cannot identify missing cases that were never included in the supplied reports.
 
 A binding without `cases` takes the job's status from `--job-status` instead, and is not checked without it. A record without a binding gets no verification assessment, because a missing binding says nothing about whether the record is tested.
 

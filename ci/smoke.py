@@ -46,11 +46,18 @@ def run(example: Path) -> dict[str, str]:
         question = ["-m", str(model), "-m", str(state)]
         gate = ["gate", *question, "--target", str(target), "--policy", str(policy), "--json"]
 
-        def observe(result: str, observed_revision: str = revision) -> None:
+        def observe(result: str, observed_revision: str = revision, *, include_skipped: bool = False) -> None:
+            skipped_case = (
+                '<testcase classname="tests/reminders/test_total" name="skipped"><skipped/></testcase>'
+                if include_skipped
+                else ""
+            )
             junit.write_text(
                 '<testsuite><testcase classname="tests/reminders/test_total" name="total">'
                 + result
-                + "</testcase></testsuite>"
+                + "</testcase>"
+                + skipped_case
+                + "</testsuite>"
             )
             call(
                 [
@@ -85,14 +92,26 @@ def run(example: Path) -> dict[str, str]:
         changed = json.loads(call(gate, 1))
         observe("<skipped/>")
         skipped = json.loads(call(gate, 1))
+        observe("", include_skipped=True)
+        call(["validate", str(model), str(state)])
+        mixed = json.loads(call(gate, 1))
+        incomplete = json.loads(call(["assess", "REQ-001", *question, "--target", str(target), "--json"]))
+        gaps = json.loads(call(["gaps", *question, "--json"]))
+        if incomplete["status"]["verification"] != "inconclusive" or not any(
+            r["id"] == "REQ-001" for r in gaps["coverage"]["unverified"]
+        ):
+            raise RuntimeError("mixed execution was not exposed as incomplete verification")
         summary = {
             **assessment["status"],
             "failed_gate": failed["result"],
             "revision_mismatch": changed["result"],
             "skipped_gate": skipped["result"],
+            "mixed_gate": mixed["result"],
         }
         if (failed["result"], changed["result"], skipped["result"]) != ("not_satisfied", "unknown", "unknown"):
             raise RuntimeError(f"unexpected blocking gate outcomes: {summary}")
+        if mixed["result"] != "unknown":
+            raise RuntimeError(f"mixed execution satisfied the gate: {summary}")
         return summary
 
 

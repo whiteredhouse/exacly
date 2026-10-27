@@ -138,10 +138,15 @@ def verification(binding: Doc, results: Mapping[str, str], run: Run) -> Doc:
             "evidence": [{**evidence, "claim": claim}],
             "reason": f"Failed: {named(failed)}.{missing}",
         }
-    skipped = len(selected) - len(ran)
-    claim = f"All {len(ran)} selected test cases passed" + (f"; {skipped} skipped" if skipped else "")
-    if empty:
-        reason = missing.strip()
+    skipped = sorted(cid for cid, outcome in selected.items() if outcome == "skipped")
+    claim = (
+        f"{len(ran)} of {len(selected)} selected test cases passed; {len(skipped)} skipped"
+        if skipped
+        else f"All {len(ran)} selected test cases passed"
+    )
+    if skipped or empty:
+        reason = (f"Skipped: {named(skipped)}." if skipped else "") + missing
+        reason = reason.strip()
         return {**assessment, "state": "inconclusive", "evidence": [{**evidence, "claim": claim}], "reason": reason}
     return {**assessment, "state": "passed", "evidence": [{**evidence, "claim": claim}]}
 
