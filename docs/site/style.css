@@ -1185,3 +1185,97 @@ button:disabled {
   @keyframes trace-arrive { from { opacity: .4; transform: translateX(-24px); } to { opacity: 1; transform: translateX(0); } }
 }
 .evidence-step summary { grid-template-columns: 1fr auto; }
+
+.project-evidence {
+  grid-template-columns: 1fr 1fr;
+}
+.project-record {
+  padding: var(--pad);
+  background: var(--paper);
+  min-width: 0;
+}
+.project-record:nth-child(2) {
+  background: var(--surface);
+}
+.project-record-title {
+  font-size: var(--lead);
+  line-height: 1.25;
+  letter-spacing: -.025em;
+}
+.project-record-title code {
+  font-family: inherit;
+  font-size: inherit;
+  letter-spacing: inherit;
+}
+.project-statuses {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+}
+.project-statuses > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+}
+.project-statuses dd {
+  font-weight: 700;
+}
+.project-observation {
+  margin-top: 26px;
+  padding: 18px;
+  background: var(--bg);
+  font-size: var(--small);
+}
+.project-observation p + p {
+  margin-top: 10px;
+}
+.project-observation code,
+.project-state-note code {
+  overflow-wrap: anywhere;
+}
+.project-record .text-link {
+  font-size: var(--small);
+}
+.project-state-note {
+  grid-column: 1 / -1;
+  max-width: none;
+  padding: 20px var(--pad);
+  background: var(--surface);
+  font-size: var(--small);
+  overflow-wrap: anywhere;
+}
+.project-explanation {
+  margin: 28px var(--pad) 0;
+  max-width: 60ch;
+  font-size: var(--body);
+}
+@media (max-width: 700px) {
+  .project-evidence {
+    grid-template-columns: 1fr;
+  }
+  .project-record-title {
+    font-size: var(--body);
+  }
+  .project-observation {
+    padding: 16px;
+  }
+}
+
+.project-observation summary {
+  cursor: pointer;
+}
+.project-receipt {
+  margin-top: 12px;
+}
+.project-receipt > summary {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.project-receipt[open] > summary {
+  margin-bottom: 12px;
+}
+@media (min-width: 701px) and (max-width: 1100px) {
+  .footer-name {
+    margin-top: 64px;
+  }
+}

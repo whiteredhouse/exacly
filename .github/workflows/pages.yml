@@ -5,29 +5,47 @@ on:
     paths:
       - "docs/site/**"
       - "spec/examples/0.2/invoice-reminders/**"
+      - "spec/exacly/**"
+      - "spec/schema/**"
+      - "python/src/exacly/**"
+      - "ci/build_site.py"
+      - "tests/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "mise.toml"
       - ".github/workflows/pages.yml"
-  push:
+  # Spec writes observed state in a [skip ci] commit. Wait for that workflow
+  # to finish, then build main including its newly committed observations.
+  workflow_run:
+    workflows: [Spec]
+    types: [completed]
     branches: [main]
-    paths:
-      - "docs/site/**"
-      - "spec/examples/0.2/invoice-reminders/**"
-      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('pages-pr-{0}', github.event.pull_request.number) || 'github-pages-publication' }}
+  cancel-in-progress: false
+
 jobs:
   validate:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Prepare the static site with the source example
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && 'main' || github.ref }}
+      - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
+      - name: Build the static site and both model browsers
         run: |
-          site_dir="$RUNNER_TEMP/exacly-site"
-          mkdir -p "$site_dir"
-          cp -R docs/site/. "$site_dir/"
-          cp spec/examples/0.2/invoice-reminders/*.yaml "$site_dir/example/"
+          uv run --locked python ci/build_site.py --out "$RUNNER_TEMP/exacly-site"
       - name: Check the static site's local references
         run: |
           python3 - <<'PY'
@@ -72,21 +90,30 @@ jobs:
           print(f"Checked {checked} local references")
           PY
       - uses: actions/upload-pages-artifact@v3
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        if: >-
+          (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'workflow_run' &&
+           github.event.workflow_run.event == 'push' &&
+           github.event.workflow_run.conclusion == 'success' &&
+           github.event.workflow_run.head_branch == 'main' &&
+           github.event.workflow_run.head_repository.full_name == github.repository)
         with:
           path: ${{ runner.temp }}/exacly-site
 
   deploy:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     needs: validate
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pages: write
       id-token: write
-    concurrency:
-      group: github-pages
-      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
