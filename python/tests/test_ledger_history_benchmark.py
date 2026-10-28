@@ -103,10 +103,11 @@ def test_profile_cli_reports_deterministic_work_and_exact_read_hash_bytes() -> N
         [sys.executable, str(ROOT / "benchmarks/ledger_history.py"), "--counts", "2", "--supersession-depth", "2"],
         cwd=ROOT,
         env={**os.environ, "PYTHONPATH": os.pathsep.join(str(ROOT / path) for path in ("python/src", "python/tests"))},
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
     )
+    assert result.returncode == 0, result.stderr
     document = json.loads(result.stdout)
     measured = document["results"][0]
     assert measured["tasks"] == measured["completed_proofs"] == 2
