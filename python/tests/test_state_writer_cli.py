@@ -52,7 +52,18 @@ def scenario(tmp_path: Path) -> Scenario:
     return Scenario(
         state,
         copy.deepcopy(initial),
-        ["refresh", *shared, "--context", str(TARGET["context"]), "--job-status", "success"],
+        [
+            "refresh",
+            *shared,
+            "--context",
+            str(TARGET["context"]),
+            "--job-status",
+            "success",
+            "--workflow",
+            CI["workflow"],
+            "--job",
+            CI["job"],
+        ],
         ["observe", "manual-qa", *shared, "--target", str(target)],
     )
 
@@ -62,6 +73,10 @@ def test_overlapping_observers_conflict_then_retry_without_losing_work(
     scenario: Scenario, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], outer: str
 ) -> None:
     """Both compute from serial 1; only the first publication wins, and a fresh retry merges it."""
+    # The hosting runner's identity must not replace this scenario's explicitly selected observer.
+    monkeypatch.setenv("GITHUB_REPOSITORY", "whiteredhouse/exacly")
+    monkeypatch.setenv("GITHUB_WORKFLOW_REF", "whiteredhouse/exacly/.github/workflows/spec.yml@refs/heads/main")
+    monkeypatch.setenv("GITHUB_JOB", "check")
     inner_args = scenario.args("observe" if outer == "refresh" else "refresh")
     original = refresh if outer == "refresh" else manual_qa.observe
     nested_output = io.StringIO()
