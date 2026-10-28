@@ -65,6 +65,7 @@ records:
       - Remove only the exact registered pending entry after the selected goal is satisfied; preserve namespace, context and lineage and advance the serial exactly once, while reporting whole-policy readiness separately from completion of this action.
       - Retain the admitted evidence bytes and receipt with their identities and digests, and commit a prepared completion intent containing the exact before-state identity and candidate after-state bytes and digest before conditional publication; publish those exact recorded bytes rather than reserializing a different candidate.
       - Hold the ledger and state locks in a deterministic deduplicated order through intent preparation, conditional atomic state publication and receipt finalization; bounded waits and unresolved intents prevent conflicting registration changes.
+      - Completion, completion inspection, recovery and exact replay reuse one full retained-history validation within each unchanged protected database view; any mutation invalidates that view and requires fresh validation before reuse, unexpected database changes fail closed, and reuse ends with the protected operation or connection.
       - SQLite ledger updates and JSON state publication form a recoverable protocol rather than one atomic transaction; failures after replacement preserve the complete published state and prepared intent and report the unfinished operation.
       - Repeating the exact completed request, including binding, state destination, plan and action, policies, target, run, attempt and evaluation date, returns its original durable receipt without HTTP, removing another task or increasing the serial again; a different request cannot reuse a completed binding or pending identity.
       - Explicit offline recovery aborts an intent when the exact before-state remains and requires fresh admission for another attempt; when the exact after-state is present it verifies the retained proof and binding, synchronizes the state and directory and finalizes once without HTTP; any third state conflicts without overwrite or replay of a stale candidate.
@@ -81,6 +82,8 @@ records:
           - "python/tests/test_completion_faults.py::*"
           - "python/tests/test_completion_store.py::*"
           - "python/tests/test_completion_locks.py::*"
+          - "python/tests/test_completion_validation.py::*"
+          - "python/tests/test_completion_journal.py::*"
 
   - id: REQ-025
     type: Requirement

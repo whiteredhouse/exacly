@@ -148,8 +148,8 @@ def _pause(control: Connection, completion_id: str) -> None:
 
 def interrupted_completion(case: FaultScenario, phase: str, control: Connection) -> None:
     """The parent kills only after a real durability boundary has been reached."""
-    original_prepare = completion_store.prepare
-    original_finalize = completion_store.finalize
+    original_prepare = completion_store.Journal.prepare
+    original_finalize = completion_store.Journal.finalize
     original_replace = os.replace
     prepared_id: str | None = None
 
@@ -179,8 +179,8 @@ def interrupted_completion(case: FaultScenario, phase: str, control: Connection)
 
     try:
         with pytest.MonkeyPatch.context() as patched:
-            patched.setattr(completion_store, "prepare", prepare)
-            patched.setattr(completion_store, "finalize", finalize)
+            patched.setattr(completion_store.Journal, "prepare", prepare)
+            patched.setattr(completion_store.Journal, "finalize", finalize)
             patched.setattr(os, "replace", replace)
             control.send(("unexpected-result", case.complete()))
     except BaseException as error:

@@ -164,15 +164,15 @@ def _finish(report: Doc, status: str, code: str, reason: str, *, receipt: Doc | 
 
 
 @contextmanager
-def _database(path: Path, *, write: bool, deadline: store.Deadline) -> Iterator[sqlite3.Connection]:
+def _database(path: Path, *, write: bool, deadline: store.Deadline) -> Iterator[completion_store.Journal]:
     try:
         store.require(os.path.lexists(path), "completion requires an existing upgraded execution ledger")
         with store.database(path, create=write, deadline=deadline) as (connection, created):
             store.require(not created, "completion cannot initialize an execution ledger")
             if write:
                 store.configure(connection, deadline=deadline)
-            completion_store.require_v2(connection, deadline=deadline)
-            yield connection
+            with completion_store.validated(connection, deadline=deadline) as journal:
+                yield journal
     except sqlite3.Error as error:
         if store.sqlite_lock_error(error):
             raise store.LockTimeoutError(store.LOCK_TIMEOUT_MESSAGE) from None
@@ -377,13 +377,13 @@ def complete(
     budget = store.Deadline(lock_timeout)
     with (
         store.locked(ledger, write=False, deadline=budget) as (absolute, _),
-        _database(absolute, write=False, deadline=budget) as connection,
+        _database(absolute, write=False, deadline=budget) as journal,
     ):
-        envelope = completion_store.envelope(connection, binding_id, deadline=budget)
+        envelope = journal.envelope(binding_id)
         mismatch = _contract(envelope, plan, action, readiness, chosen, target)
         if mismatch:
             return _finish(report, "stale", "contract", mismatch)
-        receipt = completion_store.find_completed(connection, request_digest, binding_id=binding_id, deadline=budget)
+        receipt = journal.find_completed(request_digest, binding_id=binding_id)
         if receipt is not None:
             return _finish(
                 report,
@@ -392,7 +392,7 @@ def complete(
                 "The original historical completion receipt was retained; no evidence or state was changed.",
                 receipt=receipt,
             )
-        pending = completion_store.current(connection, deadline=budget)
+        pending = journal.current()
         if pending is not None:
             report["completion_id"] = pending["intent"]["id"]
             return _finish(
@@ -442,13 +442,13 @@ def complete(
     budget = store.Deadline(lock_timeout)
     with (
         operation_locks.locked(ledger, snapshot, deadline=budget) as (absolute, parent_fd),
-        _database(absolute, write=True, deadline=budget) as connection,
+        _database(absolute, write=True, deadline=budget) as journal,
     ):
-        envelope = completion_store.envelope(connection, binding_id, deadline=budget)
+        envelope = journal.envelope(binding_id)
         mismatch = _contract(envelope, plan, action, readiness, chosen, target)
         if mismatch:
             return _finish(report, "stale", "contract", mismatch)
-        receipt = completion_store.find_completed(connection, request_digest, binding_id=binding_id, deadline=budget)
+        receipt = journal.find_completed(request_digest, binding_id=binding_id)
         if receipt is not None:
             return _finish(
                 report,
@@ -457,7 +457,7 @@ def complete(
                 "Another caller already completed this exact request.",
                 receipt=receipt,
             )
-        pending = completion_store.current(connection, deadline=budget)
+        pending = journal.current()
         if pending is not None:
             report["completion_id"] = pending["intent"]["id"]
             return _finish(
@@ -521,8 +521,7 @@ def complete(
         intent_id = uuid.uuid4().hex
         report["completion_id"] = intent_id
         try:
-            prepared = completion_store.prepare(
-                connection,
+            prepared = journal.prepare(
                 {"id": intent_id, "request": request, "prepared_at": now()},
                 before_state=current.content,
                 after_state=content,
@@ -531,7 +530,6 @@ def complete(
                 admission_receipt=admitted.receipt,
                 admitted_state=admitted.state,
                 model_documents=planning.plain(documents),
-                deadline=budget,
             )
         except Exception as error:
             raise CompletionInterruptedError(
@@ -542,7 +540,7 @@ def complete(
         try:
             state_writer.publish_locked(current, content, parent_fd)
             receipt = _receipt(prepared["intent"], envelope["binding"])
-            receipt = completion_store.finalize(connection, intent_id, receipt, deadline=budget)
+            receipt = journal.finalize(intent_id, receipt)
         except Exception as error:
             raise CompletionInterruptedError(
                 f"completion {intent_id} has a retained prepared intent; inspect it and run explicit recovery: {error}"
@@ -562,9 +560,9 @@ def show(ledger: Path, completion_id: str, *, lock_timeout: float = store.DEFAUL
     budget = store.Deadline(lock_timeout)
     with (
         store.locked(ledger, write=False, deadline=budget) as (absolute, _),
-        _database(absolute, write=False, deadline=budget) as connection,
+        _database(absolute, write=False, deadline=budget) as journal,
     ):
-        value = completion_store.get(connection, completion_id, deadline=budget)
+        value = journal.get(completion_id)
     intent = value["intent"]
     report = _report("show", intent["binding_id"], intent["request_digest"])
     report["completion_id"] = intent["id"]
@@ -591,9 +589,9 @@ def recover(
     budget = store.Deadline(lock_timeout)
     with (
         store.locked(ledger, write=False, deadline=budget) as (absolute, _),
-        _database(absolute, write=False, deadline=budget) as connection,
+        _database(absolute, write=False, deadline=budget) as journal,
     ):
-        value = completion_store.get(connection, completion_id, deadline=budget)
+        value = journal.get(completion_id)
     intent = value["intent"]
     report = _report("recover", intent["binding_id"], intent["request_digest"])
     report["completion_id"] = intent["id"]
@@ -629,9 +627,9 @@ def recover(
     budget = store.Deadline(lock_timeout)
     with (
         operation_locks.locked(ledger, snapshot, deadline=budget) as (absolute, parent_fd),
-        _database(absolute, write=True, deadline=budget) as connection,
+        _database(absolute, write=True, deadline=budget) as journal,
     ):
-        value = completion_store.get(connection, completion_id, deadline=budget)
+        value = journal.get(completion_id)
         if value["phase"] == "committed":
             return _finish(
                 report,
@@ -644,7 +642,7 @@ def recover(
             return _finish(report, "aborted", "replay", "Another caller already aborted this unpublished intent.")
         current = state_writer.read_locked(snapshot, parent_fd)
         if current.content == value["before_state"]:
-            completion_store.abort(connection, completion_id, deadline=budget)
+            journal.abort(completion_id)
             return _finish(
                 report,
                 "aborted",
@@ -658,13 +656,11 @@ def recover(
                 "state",
                 "Current state differs from both retained versions; no state or journal transition was applied.",
             )
-        envelope = completion_store.envelope(connection, intent["binding_id"], deadline=budget)
+        envelope = journal.envelope(intent["binding_id"])
         if not envelope["active"]:
             return _finish(report, "conflict", "binding", "The retained completion binding is no longer active.")
         state_writer.sync_locked(current, parent_fd)
-        receipt = completion_store.finalize(
-            connection, completion_id, _receipt(intent, envelope["binding"]), deadline=budget
-        )
+        receipt = journal.finalize(completion_id, _receipt(intent, envelope["binding"]))
         return _finish(
             report,
             "completed",
