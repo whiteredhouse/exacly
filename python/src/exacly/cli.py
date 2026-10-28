@@ -4,6 +4,7 @@ exacly validate PATH... [--revision REV] [--date YYYY-MM-DD] [--json]
 exacly refresh PATH... --context CONTEXT --state FILE [--junit FILE...] [--distribution] [run options]
 exacly observe manual-qa PATH... --target FILE --state FILE [--revision REV] [--root DIR]
 exacly admit github-actions --trust-policy FILE --target FILE --run ID --attempt N --date YYYY-MM-DD --out DIR
+exacly reconcile github-actions --dry-run --plan FILE --action ID --policy FILE --trust-policy FILE --target FILE ...
 exacly plan [-m PATH]... --policy FILE --target FILE --date YYYY-MM-DD [--json] [--out FILE]
 exacly show|trace|impact|gaps [-m PATH]... [--json] ...; exacly mcp [-m PATH]...
 exacly view plan [--base REV] | site [--out DIR]
@@ -638,6 +639,24 @@ def write_admission(out: Path, inputs: Iterable[Path], trust_policy: dict[str, A
         os.rename(folder, out)
 
 
+def write_reconciliation(
+    out: Path, inputs: Iterable[Path], trust_policy: dict[str, Any], report: dict[str, Any]
+) -> None:
+    """Save a preview outside its inputs and the validated trust policy's declared model folders.
+
+    A declared parent remains protected when it does not exist locally. No default model folder is assumed:
+    this command evaluates the remote model selected by the trust policy.
+    """
+    try:
+        destinations = (out.resolve(), out.parent.resolve() / out.name)
+        folders = [Path(name).parent.resolve() for name in trust_policy["model"]["files"]]
+        if any(path.is_relative_to(folder) for path in destinations for folder in folders):
+            raise ValueError("--out must be outside the trust policy's declared model folders")
+        write_plan(out, [], inputs, json.dumps(report, indent=2, sort_keys=True, default=str) + "\n")
+    except RuntimeError as error:
+        raise ValueError(f"--out or its protected input paths cannot be resolved: {error}") from error
+
+
 def exacly_main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv and argv[0] in ("validate", "refresh"):
@@ -671,6 +690,25 @@ def exacly_main(argv: list[str] | None = None) -> int:
     admit.add_argument("--date", required=True, type=dt.date.fromisoformat, help="explicit evaluation date YYYY-MM-DD")
     admit.add_argument("--out", required=True, type=Path, help="new bundle directory outside model folders")
     admit.add_argument("--json", action="store_true", help="print the admission receipt as JSON")
+    reconcile = commands.add_parser("reconcile", help="preview completion using fresh evidence without changing work")
+    reconcile.add_argument("source", choices=["github-actions"])
+    reconcile.add_argument(
+        "--dry-run", required=True, action="store_true", help="explicitly request a read-only preview"
+    )
+    reconcile.add_argument("--plan", required=True, type=Path, help="saved verification plan YAML/JSON")
+    reconcile.add_argument("--action", required=True, help="action ID from the saved plan")
+    reconcile.add_argument("--policy", required=True, type=Path, help="readiness policy YAML/JSON")
+    reconcile.add_argument(
+        "--trust-policy", required=True, type=Path, help="trusted producer and model policy YAML/JSON"
+    )
+    reconcile.add_argument("--target", required=True, type=Path, help="output implementation target YAML/JSON")
+    reconcile.add_argument("--run", required=True, type=positive_integer, help="GitHub Actions run ID")
+    reconcile.add_argument("--attempt", required=True, type=positive_integer, help="exact run attempt")
+    reconcile.add_argument(
+        "--date", required=True, type=dt.date.fromisoformat, help="explicit evaluation date YYYY-MM-DD"
+    )
+    reconcile.add_argument("--json", action="store_true", help="print the reconciliation preview as JSON")
+    reconcile.add_argument("--out", type=Path, help="save JSON outside declared model folders, preserving input files")
     assess = commands.add_parser(
         "assess", parents=[common], help="assess a record for an explicit implementation target"
     )
@@ -702,6 +740,39 @@ def exacly_main(argv: list[str] | None = None) -> int:
     view.add_argument("--base", metavar="REV", help="plan: the Git revision the change is against (default: main)")
     view.add_argument("--out", type=Path, metavar="DIR", help="site: the folder to write (default: reports/site)")
     args = parser.parse_args(argv)
+    if args.command == "reconcile":
+        from exacly import github_evidence, reconciliation
+
+        token = os.environ.get("GH_TOKEN")
+        if not token or not token.strip():
+            token = os.environ.get("GITHUB_TOKEN")
+        try:
+            plan_doc, readiness_policy = read(args.plan), read(args.policy)
+            trust_policy = read(args.trust_policy)
+            target = Target(read(args.target))
+            if not token or not token.strip():
+                raise ValueError("set GH_TOKEN or GITHUB_TOKEN to authenticate GitHub Actions evidence retrieval")
+            try:
+                source = github_evidence.GitHubClient(token)
+            except github_evidence.GitHubError:
+                raise ValueError("GitHub credentials are invalid") from None
+            report = reconciliation.preview(
+                source, plan_doc, args.action, readiness_policy, trust_policy, target, args.run, args.attempt, args.date
+            )
+            if report.get("status") not in {"ready", "pending", "stale"}:
+                raise ValueError("reconciliation preview has an invalid status")
+            if args.out is not None:
+                write_reconciliation(
+                    args.out, [args.plan, args.policy, args.trust_policy, args.target], trust_policy, report
+                )
+        except (query.QueryError, ValueError, OSError) as error:
+            message = str(error).replace(token, "[redacted]") if token and token.strip() else str(error)
+            print(f"exacly reconcile: {message}", file=sys.stderr)
+            return 2
+        print(
+            json.dumps(report, indent=2, sort_keys=True, default=str) if args.json else reconciliation.as_text(report)
+        )
+        return 0 if report["status"] == "ready" else 1
     if args.command == "admit":
         from exacly import admission, github_evidence
 

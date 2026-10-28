@@ -9,6 +9,7 @@ The `exacly` command and Python package work with an Exacly model, either a 0.1 
 - [`exacly assess`](#assess-an-implementation-target) projects observations onto an explicit implementation and scope.
 - [`exacly gate`](#evaluate-readiness-policy) evaluates a named readiness policy against that target, separately from conformance.
 - [`exacly plan`](#plan-verification-work) proposes work for verification prerequisites against that target, with an explicit evaluation date.
+- [`exacly reconcile github-actions --dry-run`](#preview-verification-reconciliation) previews whether fresh admitted evidence satisfies a selected plan action's verification goal.
 - [`exacly mcp`](#mcp-server) answers show, trace, impact and gaps questions for coding agents.
 
 ```sh
@@ -178,6 +179,7 @@ candidate = propose_policy(
         "spec/exacly/understanding.yaml",
         "spec/exacly/planning.yaml",
         "spec/exacly/admission.yaml",
+        "spec/exacly/reconciliation.yaml",
     ],
     producer=proposal["producer"],
     observer_paths=proposal["observer_paths"],
@@ -427,6 +429,42 @@ The default human-readable view and `--json` render the same plan. `--out` saves
 
 Exit status is 0 when a plan is produced, including a blocked plan or one with unresolved prerequisites, and 2 for invalid inputs or an output error. Use `gate` when CI needs a readiness exit status.
 
-Plans are advisory. The command does not create tasks, dispatch agents, change observations or close pending work. Its fingerprints identify supplied content; they do not authenticate an evidence producer or authorize execution. A future completion reconciler must consume protected admission output or revalidate its live source, as described in the [plan and apply research](../docs/automated-plan-apply-research.md).
+Plans are advisory. The command does not create tasks, dispatch agents, change observations or close pending work. Its fingerprints identify supplied content; they do not authenticate an evidence producer or authorize execution. Use a [reconciliation preview](#preview-verification-reconciliation) to check a selected action against fresh live admission. Actual task closure remains separate work, as described in the [plan and apply research](../docs/automated-plan-apply-research.md).
 
 In Python, `exacly.planning.create(documents, policy_doc, target, date)` produces the same plan from named documents, a policy, an `exacly.applicability.Target` and a date. `exacly.planning.as_text(plan)` renders it for people, and `exacly.planning.SCHEMA` defines the JSON artifact contract.
+
+## Preview verification reconciliation
+
+`exacly reconcile github-actions --dry-run` checks whether fresh admitted evidence satisfies the verification goal of one existing action in a saved plan. For evidence evaluation it revalidates the live producer and report through [GitHub Actions admission](#admit-github-actions-evidence), fetches the approved model through that path, and evaluates only freshly derived state. It accepts no saved receipt, executor-authored state or local model files as a substitute for those live reads.
+
+The readiness policy supplied with `--policy` must match the policy used to make the plan. The separate `--trust-policy` authorizes the producer and approved model for live evidence admission. Keep both policies under their respective review controls; a saved plan's content digest checks consistency and does not establish approval or execution authority.
+
+Supply an existing action ID from the plan and a target for the implementation whose result is being checked:
+
+```sh
+exacly reconcile github-actions --dry-run --plan reports/plan.json \
+  --action "$EXACLY_ACTION_ID" --policy policies/verification.yaml \
+  --trust-policy trusted/github-verification.json --target targets/output.json \
+  --run "$EXACLY_RUN_ID" --attempt "$EXACLY_RUN_ATTEMPT" --date 2026-10-28 \
+  --out reports/reconciliation.json --json
+```
+
+`--dry-run` is required, and the evaluation date cannot precede the saved plan's date. This first version supports source-verification targets containing only `context`, `model_revision` and `revision`, with full 40-character model and implementation commit SHAs. The output target must retain the planned model revision and context. Its implementation revision may differ from the original target, or remain the same when collecting evidence for an existing implementation. The model namespace, approved config, criteria, bindings and readiness policy must still match the plan.
+
+The report identifies the plan, selected action, original and output targets, live admission checks and verification findings. Its status is:
+
+| Status | Meaning | Exit status |
+| --- | --- | --- |
+| `ready` | Fresh admitted evidence satisfies the selected action's verification goal against the unchanged planned contract. | 0 |
+| `pending` | Admission or applicable verification is insufficient, missing, incomplete or failed. | 1 |
+| `stale` | The readiness policy or approved model contract changed; make a new plan. | 1 |
+
+A selected action can be `ready` while other requirements in the readiness policy remain unsatisfied. The report gives whole-policy readiness separately; readiness of one action does not establish readiness of the whole product or release. Invalid plan schema or digest, inconsistent action/check/completion identity, unknown action IDs and invalid inputs return 2.
+
+Each evaluation of evidence performs live admission for the exact run attempt and explicit date; a stale policy or scope can be reported before those reads. Repeating a preview leaves input documents, observations and pending work untouched; the result can change when the live source or applicable evidence changes. The default text view and `--json` render the same report. `--out` optionally saves that report outside input files and model folders, with input aliases protected.
+
+The report is advisory and unsigned. It does not prove that an executor produced the selected output revision, authorize task closure, dispatch work or maintain an execution ledger. Evidence origin, applicability and the admission limits on test honesty and acceptance coverage remain visible; an executor completion claim alone cannot make an action ready.
+
+In Python, `exacly.reconciliation.preview(source, plan_doc, action_id, readiness_policy, trust_policy, output_target, run_id, attempt, date)` returns the same read-only preview using a live GitHub source and an `exacly.applicability.Target`. `exacly.reconciliation.SCHEMA` defines its versioned JSON artifact contract.
+
+The [live rehearsal report](../docs/verification-reconciliation-rehearsal.md) records an actual producer artifact, admission and reconciliation preview, including the transport coverage and environment limitation.
