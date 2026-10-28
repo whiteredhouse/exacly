@@ -8,7 +8,26 @@ Exacly should own the loop from product intent to observable completion, with co
 
 Scope: automated planning, work dispatch and completion reconciliation for [Exacly](https://github.com/whiteredhouse/exacly) and the [Exacly Action](https://github.com/whiteredhouse/exacly-action). The implementation baseline is Exacly commit [`ce63d80`](https://github.com/whiteredhouse/exacly/commit/ce63d80e30d8c8abd7ebbcd7a9ff83b6f09ca4c0), package 0.5.0, and Action commit [`6db530d`](https://github.com/whiteredhouse/exacly-action/commit/6db530d041d51c030b89a64eaea8bc88cbfd87a8), whose package metadata is 0.6.0 and pins `exacly==0.5.0`.
 
-## Current implementation
+## Implementation progress and model roadmap
+
+The research findings below describe the recorded baseline commits. Since that baseline, the following foundations have been implemented and are active in [Exacly's model](../spec/exacly/README.md):
+
+| Record | Active foundation |
+| --- | --- |
+| REQ-018 | Target-specific saved verification plans. |
+| REQ-019 | Live GitHub evidence admission under an approved producer policy. |
+| REQ-020 | Read-only reconciliation previews. |
+| REQ-021 | Immutable operator registrations for existing pending tasks. |
+| REQ-022 | Ledger diagnosis, backup, copy-only recovery and bounded lock waits. |
+| REQ-023 | Conditional atomic state publication shared by current observers. |
+
+Refresh also now supports separate model and implementation identities under `REQ-010`. These foundations do not yet dispatch work or close pending tasks.
+
+The remaining work is recorded in [`spec/exacly/automation.yaml`](../spec/exacly/automation.yaml), with proposed Requirements `REQ-024` through `REQ-027`, implementers and data concepts linked to `OUT-001`. `REQ-024` covers controlled local completion and recoverable intent/receipt publication; `REQ-025` covers isolation from operator authority; `REQ-026` covers idempotent dispatch; `REQ-027` covers bounded executor runs. Their future test selectors currently have no matching tests and establish no verification claim.
+
+The current delivery order is controlled local completion, then authorized task dispatch, then bounded candidate execution. Candidate execution requires the isolation boundary first. Local completion runs under operator control and consumes admitted evidence without running candidate code. This refines the original delivery sequence below while retaining its research baseline and acceptance cases.
+
+## Research baseline
 
 The existing code provides much of the foundation:
 
