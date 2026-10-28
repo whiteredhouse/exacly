@@ -95,6 +95,7 @@ Its ideas come from established practice:
 | [`python/`](python/README.md) | `exacly`, the command and Python package: validate, refresh, questions, verification plans, views and the MCP server |
 | [`skills/`](skills/exacly/SKILL.md) | The skill that tells coding agents how to work with a model |
 | [`docs/`](docs/) | Research and pilot notes |
+| [`docs/site/`](docs/site/README.md) | Static landing-page mockup, worked model example, and GitHub Pages instructions |
 
 ## Quick start
 
