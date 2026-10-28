@@ -20,6 +20,7 @@ Exacly models itself, following the layout in section 13 of the specification. C
 - [`reconciliation.yaml`](reconciliation.yaml) covers read-only completion previews.
 - [`executions.yaml`](executions.yaml) covers operator registrations and the private execution ledger.
 - [`execution-maintenance.yaml`](execution-maintenance.yaml) covers bounded access, diagnosis, backup and copy-only ledger recovery and upgrade.
+- [`ledger-history.yaml`](ledger-history.yaml) covers the proof-integrity, validation-profile and audit contracts described in the [ledger-history scaling design](../../docs/ledger-history-scaling.md).
 - [`automation.yaml`](automation.yaml) covers verification completion, candidate isolation, dispatch and executor control.
 
 ## Automation roadmap

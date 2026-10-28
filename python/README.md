@@ -516,6 +516,8 @@ Inspection, backup and recovery support ledger schemas 1 and 2 without changing 
 
 Completion operations reuse full history validation only for repeated reads of the same unchanged protected database view. A new operation or a ledger mutation requires fresh validation; unexpected changes stop the operation. Validation results do not persist across commands or connections. Every fresh validation still checks all retained history, including unrelated and aborted intents, so its cost grows with that history.
 
+The [ledger-history scaling design](../docs/ledger-history-scaling.md) describes a proposed proof validation index and its integrity, retention, replay and audit guarantees. It adds no supported history format or command; current ledgers retain the full validation behavior above.
+
 For a supported interrupted SQLite DELETE-journal transaction, recover into a separate new directory:
 
 ```sh

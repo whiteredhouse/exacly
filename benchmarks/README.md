@@ -30,3 +30,32 @@ Measured on 2026-10-28 in the same managed workspace with Python 3.12.14 and `--
 | 30 | recover | 10.210 | 3.045 | 300 | 90 |
 
 Show and exact replay now derive each retained proof once. Exact-after-state recovery needs three full validations: the initial read, the current journal after acquiring commit-time locks, and the changed journal after the receipt commits. Those separate views preserve fresh validation across lock boundaries and mutations.
+
+## Independent history and payload scaling
+
+[`ledger_history.py`](ledger_history.py) profiles full store validation using independently identified completed tasks, open bindings and supersession chains. It also measures model/state/schema work and separate retained-payload read/SHA256 and SQLite `quick_check` passes. The [design decision](../docs/ledger-history-scaling.md) interprets these measurements and specifies the proposed validation-index contract.
+
+Run from the repository root with development dependencies installed. The six commands below reproduce the workloads in [`results/ledger_history_baseline.json`](results/ledger_history_baseline.json):
+
+```sh
+PYTHONPATH=python/src:python/tests uv run --locked python benchmarks/ledger_history.py \
+  --bindings-only --counts 10 100 300 1000 3000 --repeats 3
+PYTHONPATH=python/src:python/tests uv run --locked python benchmarks/ledger_history.py \
+  --bindings-only --supersession-depth 3 --counts 100 300 1000 --repeats 3
+PYTHONPATH=python/src:python/tests uv run --locked python benchmarks/ledger_history.py \
+  --counts 10 100 300
+PYTHONPATH=python/src:python/tests uv run --locked python benchmarks/ledger_history.py \
+  --backlog --counts 10 100 300
+PYTHONPATH=python/src:python/tests uv run --locked python benchmarks/ledger_history.py \
+  --counts 10 --cases 100 --requirements 10
+PYTHONPATH=python/src:python/tests uv run --locked python benchmarks/ledger_history.py \
+  --counts 10 --cases 1000 --requirements 100
+```
+
+Each invocation emits its parameters, runtime/source metadata, byte sizes, medians and individual repetitions as JSON. The committed artifact groups these outputs under workload labels. Completion scenarios use one repetition; binding-only scenarios use three. Timings are diagnostic warm-cache measurements without machine-dependent pass thresholds. A 300-task run or large proof can take tens of seconds, including excluded fixture setup.
+
+The fixtures use distinct task, pending, binding, completion, run, artifact, job, report and archive identities, while sharing an approved model, selected Requirement goal and output target. They begin with a normal completion against controlled GitHub/JUnit fixtures. Subsequent history is constructed directly with recomputed canonical associations to avoid timing repeated writes; every generated binding and complete ledger is validated before measurement. Backlog mode queues all tasks initially and preserves exact before/after state continuity. Sequential mode inserts one new pending task through an intervening serial increment. Larger reports contain real passing testcases with matching observation bindings across the declared model Requirements.
+
+Component timings are inclusive: completion-history time includes payload semantics and proof loading; payload semantics includes model loading, state-schema decoding, binding-schema validation, archive unpacking and observation derivation. Do not sum nested timers. `base_and_sqlite_seconds` excludes the completion-history callback. The group-comparison field is the analytical `pending identities × binding rows` count implied by the current membership algorithm, not an instrumented counter.
+
+The read/SHA256 pass covers the listed retained document/BLOB columns and binding/receipt JSON. It does not validate SQL associations, implement the proposed framed transcript, interpret criteria or establish authority; it is not an index prototype or a measured index speedup. These workloads do not measure cold-storage performance, live GitHub throughput or archival behavior. The fixture tests in [`test_ledger_history_benchmark.py`](../python/tests/test_ledger_history_benchmark.py) check distinct identities, state continuity, supersession shape, proof corruption rejection and deterministic measurement counts.
