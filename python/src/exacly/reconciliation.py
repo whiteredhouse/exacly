@@ -163,6 +163,7 @@ def preview(
     ledger: Path | None = None,
     binding_id: str | None = None,
     state_doc: Any = None,
+    lock_timeout: float | None = None,
 ) -> Doc:
     """Re-evaluate one advisory action from live evidence, leaving plans, state and pending work unchanged.
 
@@ -173,6 +174,12 @@ def preview(
         raise ValueError("an explicit evaluation date and positive run and attempt are required")
     if not isinstance(output_target, Target):
         raise ValueError("an explicit output target is required")
+    if lock_timeout is not None:
+        from exacly import execution_store
+
+        execution_store.Deadline(lock_timeout)
+        if ledger is None:
+            raise ValueError("lock timeout applies only to a registered ledger preview")
     if any(value is not None for value in (ledger, binding_id, state_doc)) and not all(
         value is not None for value in (ledger, binding_id, state_doc)
     ):
@@ -242,6 +249,7 @@ def preview(
             trust_policy=chosen,
             output_target=Target(target),
             date=date,
+            **({"lock_timeout": lock_timeout} if lock_timeout is not None else {}),
         )
         binding = envelope["binding"]
         report["binding"] = {

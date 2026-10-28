@@ -7,6 +7,8 @@ exacly admit github-actions --trust-policy FILE --target FILE --run ID --attempt
 exacly reconcile github-actions --dry-run --plan FILE --action ID --policy FILE --trust-policy FILE --target FILE ...
 exacly executions register --ledger FILE --plan FILE --action ID --state FILE --task TASK --opened-at ISO ...
 exacly executions show --ledger FILE --binding ID [--json]
+exacly executions inspect --ledger FILE [--lock-timeout SECONDS] [--json]
+exacly executions backup|recover --ledger FILE --out NEWDIR [--lock-timeout SECONDS] [--json]
 exacly plan [-m PATH]... --policy FILE --target FILE --date YYYY-MM-DD [--json] [--out FILE]
 exacly show|trace|impact|gaps [-m PATH]... [--json] ...; exacly mcp [-m PATH]...
 exacly view plan [--base REV] | site [--out DIR]
@@ -19,6 +21,7 @@ import argparse
 import datetime as dt
 import glob
 import json
+import math
 import os
 import subprocess
 import sys
@@ -598,6 +601,17 @@ def positive_integer(value: str) -> int:
     return number
 
 
+def nonnegative_seconds(value: str) -> float:
+    """A bounded lock wait must be finite and explicitly nonnegative."""
+    try:
+        seconds = float(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("must be finite nonnegative seconds") from error
+    if not math.isfinite(seconds) or seconds < 0:
+        raise argparse.ArgumentTypeError("must be finite nonnegative seconds")
+    return seconds
+
+
 def write_admission(out: Path, inputs: Iterable[Path], trust_policy: dict[str, Any], result: AdmissionResult) -> None:
     """Publish one complete admission bundle in a new directory, preserving every input.
 
@@ -665,6 +679,24 @@ def write_reconciliation(
 def execution_ledger_paths(ledger: Path) -> list[Path]:
     """The database and SQLite auxiliary paths that must remain outside input and model locations."""
     return [ledger, *(ledger.with_name(ledger.name + suffix) for suffix in ("-journal", "-wal", "-shm"))]
+
+
+def protect_execution_copy(ledger: Path, out: Path) -> None:
+    """Maintenance copies always use a new directory disjoint from the source and SQLite sidecars."""
+    if os.path.lexists(out):
+        raise ValueError("--out must be a new directory, not an existing path or symlink")
+    try:
+        destinations = (out.resolve(), out.parent.resolve() / out.name)
+        for source in execution_ledger_paths(ledger):
+            locations = (source.resolve(), source.parent.resolve() / source.name)
+            if any(
+                source_path.is_relative_to(destination) or destination.is_relative_to(source_path)
+                for source_path in locations
+                for destination in destinations
+            ):
+                raise ValueError("--out cannot overlap the source execution ledger or its auxiliary files")
+    except RuntimeError as error:
+        raise ValueError(f"execution copy paths cannot be resolved: {error}") from error
 
 
 def protect_execution_ledger(ledger: Path, inputs: Iterable[Path], trust_policy: dict[str, Any]) -> None:
@@ -745,12 +777,34 @@ def exacly_main(argv: list[str] | None = None) -> int:
     )
     register.add_argument("--supersedes", help="exact active binding ID to supersede with retained history")
     register.add_argument("--json", action="store_true", help="print the registered binding as JSON")
+    register.add_argument(
+        "--lock-timeout", type=nonnegative_seconds, help="maximum ledger lock wait in seconds (default: 30)"
+    )
     execution_show = execution_commands.add_parser(
         "show", help="inspect an existing binding without changing the ledger"
     )
     execution_show.add_argument("--ledger", required=True, type=Path, help="existing private execution ledger")
     execution_show.add_argument("--binding", required=True, help="registered binding ID")
     execution_show.add_argument("--json", action="store_true", help="print the binding and current status as JSON")
+    execution_show.add_argument(
+        "--lock-timeout", type=nonnegative_seconds, help="maximum ledger lock wait in seconds (default: 30)"
+    )
+    for operation in ("inspect", "backup", "recover"):
+        maintenance_parser = execution_commands.add_parser(
+            operation,
+            help={
+                "inspect": "diagnose an existing ledger without changing it",
+                "backup": "save a consistent ledger backup in a new directory",
+                "recover": "recover into a new copy while preserving the source files",
+            }[operation],
+        )
+        maintenance_parser.add_argument("--ledger", required=True, type=Path, help="existing private execution ledger")
+        if operation != "inspect":
+            maintenance_parser.add_argument("--out", required=True, type=Path, help="new private destination directory")
+        maintenance_parser.add_argument(
+            "--lock-timeout", type=nonnegative_seconds, help="maximum ledger lock wait in seconds (default: 30)"
+        )
+        maintenance_parser.add_argument("--json", action="store_true", help="print the maintenance report as JSON")
     admit = commands.add_parser("admit", help="admit verification evidence from an authorized live source")
     admit.add_argument("source", choices=["github-actions"])
     admit.add_argument("--trust-policy", required=True, type=Path, help="trusted producer and model policy YAML/JSON")
@@ -782,6 +836,9 @@ def exacly_main(argv: list[str] | None = None) -> int:
     reconcile.add_argument("--ledger", type=Path, help="existing private ledger for a registered binding")
     reconcile.add_argument("--binding", help="registered binding ID; requires --ledger and --state")
     reconcile.add_argument("--state", type=Path, help="current state to check against the registered pending item")
+    reconcile.add_argument(
+        "--lock-timeout", type=nonnegative_seconds, help="maximum registered-binding ledger lock wait in seconds"
+    )
     assess = commands.add_parser(
         "assess", parents=[common], help="assess a record for an explicit implementation target"
     )
@@ -814,11 +871,39 @@ def exacly_main(argv: list[str] | None = None) -> int:
     view.add_argument("--out", type=Path, metavar="DIR", help="site: the folder to write (default: reports/site)")
     args = parser.parse_args(argv)
     if args.command == "executions":
+        if args.execution_command in {"inspect", "backup", "recover"}:
+            import exacly.execution_maintenance as execution_maintenance
+
+            try:
+                options = {} if args.lock_timeout is None else {"lock_timeout": args.lock_timeout}
+                if args.execution_command == "inspect":
+                    answer = execution_maintenance.inspect(args.ledger, **options)
+                    if answer.get("status") not in {"clean", "recovery_required", "unsupported", "corrupt"}:
+                        raise ValueError("execution inspection returned an invalid status")
+                else:
+                    protect_execution_copy(args.ledger, args.out)
+                    maintenance_action = getattr(execution_maintenance, args.execution_command)
+                    answer = maintenance_action(args.ledger, args.out, **options)
+                    expected_status = {"backup": "backed_up", "recover": "recovered"}[args.execution_command]
+                    if answer.get("status") != expected_status:
+                        raise ValueError(f"execution {args.execution_command} returned an invalid status")
+            except (query.QueryError, ValueError, OSError) as error:
+                print(f"exacly executions: {error}", file=sys.stderr)
+                return 2
+            print(
+                json.dumps(answer, indent=2, sort_keys=True, default=str)
+                if args.json
+                else execution_maintenance.as_text(answer)
+            )
+            return 0 if args.execution_command != "inspect" or answer["status"] == "clean" else 1
         import exacly.executions as executions
 
         try:
             if args.execution_command == "show":
-                answer = executions.get(args.ledger, args.binding)
+                if args.lock_timeout is None:
+                    answer = executions.get(args.ledger, args.binding)
+                else:
+                    answer = executions.get(args.ledger, args.binding, lock_timeout=args.lock_timeout)
             else:
                 plan_doc, state_doc = read(args.plan), read(args.state)
                 readiness_policy, trust_policy = read(args.policy), read(args.trust_policy)
@@ -839,7 +924,10 @@ def exacly_main(argv: list[str] | None = None) -> int:
                     adopt_verification=args.adopt_verification,
                     supersedes=args.supersedes,
                 )
-                answer = executions.register(args.ledger, request)
+                if args.lock_timeout is None:
+                    answer = executions.register(args.ledger, request)
+                else:
+                    answer = executions.register(args.ledger, request, lock_timeout=args.lock_timeout)
         except (query.QueryError, ValueError, OSError) as error:
             print(f"exacly executions: {error}", file=sys.stderr)
             return 2
@@ -853,6 +941,8 @@ def exacly_main(argv: list[str] | None = None) -> int:
             value is not None for value in binding_options
         ):
             parser.error("--ledger, --binding and --state must be supplied together")
+        if args.lock_timeout is not None and args.ledger is None:
+            parser.error("--lock-timeout requires a registered binding with --ledger, --binding and --state")
         token = os.environ.get("GH_TOKEN")
         if not token or not token.strip():
             token = os.environ.get("GITHUB_TOKEN")
@@ -880,9 +970,10 @@ def exacly_main(argv: list[str] | None = None) -> int:
             if args.ledger is None:
                 report = reconciliation.preview(*preview_args)
             else:
-                report = reconciliation.preview(
-                    *preview_args, ledger=args.ledger, binding_id=args.binding, state_doc=read(args.state)
-                )
+                binding_kwargs = {"ledger": args.ledger, "binding_id": args.binding, "state_doc": read(args.state)}
+                if args.lock_timeout is not None:
+                    binding_kwargs["lock_timeout"] = args.lock_timeout
+                report = reconciliation.preview(*preview_args, **binding_kwargs)
             if report.get("status") not in {"ready", "pending", "stale"}:
                 raise ValueError("reconciliation preview has an invalid status")
             if args.out is not None:

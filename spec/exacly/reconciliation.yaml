@@ -28,6 +28,7 @@ records:
       - The CLI requires dry-run mode and an evaluation date that does not precede the plan; ready exits 0, pending or stale exits 1, and invalid inputs or output errors exit 2.
       - Text and JSON render the same preview; optional report output cannot overwrite inputs or enter protected model folders, including input aliases.
       - Ledger, binding ID and current state are optional all-or-none inputs; bound previews read an existing valid ledger without initialization, migration, recovery or writes.
+      - Bound previews accept a finite nonnegative lock timeout defaulting to 30 seconds; each ledger read shares one monotonic budget across directory and SQLite waits, while reads before and after live admission have separate deadlines; zero permits an immediate attempt and timeout is an actionable invalid-input error without ledger mutation, rather than an HTTP or whole-preview timeout.
       - A bound preview requires the active registered binding, exact pending entry and goal, policies and output scope to match; current state must match model revision, context and lineage, preserve the complete pending entry, and respect the latest registered serial and digest watermark.
       - Higher refreshed state serials with the same pending entry are allowed; binding or watermark mismatches produce stale and ledger errors are invalid input, while fresh live admission remains required for evidence evaluation.
       - Registered binding verification is reported only when bound checks succeed; unbound previews imply no registered task binding.
