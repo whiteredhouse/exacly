@@ -4,6 +4,7 @@ The `exacly` command and Python package work with an Exacly model, either a 0.1 
 
 - [`exacly validate`](#validate) checks the model and prints the section 11 validation report.
 - [`exacly refresh`](#refresh) writes state from what the model's bindings observe.
+- [`exacly admit github-actions`](#admit-github-actions-evidence) checks a live CI run against an approved producer policy before deriving verification state.
 - [`exacly show`, `trace`, `impact` and `gaps`](#questions) answer questions about the model, and [`exacly view`](#views) renders them for people.
 - [`exacly assess`](#assess-an-implementation-target) projects observations onto an explicit implementation and scope.
 - [`exacly gate`](#evaluate-readiness-policy) evaluates a named readiness policy against that target, separately from conformance.
@@ -74,7 +75,7 @@ exacly refresh approved-model --context main --state reports/state/main.json \
   --junit reports/junit.xml --model-revision aaaaaaa --revision bbbbbbb
 ```
 
-The identity flags label the supplied model and report; they do not check out either Git revision, load the model from that revision, or authenticate the report. The caller must supply the intended model files and test results. Distinct identities use the existing state schema. They allow `assess`, `gate` and `plan` to select the approved model and resulting implementation independently, while trusted evidence admission and automatic work completion remain separate work.
+The identity flags label the supplied model and report; they do not check out either Git revision, load the model from that revision, or authenticate the report. The caller must supply the intended model files and test results. Distinct identities use the existing state schema. They allow `assess`, `gate` and `plan` to select the approved model and resulting implementation independently. Use [GitHub Actions admission](#admit-github-actions-evidence) when verification state must be derived from a live run checked against an approved producer policy.
 
 In Python, `exacly.refresh.Run(revision=implementation_revision, context=..., observed_at=..., model_revision=model_revision)` supplies the same split. `model_revision` is optional, and `Run.config_revision` gives its effective value, defaulting to `revision`.
 
@@ -137,6 +138,86 @@ It writes one verification assessment per platform of each binding, with source 
 - **States.** A platform is failed when any criterion's latest result failed, inconclusive when one was inconclusive, passed when every criterion passed, and not checked when it has no usable observation, naming the release and builds. When every criterion due in the release passed but others are open, it is inconclusive and names them, with `x-release-scope: passed`, so the release can ship while the record is not yet verified. The release's scope is only its due criteria: a failure outside them fails the platform but leaves `x-release-scope: passed`.
 - **Details.** Each assessment carries `x-platform`, `x-release`, `x-builds`, `x-criteria` (each criterion's latest result) and, when the release has due criteria, `x-release-scope`. Its evidence is each observation's retained output with its digest. `exacly gaps` lists what the extension finds in them under "From extension observers": a release whose scope passed while the record is not verified, and observations that were not used.
 - **Validation.** When the model declares the extension, the validator checks each `manual-qa:observations` binding (`11.extension-binding`): `path`, and optionally `platforms`, nothing else. It also checks the `x-` fields on this source's assessments in state (`11.extension-assessment`), and `gaps` reports an assessment whose fields are not valid instead of reading them. The binding, assessment, target and observation schemas are `BINDING_SCHEMA`, `ASSESSMENT_SCHEMA`, `TARGET_SCHEMA` and `OBSERVATION_SCHEMA` in `exacly.manual_qa`. `observed_at` must be a timestamp with its offset, such as `2026-10-25T14:12:00Z`.
+
+## Admit GitHub Actions evidence
+
+`exacly admit github-actions` reads a live GitHub Actions run and artifact through authenticated GitHub APIs, checks them against an independently approved trust policy, and derives fresh verification state from the accepted JUnit report. Admission requires conforming 0.2 config; approved model inputs cannot contain observed state. It accepts neither caller-authored state nor offline run metadata as evidence of origin.
+
+The initial producer is [the verification evidence workflow](../.github/workflows/verification-evidence.yml). It runs on pushes to `main`, has one approved job named `Observe verification`, explicitly selects the pytest configuration with `-c pyproject.toml`, and packages `manifest.json` and `junit.xml` in an artifact named `exacly-evidence-RUN-ATTEMPT`. The packaging helper checks the checkout and supported run metadata before producing the bundle. Admission independently compares that metadata with GitHub responses and the approved policy.
+
+### Approve a producer policy
+
+The trust policy names the repository by numeric ID and full name, the `main` branch, the approved workflow path and byte digest, the observation job, an observer-code and dependency fingerprint, and the approved model revision, file list and config digest. The model revision and selected implementation revision must be full Git commit SHAs. The implementation may be a newer revision whose approved workflow and observer fingerprint still match.
+
+Prepare a candidate policy from an already reviewed commit containing the producer workflow. Set `EXACLY_APPROVED_REVISION` to that commit's full SHA and provide a read-permission GitHub token through `GH_TOKEN`:
+
+```python
+import json
+import os
+from pathlib import Path
+
+from exacly.admission import propose_policy
+from exacly.github_evidence import GitHubClient
+
+source = GitHubClient(os.environ["GH_TOKEN"])
+candidate = propose_policy(
+    source,
+    "whiteredhouse/exacly",
+    os.environ["EXACLY_APPROVED_REVISION"],
+    [
+        "spec/exacly/model.yaml",
+        "spec/exacly/validation.yaml",
+        "spec/exacly/observation.yaml",
+        "spec/exacly/understanding.yaml",
+        "spec/exacly/planning.yaml",
+        "spec/exacly/admission.yaml",
+    ],
+)
+Path("admission-policy.candidate.json").write_text(json.dumps(candidate, indent=2) + "\n")
+```
+
+Review the candidate policy independently of the implementation being evaluated, then keep the approved policy in controlled storage outside model directories. Generating hashes from a candidate implementation does not approve its workflow, observer or model. The helper prepares policy content; it grants no execution authority or approval.
+
+### Admit an exact run attempt
+
+The target selects context `main`, the policy's approved `model_revision`, and the observed implementation `revision`. After approving the policy, set `EXACLY_IMPLEMENTATION_REVISION` to the full implementation SHA from the intended run and prepare the target:
+
+```python
+import json
+import os
+from pathlib import Path
+
+approved = json.loads(Path("trusted/github-verification.json").read_text())
+target = {
+    "context": "main",
+    "model_revision": approved["model"]["revision"],
+    "revision": os.environ["EXACLY_IMPLEMENTATION_REVISION"],
+}
+Path("targets").mkdir(exist_ok=True)
+Path("targets/main.json").write_text(json.dumps(target, indent=2) + "\n")
+```
+
+Supply the run ID and exact attempt to evaluate, an explicit date and a new output directory:
+
+```sh
+exacly admit github-actions --trust-policy trusted/github-verification.json \
+  --target targets/main.json --run "$EXACLY_RUN_ID" --attempt "$EXACLY_RUN_ATTEMPT" \
+  --date 2026-10-28 --out reports/admission-run --json
+```
+
+`--date` supplies the UTC evaluation date for model conformance and expiry checks. A producer job completed after that UTC date is rejected. The live branch-protection check records its actual timestamp separately from the receipt's `as_of` date.
+
+The command reads `GH_TOKEN`, falling back to `GITHUB_TOKEN`; it has no command-line token option. The token needs read access to the repository content, workflow runs, jobs and artifacts used by admission.
+
+Admission checks the repository identity, current protection of `main`, a push run on `main` for the selected implementation SHA and exact attempt, the approved workflow and single observation job, matching workflow and observer fingerprints, and one uniquely named artifact created during the job. It verifies the API's archive digest, the strict manifest and report digest, and the ZIP contents. Approved model files are fetched at their full revision through GitHub and checked against the policy's config digest before refresh derives state with that model and implementation identity.
+
+GitHub's artifact metadata does not directly identify its producing job or attempt. The receipt therefore records that association as an inference from the approved single-job producer contract, exact artifact name and job timing. Current branch protection is an admission precondition; its `branch_protection_checked_at` timestamp does not prove historical protection at the evaluation date or when the run occurred.
+
+A completed failed verification step can supply evidence of failure. If its report contains positive assessments despite the step failing, admission downgrades those positives to `inconclusive`. A skipped or cancelled verification step, or a missing report, is rejected.
+
+For an admission decision, the new output directory contains `receipt.json`. An admitted result also retains `archive.zip`, `junit.xml` and freshly derived `state.json`; a rejected result saves no report or state. Output is written atomically to a new directory. Exit status is 0 for admitted, 1 for rejected, and 2 for invalid inputs or output errors.
+
+The receipt establishes only the checked evidence origin and target applicability. It records `test_honesty_verified: false`, `coverage_verified: false` and `self_authenticating: false`: a trusted producer can run weak or misleading checks, and a copied or edited receipt is not independently authenticated. Changes to acceptance coverage still need review. Retain admission output in protected storage or revalidate the live source before using it for a later decision. This command does not sign receipts, dispatch work or close pending tasks.
 
 ## Questions
 
@@ -335,6 +416,6 @@ The default human-readable view and `--json` render the same plan. `--out` saves
 
 Exit status is 0 when a plan is produced, including a blocked plan or one with unresolved prerequisites, and 2 for invalid inputs or an output error. Use `gate` when CI needs a readiness exit status.
 
-Plans are advisory. The command does not create tasks, dispatch agents, change observations or close pending work. Its fingerprints identify supplied content; they do not authenticate an evidence producer or authorize execution. Automatic completion still needs trusted evidence admission and a completion reconciler, as described in the [plan and apply research](../docs/automated-plan-apply-research.md).
+Plans are advisory. The command does not create tasks, dispatch agents, change observations or close pending work. Its fingerprints identify supplied content; they do not authenticate an evidence producer or authorize execution. A future completion reconciler must consume protected admission output or revalidate its live source, as described in the [plan and apply research](../docs/automated-plan-apply-research.md).
 
 In Python, `exacly.planning.create(documents, policy_doc, target, date)` produces the same plan from named documents, a policy, an `exacly.applicability.Target` and a date. `exacly.planning.as_text(plan)` renders it for people, and `exacly.planning.SCHEMA` defines the JSON artifact contract.

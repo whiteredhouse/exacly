@@ -1,0 +1,41 @@
+name: Verification evidence
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  observe:
+    name: Observe verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
+      - name: Install locked dependencies
+        run: uv sync --locked
+      - name: Run verification
+        id: verification
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: uv run --locked pytest -c pyproject.toml spec/tests python/tests tests --junitxml=reports/junit.xml
+      - name: Package verification evidence
+        id: evidence
+        if: always() && (steps.verification.outcome == 'success' || steps.verification.outcome == 'failure')
+        env:
+          EXACLY_TEST_OUTCOME: ${{ steps.verification.outcome }}
+        run: uv run --locked python ci/package_verification_evidence.py --report reports/junit.xml --out reports/evidence
+      - name: Upload verification evidence
+        if: always() && steps.evidence.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: exacly-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: reports/evidence
+          if-no-files-found: error
+          retention-days: 30
+          include-hidden-files: false

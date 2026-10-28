@@ -3,6 +3,7 @@
 exacly validate PATH... [--revision REV] [--date YYYY-MM-DD] [--json]
 exacly refresh PATH... --context CONTEXT --state FILE [--junit FILE...] [--distribution] [run options]
 exacly observe manual-qa PATH... --target FILE --state FILE [--revision REV] [--root DIR]
+exacly admit github-actions --trust-policy FILE --target FILE --run ID --attempt N --date YYYY-MM-DD --out DIR
 exacly plan [-m PATH]... --policy FILE --target FILE --date YYYY-MM-DD [--json] [--out FILE]
 exacly show|trace|impact|gaps [-m PATH]... [--json] ...; exacly mcp [-m PATH]...
 exacly view plan [--base REV] | site [--out DIR]
@@ -24,7 +25,7 @@ from collections.abc import Callable, Iterable
 from fnmatch import fnmatchcase
 from importlib import metadata
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
@@ -32,6 +33,9 @@ from exacly import manual_qa, mcp, planning, policy, query, views
 from exacly.applicability import Target
 from exacly.core import binding_words, bindings, identity, is_state, validate_documents
 from exacly.refresh import RefreshError, Run, check_distribution_identity, read_junit, refresh, unattributed
+
+if TYPE_CHECKING:
+    from exacly.admission import AdmissionResult
 
 SUFFIXES = {".yaml", ".yml", ".json"}
 DEFAULT_MODEL = Path("spec/exacly")
@@ -580,6 +584,60 @@ def write_plan(out: Path, paths: list[Path], inputs: Iterable[Path], text: str) 
             temporary.unlink(missing_ok=True)
 
 
+def positive_integer(value: str) -> int:
+    """A run identifier or attempt must be an explicitly positive integer."""
+    try:
+        number = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("must be a positive integer") from error
+    if number <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return number
+
+
+def write_admission(out: Path, inputs: Iterable[Path], trust_policy: dict[str, Any], result: AdmissionResult) -> None:
+    """Publish one complete admission bundle in a new directory, preserving every input.
+
+    The caller must validate trust_policy through admission.admit before invoking this helper. Model file
+    declarations are remote Git paths; their corresponding local folders are excluded from output placement.
+    """
+    if os.path.lexists(out):
+        raise ValueError("--out must be a new directory, not an existing path or symlink")
+    try:
+        destination = out.resolve()
+        protected = {path.resolve() for path in inputs}
+        folders = [DEFAULT_MODEL.resolve(), *(Path(name).parent.resolve() for name in trust_policy["model"]["files"])]
+    except RuntimeError as error:
+        raise ValueError(f"--out or its protected input paths cannot be resolved: {error}") from error
+    if destination in protected:
+        raise ValueError("--out cannot overwrite the trust policy or target")
+    if any(destination.is_relative_to(folder) for folder in folders):
+        raise ValueError("--out must be outside model folders")
+    if result.receipt.get("status") not in {"admitted", "rejected"}:
+        raise ValueError("admission receipt has an invalid status")
+    if result.receipt["status"] == "admitted" and (
+        result.archive is None or result.report is None or result.state is None
+    ):
+        raise ValueError("admitted evidence must include its archive, report and state")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=f".{out.name}-", dir=out.parent) as temporary:
+        folder = Path(temporary)
+        folder.joinpath("receipt.json").write_text(
+            json.dumps(result.receipt, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8"
+        )
+        if result.receipt["status"] == "admitted":
+            assert result.archive is not None and result.report is not None and result.state is not None
+            folder.joinpath("archive.zip").write_bytes(result.archive)
+            folder.joinpath("junit.xml").write_bytes(result.report)
+            folder.joinpath("state.json").write_text(
+                json.dumps(result.state, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8"
+            )
+        # Recheck immediately before publication so an ordinary repeat invocation never replaces a bundle.
+        if os.path.lexists(out):
+            raise ValueError("--out must be a new directory, not an existing path or symlink")
+        os.rename(folder, out)
+
+
 def exacly_main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv and argv[0] in ("validate", "refresh"):
@@ -604,6 +662,15 @@ def exacly_main(argv: list[str] | None = None) -> int:
     commands.add_parser("validate", help="validate the model and print the section 11 report")
     commands.add_parser("refresh", help="write state for one context from what the bindings observe")
     commands.add_parser("observe", help="write state from an extension source, such as manual-qa observations")
+    admit = commands.add_parser("admit", help="admit verification evidence from an authorized live source")
+    admit.add_argument("source", choices=["github-actions"])
+    admit.add_argument("--trust-policy", required=True, type=Path, help="trusted producer and model policy YAML/JSON")
+    admit.add_argument("--target", required=True, type=Path, help="explicit implementation target YAML/JSON")
+    admit.add_argument("--run", required=True, type=positive_integer, help="GitHub Actions run ID")
+    admit.add_argument("--attempt", required=True, type=positive_integer, help="exact run attempt")
+    admit.add_argument("--date", required=True, type=dt.date.fromisoformat, help="explicit evaluation date YYYY-MM-DD")
+    admit.add_argument("--out", required=True, type=Path, help="new bundle directory outside model folders")
+    admit.add_argument("--json", action="store_true", help="print the admission receipt as JSON")
     assess = commands.add_parser(
         "assess", parents=[common], help="assess a record for an explicit implementation target"
     )
@@ -635,6 +702,35 @@ def exacly_main(argv: list[str] | None = None) -> int:
     view.add_argument("--base", metavar="REV", help="plan: the Git revision the change is against (default: main)")
     view.add_argument("--out", type=Path, metavar="DIR", help="site: the folder to write (default: reports/site)")
     args = parser.parse_args(argv)
+    if args.command == "admit":
+        from exacly import admission, github_evidence
+
+        token = os.environ.get("GH_TOKEN")
+        if not token or not token.strip():
+            token = os.environ.get("GITHUB_TOKEN")
+        try:
+            if os.path.lexists(args.out):
+                raise ValueError("--out must be a new directory, not an existing path or symlink")
+            trust_policy = read(args.trust_policy)
+            target = Target(read(args.target))
+            if not token or not token.strip():
+                raise ValueError("set GH_TOKEN or GITHUB_TOKEN to authenticate GitHub Actions evidence retrieval")
+            try:
+                source = github_evidence.GitHubClient(token)
+            except github_evidence.GitHubError:
+                raise ValueError("GitHub credentials are invalid") from None
+            result = admission.admit(source, trust_policy, target, args.run, args.attempt, args.date)
+            write_admission(args.out, [args.trust_policy, args.target], trust_policy, result)
+        except (query.QueryError, ValueError, OSError) as error:
+            message = str(error).replace(token, "[redacted]") if token and token.strip() else str(error)
+            print(f"exacly admit: {message}", file=sys.stderr)
+            return 2
+        print(
+            json.dumps(result.receipt, indent=2, sort_keys=True, default=str)
+            if args.json
+            else admission.as_text(result.receipt)
+        )
+        return 0 if result.receipt["status"] == "admitted" else 1
     if args.command == "plan":
         try:
             paths = args.model or [DEFAULT_MODEL]

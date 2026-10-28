@@ -12,6 +12,7 @@ on:
       - "ci/**"
       - ".github/workflows/spec.yml"
       - ".github/workflows/release.yml"
+      - ".github/workflows/verification-evidence.yml"
   # Every push to main runs, whatever it changed, so that the latest main always gets a state job.
   # The state job's own commits carry [skip ci] and don't start another run.
   push:
