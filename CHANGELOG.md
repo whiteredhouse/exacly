@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `exacly refresh --model-revision MODEL --revision IMPLEMENTATION` records verification against an explicitly identified model and implementation. The enclosing state's config revision follows the model; assessment context and evidence applicability follow the implementation. Omitting `--model-revision` preserves the existing single-revision behavior and retained observations keep their original identities.
+- Distribution refresh rejects distinct model and implementation revisions. The new identity option labels caller-supplied model files and results; it does not load Git revisions or authenticate evidence. GitHub's automatic source link follows the selected implementation revision, while an explicit `--source-url` remains unchanged.
 - `exacly plan --policy FILE --target FILE --date YYYY-MM-DD` proposes read-only work for Requirement verification prerequisites. It distinguishes investigation of a known failure, collection of missing evidence and missing observation configuration, while satisfied prerequisites generate no action.
 - Text and JSON views share a versioned plan with input fingerprints, stable action IDs and observable completion conditions. `--out` saves JSON outside model inputs. Planning does not dispatch work or establish evidence authenticity; readiness exit behavior remains on `gate`.
 

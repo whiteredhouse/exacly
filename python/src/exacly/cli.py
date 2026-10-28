@@ -31,7 +31,7 @@ import yaml
 from exacly import manual_qa, mcp, planning, policy, query, views
 from exacly.applicability import Target
 from exacly.core import binding_words, bindings, identity, is_state, validate_documents
-from exacly.refresh import RefreshError, Run, read_junit, refresh, unattributed
+from exacly.refresh import RefreshError, Run, check_distribution_identity, read_junit, refresh, unattributed
 
 SUFFIXES = {".yaml", ".yml", ".json"}
 DEFAULT_MODEL = Path("spec/exacly")
@@ -218,33 +218,43 @@ def refresh_main(argv: list[str] | None = None) -> int:
         help="the context is how the product is distributed: an implementer present at the revision counts as released",
     )
     parser.add_argument(
-        "--revision", default=defaults["revision"], help="config revision observed, such as a Git commit"
+        "--revision", default=defaults["revision"], help="implementation revision observed, such as a Git commit"
+    )
+    parser.add_argument(
+        "--model-revision", help="revision defining the observed criteria and bindings (default: --revision)"
     )
     parser.add_argument("--workflow", default=defaults["workflow"], help="workflow path of the run, for bindings")
     parser.add_argument("--job", default=defaults["job"], help="job of the run, for bindings")
     parser.add_argument("--job-status", help="the job's status so far, for bindings without cases (success, failure)")
     parser.add_argument("--run-url", default=defaults["run_url"], help="link to the run, cited as evidence")
-    parser.add_argument("--source-url", default=defaults["source_url"], help="base link to files at the revision")
+    parser.add_argument("--source-url", help="base link to implementation files (default: GitHub blob at --revision)")
     parser.add_argument("--root", type=Path, default=Path(), help="repository root that references resolve against")
     args = parser.parse_args(argv)
-    if not args.revision:
+    if args.revision is None:
         parser.error("--revision is required outside GitHub Actions")
+    source_url = args.source_url
+    if source_url is None:
+        server, repo = os.environ.get("GITHUB_SERVER_URL"), os.environ.get("GITHUB_REPOSITORY")
+        source_url = f"{server}/{repo}/blob/{args.revision}" if server and repo else None
     try:
+        run = Run(
+            revision=args.revision,
+            model_revision=args.model_revision,
+            context=args.context,
+            observed_at=dt.datetime.now(dt.UTC).replace(microsecond=0),
+            workflow=args.workflow,
+            job=args.job,
+            job_status=args.job_status,
+            url=args.run_url,
+            source_url=source_url,
+        )
+        if args.distribution:
+            check_distribution_identity(run)
         documents = {name: doc for name, doc in load(args.paths).items() if not is_state(doc)}
-    except query.QueryError as error:
+    except (query.QueryError, RefreshError) as error:
         print(f"exacly refresh: {error}", file=sys.stderr)
         return 1
     previous = json.loads(args.state.read_text()) if args.state.exists() else None
-    run = Run(
-        revision=args.revision,
-        context=args.context,
-        observed_at=dt.datetime.now(dt.UTC).replace(microsecond=0),
-        workflow=args.workflow,
-        job=args.job,
-        job_status=args.job_status,
-        url=args.run_url,
-        source_url=args.source_url,
-    )
     try:
         state = refresh(documents, read_junit(args.junit), run, previous, args.distribution, args.root)
     except RefreshError as error:
@@ -254,7 +264,10 @@ def refresh_main(argv: list[str] | None = None) -> int:
     args.state.write_text(json.dumps(state, indent=2) + "\n")
     counts = Counter(f"{a['dimension']} {a['state']}" for r in state["records"].values() for a in r["assessments"])
     summary = ", ".join(f"{n} {k}" for k, n in sorted(counts.items())) or "no assessments"
-    print(f"Wrote {args.state}: {args.context} serial {state['serial']} at {args.revision}: {summary}")
+    observed = run.revision
+    if run.config_revision != run.revision:
+        observed = f"implementation {run.revision} (model {run.config_revision})"
+    print(f"Wrote {args.state}: {args.context} serial {state['serial']} at {observed}: {summary}")
     unknown = unattributed(state)
     if unknown:
         print(

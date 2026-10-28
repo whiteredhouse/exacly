@@ -47,11 +47,12 @@ records:
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-27"
+    last_reviewed_at: "2026-10-28"
     statement: >-
       For each record with a tests binding, write a verification assessment for
-      the observed commit from the test cases the binding selects, with the run
-      as evidence, and increase the serial while keeping the lineage.
+      the observed implementation against the supplied model from the test cases
+      the binding selects, with the run as evidence, and increase the serial while
+      keeping the lineage and original identities of retained observations.
     acceptance_criteria:
       - Every selected case passing gives passed; any failing gives failed, with the failing cases as the reason.
       - A mix of passing and skipped selected cases gives inconclusive with evidence and a reason naming skipped cases; skipped cases count as present for pattern matching, and missing-pattern diagnostics and failure precedence are preserved.
@@ -59,18 +60,25 @@ records:
       - A pattern that selects no case in the report gives inconclusive, naming the pattern, unless a selected case failed, which gives failed and names both.
       - A binding without cases takes the job's result.
       - A record without a binding gets no verification assessment.
+      - An optional model revision identifies the approved criteria and bindings separately from the observed implementation revision; omitting it uses the implementation revision for both, preserving existing callers and positional Run arguments.
+      - State config_revision names the effective model revision; each new test assessment subject names the model and implementation revisions independently, while assessment context and evidence applies_to name the implementation revision.
+      - Revision flags label the supplied config and reports without checking out Git revisions or authenticating their provenance; an automatic GitHub source link uses the selected implementation revision and an explicit source URL is preserved.
       - In a distribution context, a Requirement whose active implementer's reference exists at the revision is assessed as released there.
+      - Distribution refresh rejects distinct model and implementation revisions before writing state; matching full and abbreviated Git revisions retain the existing behavior.
       - The serial increases by one on each write, and the lineage stays the same; earlier state for another model or context is refused.
       - Each assessment names its source, tests with the binding's workflow and job, or distribution.
       - A record may have several tests bindings, each observed only by runs of its workflow and job; a run replaces only the results of the bindings it observed, and a binding's result goes when the binding leaves the config.
       - A write replaces only the assessments of the sources it observed, keeping another observer's, and drops observations and pending work for records and relationships that left the config.
       - An earlier verification or delivery assessment without a source is rewritten as tests or distribution; one of another dimension is kept and reported.
+      - Advancing the enclosing state's model revision or migrating a legacy source never relabels the original subjects or evidence applicability of retained observations.
       - The state written is accepted by the validator.
     verification_method: Refresh tests in CI.
     observe:
       tests:
         cases:
           - "python/tests/test_refresh.py::*"
+          - "python/tests/test_refresh_identity.py::*"
+          - "python/tests/test_refresh_identity_cli.py::*"
 
   - id: REQ-015
     type: Requirement
@@ -106,8 +114,8 @@ records:
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-24"
-    responsibility: Observe the sources a model's bindings name and write state.
+    last_reviewed_at: "2026-10-28"
+    responsibility: Observe the sources a model's bindings name and write state retaining explicit model and implementation identities.
     interfaces: [exacly refresh command, exacly observe command, exacly.refresh and exacly.manual_qa Python APIs]
     implementation_ref: { locator: python/src/exacly/refresh.py }
 
