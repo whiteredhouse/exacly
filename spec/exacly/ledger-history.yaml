@@ -1,0 +1,92 @@
+# Proposed semantic-validation index contract. Current version-1/version-2 validation is unchanged.
+# The linked decision and benchmarks select future work; this file does not implement an index.
+exacly: "0.2.0"
+
+records:
+  - id: REQ-028
+    type: Requirement
+    name: Reuse terminal semantics while checking all retained history bytes
+    description: Reduce repeated interpretation of unchanged terminal proof through a fully bound index without weakening byte-integrity checks or granting cached completion authority.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence:
+      - locator: docs/ledger-history-scaling.md
+        kind: decision
+        claim: The history-scaling decision selects an opt-in semantic-validation index before archival because measured semantic re-derivation dominates byte hashing and SQLite integrity checks.
+        observed_at: "2026-10-28"
+        applies_to: Proposed ledger-history validation; current schema versions 1 and 2 remain unchanged
+    last_reviewed_at: "2026-10-28"
+    statement: >-
+      Under explicit operator maintenance authorization, produce a new versioned ledger copy with
+      mandatory byte-integrity baselines and terminal semantic verdicts bound to exact inputs and an
+      independently identified installed validation profile, allowing normal operations to reuse
+      matching terminal semantics while checking every historical byte and structural dependency
+      and retaining explicit full semantic audit and existing execution and completion authority.
+    acceptance_criteria:
+      - Index initialization, rebuild and format upgrade are explicit maintenance operations into a new private destination after full semantic validation of the actual source history; dry-run identifies the source, selected installed profile, validation scope and intended output without changing files, state, records or watermarks.
+      - Use a new explicitly versioned opt-in ledger format; preserve the source and require one explicit canonical cutover, while current version-1 and version-2 readers, registration, completion and full semantic history validation remain unchanged and never migrate or build an index implicitly.
+      - Preserve all exact retained proof, model documents, state bytes, binding contracts, requests, phases and immutable receipts in the new ledger; this first format introduces no archival, expiry, garbage collection or deletion authority.
+      - Separate the required historical byte-integrity baseline from optional profile-scoped semantic verdicts; baseline membership covers the exact retained row set without missing, extra or duplicate identities, and every retained input has an unambiguous association with its required baseline.
+      - Bind exact raw typed TEXT and BLOB inputs using a canonical domain-separated encoding with explicit field identities, lengths, order and presence; the baseline and verdict dependency closure includes binding contracts, requests and dates, approved model and policy identities, before-state and after-state, admission receipts, archives, reports, admitted state, phase, receipts or explicit receipt absence, and any derived facts used by the cached result.
+      - Derive accepted schema and semantic profile identities from the independently installed tool and its compatibility registry, including relevant parser, observer, model, merge, assessment and validation dependencies; a ledger's self-declared version or profile string cannot establish that its verdict is reusable.
+      - Reuse only successful terminal semantic verdicts whose required byte baseline, complete dependency association and accepted installed profile match; prepared intents always receive fresh semantic checks and never obtain completion authorization from a cached result.
+      - Every normal operation still checks all retained historical bytes, size bounds, exact SQL schema, base metadata, row coverage, binding membership, uniqueness, supersession dependencies, active bindings, state watermarks, phases, receipts, prepared-intent counts, relationships and index associations; only repeated terminal payload interpretation is omitted.
+      - A missing required baseline, changed input hash, corrupt coverage or inconsistent baseline association is a hard integrity error; neither a normal read, rebuild nor full semantic audit may silently validate the changed bytes and reseal them as the original retained history.
+      - Only missing or deliberately invalidated semantic verdicts and recognized stale profiles with a matching required byte baseline may fall back to full semantic validation in read-only memory before dependent work; unsupported semantics produce an explicit unsupported result, and ordinary reads never write an index or migrate its format.
+      - A known reusable verdict whose recorded dependency, phase, receipt, baseline or accepted-profile association is inconsistent fails explicitly; ordinary operations must not silently refresh it or relabel mismatched retained content as a previously validated result.
+      - App-owned mutations freshly validate their actual recorded inputs and dependency changes, then atomically maintain the integrity baseline and matching new terminal verdict or explicitly invalidate the semantic verdict with the related binding, phase, receipt and watermark transaction; failed commit or rollback cannot leave a reusable stale positive result.
+      - Preserve permanent canonical binding, pending and completion identities and every intent ID, including aborted intents; completed pending work remains unavailable for reuse, while the same aborted request may be retried only through fresh admission under a new intent ID.
+      - Exact completed-request replay returns the original immutable historical receipt without HTTP, state publication, another pending-item removal or a serial increment; a cached semantic verdict never authenticates live evidence, changes the approved contract or independently authorizes task completion.
+      - Retain all prepared-intent proof needed for exact-before, exact-after and conflict recovery, and preserve explicit hot-journal and completion recovery behavior in the new format; recovery validates the actual durable outcome and never fabricates or reuses a stale baseline or semantic result.
+      - Explicit full semantic audit checks the required byte baseline and all global invariants and freshly re-derives every retained observation and state transition regardless of matching verdicts; it checks the index against those results and reports corruption, unsupported semantics or incomplete validation without writing repairs or returning cached success as fresh audit evidence.
+      - Publish only a complete validated and synchronized ledger copy with a versioned manifest; interruption preserves the source, uncertain durability preserves complete published output for inspection, and backup or copy-only recovery preserves index and proof coherently under the same explicit canonical cutover rule.
+      - Resolve canonical identities through indexed associations and validate supersession membership without repeatedly rescanning all bindings for every pending identity; report byte volume, semantic work and remaining history-wide costs rather than claiming constant storage, constant latency or bounded total history cost.
+      - Report whole-history byte and structural consistency separately from reused terminal semantics and freshly re-derived semantics; disclose the installed profile and checked scope so ordinary index-assisted success is not described as a fresh full semantic audit.
+      - Baselines, verdicts and digests do not authenticate who produced a cached verdict, defend against a same-user consistent rewrite of proof and index, prove the latest global generation or make receipts self-authenticating; the operator-controlled runtime remains the authority boundary, and fresh semantic audit can expose invalid semantics without authenticating historical origin.
+    verification_method: Future index, command and process-termination tests covering exact input framing and row coverage, profile invalidation, whole-history corruption, read-only fallback, prepared-intent re-derivation, atomic mutation and recovery, full audit and identity preservation.
+    observe:
+      tests:
+        cases:
+          - "python/tests/test_execution_history.py::*"
+          - "python/tests/test_execution_history_cli.py::*"
+          - "python/tests/test_execution_history_faults.py::*"
+
+  - id: APP-015
+    type: Application
+    name: Ledger history validation
+    description: Proposed explicit semantic-index initialization and rebuild with index-assisted validation and full semantic audit.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-28"
+    responsibility: Bind successful terminal semantics to required exact-byte baselines and installed validator profiles while preserving whole-history byte checks, read-only fallback, explicit audit and copy-only maintenance.
+    interfaces: [Planned semantic-index initialization and rebuild commands, Planned index-assisted history validation and full semantic audit, Planned exacly.execution_history Python API]
+    implementation_ref: { locator: python/src/exacly/execution_history.py, planned: true }
+
+  - id: INFO-006
+    type: Information
+    name: Historical integrity baselines and semantic verdicts
+    description: Proposed required exact-byte associations with separately reusable terminal semantic results tied to the installed validation profile.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-28"
+    definition: Versioned exact-row-set integrity baselines with domain-separated typed input digests and dependency associations, plus separately profile-scoped successful terminal verdicts or explicit invalidation state; all proof remains in the same ledger and neither record independently grants approval or authenticates historical origin.
+    identifiers: [index format, binding ID, pending identity, completion ID, request digest, input baseline digest, installed validation-profile identity]
+    steward: exacly-maintainers
+
+relationships:
+  - { source: REQ-028, type: supports, target: PROC-002 }
+  - { source: APP-015, type: implements, target: REQ-028 }
+  - { source: PROC-002, type: uses, target: APP-015, conditions: "Only for explicit future index maintenance, index-assisted validation or semantic audit." }
+  - { source: APP-015, type: depends_on, target: APP-010, conditions: "Preserves immutable binding identities, supersession dependencies and state watermarks in the proposed opt-in format." }
+  - { source: APP-015, type: depends_on, target: APP-011, conditions: Requires protected copy publication and coherent backup or explicit recovery of proof and index. }
+  - { source: APP-015, type: depends_on, target: APP-012, conditions: Reuses completion semantic checks without granting fresh evidence or task-completion authority to an index entry. }
+  - { source: APP-015, type: depends_on, target: INF-003, conditions: Requires an explicitly selected future ledger format; current schema versions 1 and 2 are unchanged. }
+  - { source: APP-015, type: reads, target: INFO-003 }
+  - { source: APP-015, type: writes, target: INFO-003, conditions: Copies historical bindings without rewriting identities or contracts. }
+  - { source: APP-015, type: reads, target: INFO-004 }
+  - { source: APP-015, type: writes, target: INFO-004, conditions: Copies exact retained completion history and preserves original immutable receipts. }
+  - { source: APP-015, type: reads, target: INFO-006 }
+  - { source: APP-015, type: writes, target: INFO-006 }
+  - { source: INF-003, type: stores, target: INFO-006, role: system_of_record, conditions: Proposed integrity baselines and semantic verdicts after explicit copy-only upgrade; absent from current ledger schema versions 1 and 2. }

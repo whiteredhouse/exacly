@@ -33,7 +33,7 @@ def measure(counts: Sequence[int], repeats: int) -> list[dict[str, Any]]:
         for count in counts:
             for name in ("show", "replay", "recover"):
                 folder = root / f"{count}-{name}"
-                folder.mkdir()
+                folder.mkdir(mode=0o700)
                 case, identity = history(folder, count, prepared=name == "recover")
                 original = case.ledger.read_bytes()
                 elapsed: list[float] = []
