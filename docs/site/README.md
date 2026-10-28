@@ -16,15 +16,17 @@ python3 -m http.server 8000 --directory docs/site
 Open `http://localhost:8000`. The main presentation files are `index.html`,
 `style.css`, and `site.js`. All browser interactions run locally.
 
-The visitor quick start uses `uvx exacly --help` to run the published CLI
-without a persistent installation or a repository clone. The worked model is
-available in the browser example. The contributor workflow remains
-`mise run check` from the repository root.
+The visitor quick start downloads `example.yaml` and runs a requirement trace
+with the published package through `uvx`. It needs no repository clone or
+persistent Exacly installation. Keep the download URL aligned with the Pages
+address. The contributor workflow remains `mise run check` from the repository
+root.
 
 ## Maintain the worked example
 
 The `example/` directory is authentic static output from the fictional invoice
-reminders model. Its records are proposed; it does not represent a deployed
+reminders model. The downloadable `example.yaml` merges its boundary and records
+into one config document. Its records are proposed; it does not represent a deployed
 customer product or a passing test run. Regenerate it when that model changes:
 
 ```sh
@@ -32,6 +34,18 @@ uv run --locked exacly validate spec/examples/0.2/invoice-reminders
 uv run --locked exacly view site \
   -m spec/examples/0.2/invoice-reminders \
   --out docs/site/example
+uv run --locked python - <<'PYTHON'
+from pathlib import Path
+import yaml
+source = Path("spec/examples/0.2/invoice-reminders")
+model = {**yaml.safe_load((source / "model.yaml").read_text()),
+         **yaml.safe_load((source / "billing.yaml").read_text())}
+header = "# Fictional invoice-reminders example from spec/examples/0.2/invoice-reminders/.\n# All records are proposed; this config has no observed state.\n"
+Path("docs/site/example.yaml").write_text(
+    header + yaml.safe_dump(model, sort_keys=False, allow_unicode=True)
+)
+PYTHON
+uv run --locked exacly validate docs/site/example.yaml
 ```
 
 Commit the generated HTML with the landing-page changes. Keep assertions about
