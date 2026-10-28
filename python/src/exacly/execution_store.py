@@ -283,7 +283,7 @@ def check_file_info(info: os.stat_result) -> None:
     )
 
 
-def header(fd: int) -> int:
+def _header(fd: int) -> int:
     content = os.pread(fd, 100, 0)
     require(
         len(content) == 100 and content[:16] == b"SQLite format 3\0",
@@ -292,7 +292,20 @@ def header(fd: int) -> int:
     require(content[18:20] == b"\x01\x01", "execution store requires DELETE journaling")
     require(int.from_bytes(content[68:72], "big") == APPLICATION_ID, "unrecognized execution store application")
     version = int.from_bytes(content[60:64], "big")
+    return version
+
+
+def _operational_version(version: int) -> None:
+    require(
+        version != 3,
+        "version 3 is an audit-only ledger; use executions audit, and select the original v2 ledger for operations",
+    )
     require(version in (USER_VERSION, COMPLETION_VERSION), "unsupported execution store schema version")
+
+
+def header(fd: int) -> int:
+    version = _header(fd)
+    _operational_version(version)
     return version
 
 
@@ -343,9 +356,9 @@ def database(
             os.close(fd)
 
 
-def validate(
-    connection: sqlite3.Connection, *, deadline: Deadline | None = None
-) -> tuple[dict[str, Doc], dict[str, str], dict[str, Doc]]:
+def _structure(
+    connection: sqlite3.Connection, schema: dict[str, str], version: int, *, deadline: Deadline | None = None
+) -> None:
     def execute(statement: str) -> sqlite3.Cursor:
         # busy_timeout is connection-local. It does not write or migrate the inspected database.
         if deadline is not None:
@@ -356,22 +369,26 @@ def validate(
         execute("PRAGMA application_id").fetchone() == (APPLICATION_ID,),
         "unrecognized execution store application",
     )
-    version = execute("PRAGMA user_version").fetchone()[0]
-    require(version in (USER_VERSION, COMPLETION_VERSION), "unsupported execution store schema version")
+    require(execute("PRAGMA user_version").fetchone() == (version,), "unsupported execution store schema version")
     require(
         execute("PRAGMA journal_mode").fetchone() == ("delete",),
         "execution store requires DELETE journaling",
     )
     objects = execute("SELECT type, name, tbl_name, sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'").fetchall()
-    schema = dict(SCHEMA)
-    if version == COMPLETION_VERSION:
-        from exacly import completion_store
-
-        schema.update(completion_store.SCHEMA)
     expected = sorted(("table", name, name, sql) for name, sql in schema.items())
     require(sorted(objects) == expected, "unrecognized execution store schema")
     require(execute("PRAGMA quick_check").fetchall() == [("ok",)], "execution store integrity check failed")
     require(not execute("PRAGMA foreign_key_check").fetchall(), "execution store relationships are invalid")
+
+
+def _base(
+    connection: sqlite3.Connection, *, deadline: Deadline | None = None
+) -> tuple[dict[str, Doc], dict[str, str], dict[str, Doc]]:
+    def execute(statement: str) -> sqlite3.Cursor:
+        if deadline is not None:
+            busy_timeout(connection, deadline)
+        return connection.execute(statement)
+
     records: dict[str, Doc] = {}
     for identity, pending, supersedes, text in execute("SELECT id, pending_key, supersedes, record_json FROM bindings"):
         value = decoded(text)
@@ -415,6 +432,23 @@ def validate(
             seen == {identity for identity, value in records.items() if value["pending_key"] == pending},
             "execution supersession chain is incomplete",
         )
+    return records, active, watermarks
+
+
+def validate(
+    connection: sqlite3.Connection, *, deadline: Deadline | None = None
+) -> tuple[dict[str, Doc], dict[str, str], dict[str, Doc]]:
+    if deadline is not None:
+        busy_timeout(connection, deadline)
+    version = connection.execute("PRAGMA user_version").fetchone()[0]
+    _operational_version(version)
+    schema = dict(SCHEMA)
+    if version == COMPLETION_VERSION:
+        from exacly import completion_store
+
+        schema.update(completion_store.SCHEMA)
+    _structure(connection, schema, version, deadline=deadline)
+    records, active, watermarks = _base(connection, deadline=deadline)
     if version == COMPLETION_VERSION:
         completion_store.validate(connection, records, active, watermarks, deadline=deadline)
     return records, active, watermarks

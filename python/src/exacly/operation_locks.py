@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 import time
 from collections.abc import Iterable, Iterator
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 
 from exacly import execution_store as store
@@ -29,38 +29,35 @@ def directories(
     """Lock existing real directories once, in one global order, sharing a wait budget."""
     store.require(os.name == "posix" and fcntl is not None, "local operations require POSIX directory locks")
     budget = deadline if deadline is not None else store.Deadline()
-    opened: list[int] = []
     selected: dict[tuple[int, int], int] = {}
     identities: dict[Path, tuple[int, int]] = {}
-    try:
-        for given in paths:
-            path = given.absolute()
-            if path in identities:
-                continue
-            descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-            opened.append(descriptor)
-            info = os.fstat(descriptor)
-            identity = (info.st_dev, info.st_ino)
-            identities[path] = identity
-            selected.setdefault(identity, descriptor)
-        for identity in sorted(selected):
-            descriptor = selected[identity]
-            while True:
-                try:
-                    fcntl.flock(descriptor, (fcntl.LOCK_EX if write else fcntl.LOCK_SH) | fcntl.LOCK_NB)
-                    break
-                except (BlockingIOError, InterruptedError):
-                    budget.check()
-                    time.sleep(min(store.LOCK_RETRY_INTERVAL, budget.remaining()))
-        for path, identity in identities.items():
-            current = path.stat(follow_symlinks=False)
-            store.require((current.st_dev, current.st_ino) == identity, "locked operation directory changed")
+    with ExitStack() as stack:
+        try:
+            for given in paths:
+                path = given.absolute()
+                if path in identities:
+                    continue
+                descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                stack.callback(os.close, descriptor)
+                info = os.fstat(descriptor)
+                identity = (info.st_dev, info.st_ino)
+                identities[path] = identity
+                selected.setdefault(identity, descriptor)
+            for identity in sorted(selected):
+                descriptor = selected[identity]
+                while True:
+                    try:
+                        fcntl.flock(descriptor, (fcntl.LOCK_EX if write else fcntl.LOCK_SH) | fcntl.LOCK_NB)
+                        break
+                    except (BlockingIOError, InterruptedError):
+                        budget.check()
+                        time.sleep(min(store.LOCK_RETRY_INTERVAL, budget.remaining()))
+            for path, identity in identities.items():
+                current = path.stat(follow_symlinks=False)
+                store.require((current.st_dev, current.st_ino) == identity, "locked operation directory changed")
+        except OSError as error:
+            raise store.StoreError("cannot lock local operation directories") from error
         yield {path: selected[identity] for path, identity in identities.items()}
-    except OSError as error:
-        raise store.StoreError("cannot lock local operation directories") from error
-    finally:
-        for descriptor in reversed(opened):
-            os.close(descriptor)
 
 
 @contextmanager

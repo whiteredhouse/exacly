@@ -163,11 +163,16 @@ def test_retained_bytes_require_valid_schema_and_a_single_successor(tmp_path: Pa
             assert destination.read_bytes() == before
 
 
-def test_failure_inside_joint_operation_releases_every_directory_lock(tmp_path: Path) -> None:
+@pytest.mark.parametrize("error_type", [RuntimeError, OSError])
+def test_failure_inside_joint_operation_releases_every_directory_lock(
+    tmp_path: Path, error_type: type[Exception]
+) -> None:
     ledger, destination = paths(tmp_path)
     captured = state_writer.read(destination)
-    with pytest.raises(RuntimeError, match="coordinator failed"), operation_locks.locked(ledger, captured):
-        raise RuntimeError("coordinator failed")
+    failure = error_type("coordinator failed")
+    with pytest.raises(error_type, match="coordinator failed") as caught, operation_locks.locked(ledger, captured):
+        raise failure
+    assert caught.value is failure
     with operation_locks.locked(ledger, captured, deadline=store.Deadline(0)) as (_, parent_fd):
         state_writer.publish_locked(captured, state_writer.serialize(state(serial=2)), parent_fd)
 

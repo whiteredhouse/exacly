@@ -2,9 +2,9 @@
 
 Decision date: 2026-10-28. Baseline: [`da21cd8`](https://github.com/whiteredhouse/exacly/commit/da21cd8ee446191fa04a107cb1a00cc0cada6586), including operation-scoped validation from PR #58.
 
-Choose a **profile-bound proof validation index in a new opt-in ledger format** as the next implementation. Ordinary operations will still check every retained proof byte and all live/global invariants. Only previously validated terminal payload semantics may be reused, when exact content, dependencies and the installed validator profile match. Full audit always re-derives those semantics.
+Use a **profile-bound proof validation index in a new opt-in ledger format** for the measured semantic bottleneck. The operational contract requires every retained proof byte and all live/global invariants to remain checked. Only previously validated terminal payload semantics may eventually be reused, when exact content, dependencies and the installed validator profile match. Full audit always re-derives those semantics.
 
-This PR provides benchmarks and an implementation contract. It implements no index, archive command, storage format, migration or deletion behavior. The canonical requirements and lifecycle are in [`ledger-history.yaml`](../spec/exacly/ledger-history.yaml). Current version-1/version-2 validation remains unchanged.
+The conversion and audit foundation creates an **audit-only version-3 copy** from a fully validated version-2 ledger. It records required integrity baselines and terminal semantic verdicts, then audits the copy read-only with fresh full semantics. It does not enable operational reuse, operational index-aware writers, ordinary version-3 maintenance or cutover, and establishes no performance improvement. Current version-1/version-2 operational validation remains unchanged. The canonical acceptance contracts and lifecycle are in [`ledger-history.yaml`](../spec/exacly/ledger-history.yaml).
 
 ## Workload and evidence
 
@@ -59,7 +59,17 @@ A properly bound index and an archive catalogue both rely on the controlled oper
 
 The raw SHA256 timing is a data-processing comparison only. It does not check criteria, establish semantic validity, implement the required transcript/index, or authorize completion. It must not be presented as the proposed index's measured speedup.
 
-## Proposed index contract
+## Conversion and audit foundation
+
+[`executions index` and `executions audit`](../python/README.md#create-and-audit-an-integrity-index-copy) implement the conversion and audit scope of REQ-029. Conversion accepts a clean version-2 source with no unresolved prepared intent and publishes a new bundle containing the exact raw source, an audit-only indexed copy and a manifest. Dry-run fully validates the source and destination plan without creating output. Audit validates required baselines and all semantic transitions regardless of matching stored verdicts; unsupported profiles and integrity mismatches are explicit failures, never read-only fallback or repair.
+
+The report contract identifies checked scope, profile and the copy's ineligibility for operational use. Keep the version-2 source as the working ledger. Existing registration, show, reconciliation, completion, backup and recovery commands continue to reject version 3. This isolates the conversion and audit invariants before any command is allowed to rely on a durable semantic verdict.
+
+The foundation fixes profile family `exacly-ledger-audit-v1` and typed transcript codec `typed-cells-v1`. The required baseline commits the complete retained-row roster, while each terminal verdict binds only its semantic dependency closure: its exact binding row, intent row and receipt row or explicit receipt absence. Global relationships remain separately checked. The profile independently fingerprints installed code, schemas, parser dependencies and runtime; audit requires that matching installation. This separation supplies the integrity foundation without enabling operational semantic reuse or writers.
+
+REQ-028 retains the complete proposed operational contract below. Its dedicated reuse and integration test selectors remain separate from the conversion/audit tests, so passing the foundation cannot imply that operational reuse or index-aware completion has been verified. The earlier benchmark measurements describe the existing version-2 bottleneck and hashing comparison; they do not measure a completed index-assisted operational path.
+
+## Proposed operational index contract
 
 ### Required integrity baseline and optional semantic reuse
 
@@ -102,7 +112,7 @@ Failed statements, commits or rollback attempts must not leave partial usable en
 
 The new format is obtained through explicit copy-only maintenance into a new private destination after full source validation. Source files and exact historical proof remain unchanged, including binding/request identities, before/after bytes and original receipts. Unsupported inputs and unresolved prepared intents initially block conversion; operators use the existing explicit recovery first.
 
-Validate the complete output, synchronize its files and directory, then atomically publish the new copy without overwrite. Operators explicitly select one canonical ledger; old and copied files must not be parallel active authorities. Ordinary commands never migrate or recover implicitly. Backup and copy-only recovery retain the complete proof and index and validate both; copying a successful cache record alone cannot establish a valid ledger.
+Validate the complete output, synchronize its files and directory, then atomically publish the new copy without overwrite. Operational format integration will require explicit selection of one canonical ledger; old and copied files must not be parallel active authorities. The current audit-only copy is ineligible for this cutover. Ordinary commands never migrate or recover implicitly. Future index-aware backup and copy-only recovery must retain the complete proof and index and validate both; copying a successful cache record alone cannot establish a valid ledger.
 
 ## Audit, retention and claims
 
@@ -121,9 +131,9 @@ Matching bytes, profiles and cached facts do not independently prove who produce
 
 ## Implementation sequence
 
-[`REQ-028`](../spec/exacly/ledger-history.yaml) defines the future acceptance contract. Its planned tests select no current implementation. Benchmark tests validate fixture construction and the current store, not index correctness.
+[`REQ-028`](../spec/exacly/ledger-history.yaml) defines the complete future acceptance contract. Its dedicated operational-reuse tests select no current implementation. REQ-029 and its conversion/audit tests cover the foundation, while benchmark tests validate fixture construction and the measured version-2 store.
 
-1. Specify the index/transcript/profile schema and compatibility rules. Implement explicit copy-only conversion, integrity validation and full audit first, preserving v1/v2 behavior.
+1. Establish the index/transcript/profile schema and explicit copy-only conversion, integrity validation and full audit, preserving v1/v2 behavior. The audit-only foundation implements this scope under REQ-029.
 2. Add semantic reuse for unchanged terminal payloads and read-only fallback, retaining all-byte and global checks. Test missing/extra index rows, altered dependencies, profile changes and corrupt proof/index entries.
 3. Integrate terminal index writes with real completion, abort, backup and recovery transactions. Run process-kill/restart, exact offline replay, supersession and current-state race cases against the new format.
 4. Repeat the independent-binding, supersession, queued-backlog and large-proof workloads. Report normal indexed validation and full audit separately; verify semantic work counts and index coverage without machine-dependent timing assertions.
@@ -135,4 +145,5 @@ Promote only behavior whose implementation and acceptance tests exist, updating 
 - [`execution_store.validate`](../python/src/exacly/execution_store.py): current SQLite, binding, chain and watermark checks.
 - [`completion_store`](../python/src/exacly/completion_store.py): retained semantic proof checks, exact state transitions and operation-scoped reuse.
 - [`execution_maintenance`](../python/src/exacly/execution_maintenance.py): protected copy publication, backup, recovery and upgrade.
+- [`execution_history`](../python/src/exacly/execution_history.py) and [`history_maintenance`](../python/src/exacly/history_maintenance.py): the audit-only integrity format, conversion and fresh semantic audit foundation.
 - SQLite [`quick_check`](https://www.sqlite.org/pragma.html#pragma_quick_check), [`data_version`](https://www.sqlite.org/pragma.html#pragma_data_version) and [online backup](https://www.sqlite.org/backup.html) document storage checks; none establishes semantic evidence validity or a globally monotonic ledger identity.
