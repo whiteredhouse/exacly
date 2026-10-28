@@ -84,6 +84,12 @@ A changing state serial should trigger re-evaluation. If newer evidence already 
 
 Input and output implementation identities must remain distinct. A repair planned against revision A produces revision B. Completion must assess B against the approved criteria. Requiring B's evidence to match A would prevent completion; relabeling A's evidence as B would create a false claim. Exacly already distinguishes model revision from implementation revision and build composition. [Applicability rules](https://github.com/whiteredhouse/exacly/blob/ce63d80e30d8c8abd7ebbcd7a9ff83b6f09ca4c0/python/src/exacly/applicability.py#L15).
 
+### Observer identity prerequisite
+
+The model can represent separate identities, but general `refresh` currently cannot supply them independently. Its CLI accepts one `--revision`, and `Run` carries one revision. Test and distribution observations write that value as both `subject.model_revision` and `subject.revision`. [CLI input](https://github.com/whiteredhouse/exacly/blob/ce63d80e30d8c8abd7ebbcd7a9ff83b6f09ca4c0/python/src/exacly/cli.py#L219), [test subject](https://github.com/whiteredhouse/exacly/blob/ce63d80e30d8c8abd7ebbcd7a9ff83b6f09ca4c0/python/src/exacly/refresh.py#L105), [distribution subject](https://github.com/whiteredhouse/exacly/blob/ce63d80e30d8c8abd7ebbcd7a9ff83b6f09ca4c0/python/src/exacly/refresh.py#L184).
+
+Before automatic completion, extend that observer contract to identify the approved model and produced implementation separately. Alternatively, explicitly select both at the produced revision through a successor plan that revalidates the approved criteria and bindings. Do not silently change earlier observations' subjects or assume equal config content makes different revisions interchangeable to the current matcher.
+
 Keep these facts separate:
 
 - The executor finished.
@@ -94,6 +100,12 @@ Keep these facts separate:
 An unknown readiness result can justify collecting evidence or repairing behavior. Authorization to perform that remedial action is a separate policy decision from readiness to release.
 
 Changed acceptance criteria or observation bindings require review and replanning before an executor can claim completion against them. A generated passing test establishes only the claim its binding and evidence support; it does not automatically establish complete acceptance coverage. Verification and delivery remain independent. [Specification section 8](https://github.com/whiteredhouse/exacly/blob/ce63d80e30d8c8abd7ebbcd7a9ff83b6f09ca4c0/spec/versions/0.2.0.md#L152).
+
+### Trusted evidence admission prerequisite
+
+Current `gate` evaluates supplied state and evidence metadata. Applicability checks match the selected subject and bindings; `core.supported` checks evidence kind, applicability and expiry. These checks do not authenticate the report producer, fetch the referenced CI result or verify its digest or signature. Refresh consumes supplied JUnit and caller-provided run metadata. Matching identities alone therefore cannot prevent fabricated completion evidence. [Assessment](https://github.com/whiteredhouse/exacly/blob/ce63d80e30d8c8abd7ebbcd7a9ff83b6f09ca4c0/python/src/exacly/query.py#L505), [evidence checks](https://github.com/whiteredhouse/exacly/blob/ce63d80e30d8c8abd7ebbcd7a9ff83b6f09ca4c0/python/src/exacly/core.py#L518), [report input](https://github.com/whiteredhouse/exacly/blob/ce63d80e30d8c8abd7ebbcd7a9ff83b6f09ca4c0/python/src/exacly/cli.py#L236).
+
+Automatic closure needs a trusted observation and admission path around this evaluator. Protect the authoritative workflow, criteria, bindings and policy; establish which producer ran the checks against which implementation; retain identified reports; and reject executor-authored state as completion evidence. A trusted runner can still execute weakened tests, so retain and review changes to test meaning and coverage. Evidence origin, target applicability and acceptance coverage are separate checks. This is a proposed automation prerequisite, not behavior already provided by `gate`.
 
 ## Existing approaches and integration choices
 
@@ -115,7 +127,7 @@ An executor adapter should receive requirement IDs, approved criteria and bindin
 
 1. **Target-aware planning.** Add a versioned plan format, deterministic gap classification and Markdown rendering. Preserve the existing PR impact view.
 2. **Task dispatch.** Add dry-run support, a durable receipt ledger and one GitHub task adapter with duplicate prevention and crash recovery.
-3. **Completion reconciliation.** Reuse applicability and policy evaluation to close pending work from observations of the resulting implementation. Preserve unrelated observers' assessments.
+3. **Completion reconciliation.** Establish separate observer identities and trusted evidence admission before automatic closure. Reuse applicability and policy evaluation to close pending work from observations of the resulting implementation. Preserve unrelated observers' assessments.
 4. **Bounded agent execution.** Add one executor adapter returning PR and output revision identities, then introduce retry budgets and explicit policies for further automation.
 
 Keep plan, policy, target and receipt files outside the recursively loaded model directory. For GitHub execution, privileged dispatch should use trusted workflow code; fork-produced artifacts remain untrusted inputs. [Exacly target guidance](https://github.com/whiteredhouse/exacly/blob/ce63d80e30d8c8abd7ebbcd7a9ff83b6f09ca4c0/python/README.md#assess-an-implementation-target), [GitHub workflow security guidance](https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target).
@@ -129,6 +141,9 @@ The first pilot should demonstrate these cases:
 - Agent completion reports, issue closure and PR merge leave work pending without sufficient evidence.
 - Wrong-build, wrong-environment, expired or incomplete results cannot close work.
 - New output revisions can satisfy the approved completion condition.
+- Observations identify the approved model revision and produced implementation independently, without relabeling historical evidence.
+- Fabricated reports or executor-authored state cannot close work even when their supplied identity metadata matches the target.
+- Weakened tests or removed checks cannot establish completion without review of their acceptance coverage.
 - Partial failure preserves successful receipts and retries remaining work.
 - Refreshing one source preserves unrelated assessments; a requirement bound to tests and manual QA remains unverified until both required sources pass.
 - Concurrent applies serialize conflicting dispatches and state writes.
