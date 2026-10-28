@@ -1,5 +1,10 @@
 # Package release notes
 
+## Unreleased
+
+- `exacly plan --policy FILE --target FILE --date YYYY-MM-DD` proposes read-only work for Requirement verification prerequisites. It distinguishes investigation of a known failure, collection of missing evidence and missing observation configuration, while satisfied prerequisites generate no action.
+- Text and JSON views share a versioned plan with input fingerprints, stable action IDs and observable completion conditions. `--out` saves JSON outside model inputs. Planning does not dispatch work or establish evidence authenticity; readiness exit behavior remains on `gate`.
+
 ## 0.5.0
 
 - Case-bound verification now requires every selected case to pass: mixed passing/skipped outcomes give `inconclusive`, retaining evidence and naming skipped cases alongside any missing patterns. Failures still give `failed`; all-skipped selections remain `not_checked`. This supersedes the permissive pass-plus-skip behavior accepted in #24. Verification readiness gates return `unknown` for these incomplete results and exit 1.
