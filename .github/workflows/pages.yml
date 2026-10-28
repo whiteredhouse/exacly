@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - "docs/site/**"
+      - "spec/examples/0.2/invoice-reminders/**"
       - ".github/workflows/pages.yml"
   push:
     branches: [main]
     paths:
       - "docs/site/**"
+      - "spec/examples/0.2/invoice-reminders/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -20,14 +22,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Prepare the static site with the source example
+        run: |
+          site_dir="$RUNNER_TEMP/exacly-site"
+          mkdir -p "$site_dir"
+          cp -R docs/site/. "$site_dir/"
+          cp spec/examples/0.2/invoice-reminders/*.yaml "$site_dir/example/"
       - name: Check the static site's local references
         run: |
           python3 - <<'PY'
           from html.parser import HTMLParser
+          import os
           from pathlib import Path
           from urllib.parse import unquote, urlsplit
 
-          root = Path("docs/site").resolve()
+          root = (Path(os.environ["RUNNER_TEMP"]) / "exacly-site").resolve()
           assert (root / "index.html").is_file(), "Missing landing page"
           assert (root / ".nojekyll").is_file(), "Missing .nojekyll"
 
@@ -62,6 +71,10 @@ jobs:
                   checked += 1
           print(f"Checked {checked} local references")
           PY
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        with:
+          path: ${{ runner.temp }}/exacly-site
 
   deploy:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
@@ -78,11 +91,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs/site
       - name: Deploy GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
