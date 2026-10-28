@@ -16,6 +16,11 @@ python3 -m http.server 8000 --directory docs/site
 Open `http://localhost:8000`. The main presentation files are `index.html`,
 `style.css`, and `site.js`. All browser interactions run locally.
 
+The visitor quick start uses `uvx exacly --help` to run the published CLI
+without a persistent installation or a repository clone. The worked model is
+available in the browser example. The contributor workflow remains
+`mise run check` from the repository root.
+
 ## Maintain the worked example
 
 The `example/` directory is authentic static output from the fictional invoice
