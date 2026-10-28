@@ -2,10 +2,10 @@
   "exacly": "0.2.0",
   "namespace": "exacly",
   "context": "main",
-  "config_revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-  "serial": 25,
+  "config_revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+  "serial": 26,
   "lineage": "c6586339-c553-47a5-9f79-d9ef18dd85a6",
-  "written_at": "2026-10-28T13:22:27Z",
+  "written_at": "2026-10-28T13:34:43Z",
   "records": {
     "REQ-001": {
       "assessments": [
@@ -33,19 +33,19 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-          "at": "2026-10-28T13:22:27Z",
+          "context": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+          "at": "2026-10-28T13:34:43Z",
           "subject": {
-            "model_revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-            "revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6"
+            "model_revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+            "revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75"
           },
           "source": "tests",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40695707145",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40697600384",
               "kind": "test",
               "observed_at": "2026-10-28",
-              "applies_to": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
+              "applies_to": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
               "claim": "All 69 selected test cases passed"
             }
           ]
@@ -78,19 +78,19 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-          "at": "2026-10-28T13:22:27Z",
+          "context": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+          "at": "2026-10-28T13:34:43Z",
           "subject": {
-            "model_revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-            "revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6"
+            "model_revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+            "revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75"
           },
           "source": "tests",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40695707145",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40697600384",
               "kind": "test",
               "observed_at": "2026-10-28",
-              "applies_to": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
+              "applies_to": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
               "claim": "All 14 selected test cases passed"
             }
           ]
@@ -123,19 +123,19 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-          "at": "2026-10-28T13:22:27Z",
+          "context": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+          "at": "2026-10-28T13:34:43Z",
           "subject": {
-            "model_revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-            "revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6"
+            "model_revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+            "revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75"
           },
           "source": "tests",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40695707145",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40697600384",
               "kind": "test",
               "observed_at": "2026-10-28",
-              "applies_to": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
+              "applies_to": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
               "claim": "All 40 selected test cases passed"
             }
           ]
@@ -168,19 +168,19 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-          "at": "2026-10-28T13:22:27Z",
+          "context": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+          "at": "2026-10-28T13:34:43Z",
           "subject": {
-            "model_revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-            "revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6"
+            "model_revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+            "revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75"
           },
           "source": "tests",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40695707145",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40697600384",
               "kind": "test",
               "observed_at": "2026-10-28",
-              "applies_to": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
+              "applies_to": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
               "claim": "All 10 selected test cases passed"
             }
           ]
@@ -213,19 +213,19 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-          "at": "2026-10-28T13:22:27Z",
+          "context": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+          "at": "2026-10-28T13:34:43Z",
           "subject": {
-            "model_revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-            "revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6"
+            "model_revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+            "revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75"
           },
           "source": "tests",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40695707145",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40697600384",
               "kind": "test",
               "observed_at": "2026-10-28",
-              "applies_to": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
+              "applies_to": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
               "claim": "All 12 selected test cases passed"
             }
           ]
@@ -258,19 +258,19 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-          "at": "2026-10-28T13:22:27Z",
+          "context": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+          "at": "2026-10-28T13:34:43Z",
           "subject": {
-            "model_revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-            "revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6"
+            "model_revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+            "revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75"
           },
           "source": "tests",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40695707145",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40697600384",
               "kind": "test",
               "observed_at": "2026-10-28",
-              "applies_to": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
+              "applies_to": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
               "claim": "All 10 selected test cases passed"
             }
           ]
@@ -303,19 +303,19 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-          "at": "2026-10-28T13:22:27Z",
+          "context": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+          "at": "2026-10-28T13:34:43Z",
           "subject": {
-            "model_revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-            "revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6"
+            "model_revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+            "revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75"
           },
           "source": "tests",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40695707145",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40697600384",
               "kind": "test",
               "observed_at": "2026-10-28",
-              "applies_to": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
+              "applies_to": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
               "claim": "All 11 selected test cases passed"
             }
           ]
@@ -348,19 +348,19 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-          "at": "2026-10-28T13:22:27Z",
+          "context": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+          "at": "2026-10-28T13:34:43Z",
           "subject": {
-            "model_revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-            "revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6"
+            "model_revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+            "revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75"
           },
           "source": "tests",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40695707145",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40697600384",
               "kind": "test",
               "observed_at": "2026-10-28",
-              "applies_to": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
+              "applies_to": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
               "claim": "All 9 selected test cases passed"
             }
           ]
@@ -393,19 +393,19 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-          "at": "2026-10-28T13:22:27Z",
+          "context": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+          "at": "2026-10-28T13:34:43Z",
           "subject": {
-            "model_revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-            "revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6"
+            "model_revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+            "revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75"
           },
           "source": "tests",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40695707145",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40697600384",
               "kind": "test",
               "observed_at": "2026-10-28",
-              "applies_to": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
+              "applies_to": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
               "claim": "The job succeeded"
             }
           ]
@@ -438,19 +438,19 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-          "at": "2026-10-28T13:22:27Z",
+          "context": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+          "at": "2026-10-28T13:34:43Z",
           "subject": {
-            "model_revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-            "revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6"
+            "model_revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+            "revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75"
           },
           "source": "tests",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40695707145",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40697600384",
               "kind": "test",
               "observed_at": "2026-10-28",
-              "applies_to": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
+              "applies_to": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
               "claim": "All 55 selected test cases passed"
             }
           ]
@@ -483,19 +483,19 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-          "at": "2026-10-28T13:22:27Z",
+          "context": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+          "at": "2026-10-28T13:34:43Z",
           "subject": {
-            "model_revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-            "revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6"
+            "model_revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+            "revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75"
           },
           "source": "tests",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40695707145",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40697600384",
               "kind": "test",
               "observed_at": "2026-10-28",
-              "applies_to": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
+              "applies_to": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
               "claim": "All 9 selected test cases passed"
             }
           ]
@@ -528,19 +528,19 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-          "at": "2026-10-28T13:22:27Z",
+          "context": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+          "at": "2026-10-28T13:34:43Z",
           "subject": {
-            "model_revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-            "revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6"
+            "model_revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+            "revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75"
           },
           "source": "tests",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40695707145",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40697600384",
               "kind": "test",
               "observed_at": "2026-10-28",
-              "applies_to": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
+              "applies_to": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
               "claim": "All 49 selected test cases passed"
             }
           ]
@@ -573,19 +573,19 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-          "at": "2026-10-28T13:22:27Z",
+          "context": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+          "at": "2026-10-28T13:34:43Z",
           "subject": {
-            "model_revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-            "revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6"
+            "model_revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+            "revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75"
           },
           "source": "tests",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40695707145",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40697600384",
               "kind": "test",
               "observed_at": "2026-10-28",
-              "applies_to": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
+              "applies_to": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
               "claim": "All 14 selected test cases passed"
             }
           ]
@@ -625,19 +625,19 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-          "at": "2026-10-28T13:22:27Z",
+          "context": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+          "at": "2026-10-28T13:34:43Z",
           "subject": {
-            "model_revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-            "revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6"
+            "model_revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+            "revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75"
           },
           "source": "tests",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40695707145",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40697600384",
               "kind": "test",
               "observed_at": "2026-10-28",
-              "applies_to": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
+              "applies_to": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
               "claim": "All 17 selected test cases passed"
             }
           ]
@@ -670,19 +670,19 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-          "at": "2026-10-28T13:22:27Z",
+          "context": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+          "at": "2026-10-28T13:34:43Z",
           "subject": {
-            "model_revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-            "revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6"
+            "model_revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+            "revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75"
           },
           "source": "tests",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40695707145",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40697600384",
               "kind": "test",
               "observed_at": "2026-10-28",
-              "applies_to": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
+              "applies_to": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
               "claim": "All 34 selected test cases passed"
             }
           ]
@@ -694,19 +694,19 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-          "at": "2026-10-28T13:22:27Z",
+          "context": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+          "at": "2026-10-28T13:34:43Z",
           "subject": {
-            "model_revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-            "revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6"
+            "model_revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+            "revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75"
           },
           "source": "tests",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40695707145",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40697600384",
               "kind": "test",
               "observed_at": "2026-10-28",
-              "applies_to": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
+              "applies_to": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
               "claim": "All 33 selected test cases passed"
             }
           ]
@@ -718,19 +718,19 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-          "at": "2026-10-28T13:22:27Z",
+          "context": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+          "at": "2026-10-28T13:34:43Z",
           "subject": {
-            "model_revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-            "revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6"
+            "model_revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+            "revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75"
           },
           "source": "tests",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40695707145",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40697600384",
               "kind": "test",
               "observed_at": "2026-10-28",
-              "applies_to": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
+              "applies_to": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
               "claim": "All 29 selected test cases passed"
             }
           ]
@@ -742,19 +742,19 @@
         {
           "dimension": "verification",
           "state": "passed",
-          "context": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-          "at": "2026-10-28T13:22:27Z",
+          "context": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+          "at": "2026-10-28T13:34:43Z",
           "subject": {
-            "model_revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
-            "revision": "5510e8f357d2153f99ef2585daeac72d5e1568a6"
+            "model_revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
+            "revision": "bcf97ad6019a9d073af8e335c9e003fa100c5a75"
           },
           "source": "tests",
           "evidence": [
             {
-              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40695707145",
+              "locator": "https://github.com/whiteredhouse/exacly/actions/runs/40697600384",
               "kind": "test",
               "observed_at": "2026-10-28",
-              "applies_to": "5510e8f357d2153f99ef2585daeac72d5e1568a6",
+              "applies_to": "bcf97ad6019a9d073af8e335c9e003fa100c5a75",
               "claim": "All 74 selected test cases passed"
             }
           ]
