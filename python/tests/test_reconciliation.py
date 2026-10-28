@@ -92,6 +92,7 @@ def test_a_new_implementation_can_satisfy_the_selected_unchanged_goal() -> None:
     assert report["status"] == "ready", report
     assert report["advisory"] is True and report["dry_run"] is True
     assert report["claims"] == {
+        "registered_binding_verified": False,
         "task_completion_authorized": False,
         "executor_output_link_verified": False,
         "self_authenticating": False,
