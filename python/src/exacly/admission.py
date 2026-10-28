@@ -490,6 +490,35 @@ def propose_policy(
     return validate_policy(candidate)
 
 
+def observe_report(documents: Doc, report: bytes, run: Run) -> Doc:
+    """Derive observations from retained, validated JUnit bytes and explicit producer metadata.
+
+    This pure observation contract performs no live provenance checks. Admission calls it only after
+    validating the producer and archive; completion-journal validation uses it to rederive the same
+    observations from its retained proof. Fresh state lineage is generated independently on each call.
+    """
+    require(isinstance(report, bytes) and len(report) <= REPORT_LIMIT, "report exceeds the permitted size")
+    with tempfile.TemporaryDirectory(prefix="exacly-admission-") as scratch:
+        path = Path(scratch) / "junit.xml"
+        path.write_bytes(report)
+        results = read_junit([path])
+    require(
+        not (run.job_status == "success" and "failed" in results.values()),
+        "successful producer step supplied failed checks",
+    )
+    observed = refresh(documents, results, run)
+    incomplete = run.job_status != "success" or not any(value != "skipped" for value in results.values())
+    if incomplete:
+        for record in observed["records"].values():
+            for assessment in record.get("assessments", []):
+                if assessment["state"] == "passed":
+                    assessment.update(
+                        state="inconclusive",
+                        reason="The producer did not establish complete successful check execution.",
+                    )
+    return observed
+
+
 def admit(source: Source, policy_doc: Any, target: Target, run_id: int, attempt: int, date: dt.date) -> AdmissionResult:
     """Fetch live provenance and retained bytes before producing fresh observations; never accept supplied state."""
     chosen = validate_policy(policy_doc)
@@ -689,17 +718,9 @@ def admit(source: Source, policy_doc: Any, target: Target, run_id: int, attempt:
             {"code": stage, "passed": True, "reason": "unique attempt artifact, archive and report digests matched"}
         )
         stage = "observation"
-        with tempfile.TemporaryDirectory(prefix="exacly-admission-") as scratch:
-            path = Path(scratch) / "junit.xml"
-            path.write_bytes(report)
-            results = read_junit([path])
-        require(
-            not (check["conclusion"] == "success" and "failed" in results.values()),
-            "successful producer step supplied failed checks",
-        )
-        observed = refresh(
+        observed = observe_report(
             documents,
-            results,
+            report,
             Run(
                 revision=selection["revision"],
                 model_revision=selection["model_revision"],
@@ -712,15 +733,6 @@ def admit(source: Source, policy_doc: Any, target: Target, run_id: int, attempt:
                 source_url=f"https://github.com/{repository}/blob/{selection['revision']}",
             ),
         )
-        incomplete = check["conclusion"] != "success" or not any(value != "skipped" for value in results.values())
-        if incomplete:
-            for record in observed["records"].values():
-                for assessment in record.get("assessments", []):
-                    if assessment["state"] == "passed":
-                        assessment.update(
-                            state="inconclusive",
-                            reason="The producer did not establish complete successful check execution.",
-                        )
         receipt["status"] = "admitted"
         receipt["origin"] = {
             "repository": repository,

@@ -445,7 +445,7 @@ The default human-readable view and `--json` render the same plan. `--out` saves
 
 Exit status is 0 when a plan is produced, including a blocked plan or one with unresolved prerequisites, and 2 for invalid inputs or an output error. Use `gate` when CI needs a readiness exit status.
 
-Plans are advisory. The command does not create tasks, dispatch agents, change observations or close pending work. Its fingerprints identify supplied content; they do not authenticate an evidence producer or authorize execution. Use a [reconciliation preview](#preview-verification-reconciliation) to check a selected action against fresh live admission. Actual task closure remains separate work, as described in the [plan and apply research](../docs/automated-plan-apply-research.md).
+Plans are advisory. The command does not create tasks, dispatch agents, change observations or close pending work. Its fingerprints identify supplied content; they do not authenticate an evidence producer or authorize execution. Use a [reconciliation preview](#preview-verification-reconciliation) to check a selected action against fresh live admission, or explicitly authorize [local completion](#complete-registered-verification-work) for an existing registered verification task.
 
 In Python, `exacly.planning.create(documents, policy_doc, target, date)` produces the same plan from named documents, a policy, an `exacly.applicability.Target` and a date. `exacly.planning.as_text(plan)` renders it for people, and `exacly.planning.SCHEMA` defines the JSON artifact contract.
 
@@ -471,11 +471,15 @@ The versioned binding captures namespace, context and lineage; canonical Require
 
 The ledger is an explicitly selected private SQLite database using POSIX ownership, permissions and file locks, with file mode `0600`. It is not discovered from a repository and does not import JSON binding files. Directory ownership and permissions protect its storage boundary, but they do not isolate candidate code running as the same operating-system user. Run registration separately from code that is not authorized to change these bindings.
 
+Registration initializes new ledgers in schema version 1. Existing supported version-1 and version-2 ledgers retain their format; normal reads and registration never upgrade it. [Completion](#complete-registered-verification-work) requires version 2 through the explicit [copy-only upgrade](#upgrade-a-ledger-for-completion).
+
 Repeating a registration for the same pending entry and contract is idempotent and returns the original record, including its first `as_of`, `registered_at` and historical state snapshot. A different contract for an already active pending key conflicts unless `--supersedes` names its exact current binding ID. Explicit supersession atomically appends a replacement and leaves the original immutable record visible as inactive. A concurrent change to the active binding makes that replacement fail rather than silently overwrite history.
+
+An unresolved prepared completion intent blocks registration and supersession for that pending identity. A completed pending identity cannot be registered or reused; aborted intents remain in history and allow a fresh attempt. Resolve an interrupted completion through its [completion recovery command](#complete-registered-verification-work).
 
 The store keeps the latest registered state serial and digest for each pending identity. Registration rejects an older state or different content at the same serial for that identity. Registering the same contract against a newer state advances this watermark without rewriting the original binding. A later refresh with the same pending entry can still be evaluated; read-only previews never advance the watermark.
 
-The watermark guards registered history for that pending item. It does not authenticate global state freshness or prove that the supplied file is the latest filesystem snapshot; a future state-changing closure operation still needs an exact-state concurrency check.
+The watermark guards registered history for that pending item. It does not authenticate global state freshness or prove that the supplied file is the latest filesystem snapshot. Local completion additionally checks the actual current state and active binding under commit-time locks.
 
 Read a binding without changing the database:
 
@@ -508,6 +512,8 @@ exacly executions backup --ledger "$EXACLY_LEDGER_FILE" \
 
 Backup uses SQLite's consistent backup operation and validates the copied store. It writes `ledger.sqlite3` and a manifest in the destination, leaving the source database unchanged. The copy retains the same binding identities, history, watermarks and approval limits; a backup does not grant new authority.
 
+Inspection, backup and recovery support ledger schemas 1 and 2 without changing their version. Version-2 validation also covers retained completion intents, receipts, proof digests, state identities and cross-references. It re-derives admitted observations from the retained JUnit report and approved model, and checks the exact recorded state transition.
+
 For a supported interrupted SQLite DELETE-journal transaction, recover into a separate new directory:
 
 ```sh
@@ -523,7 +529,22 @@ Backup and recovery succeed with exit 0; errors exit 2. Their destination must b
 
 After reviewing a recovered copy, explicitly select its ledger path and cut over to one canonical ledger. Do not use the old and recovered copies as parallel active authorities. Manifests describe the operation and retained content; they do not authenticate global freshness or prove that a copy is the latest ledger.
 
-In Python, `exacly.execution_maintenance.inspect(ledger_path)`, `backup(ledger_path, output_directory)` and `recover(ledger_path, output_directory)` return maintenance reports; each accepts the optional `lock_timeout` keyword. `as_text(report)` renders the same report, and `SCHEMA` defines its `0.1.0` format. Maintenance does not modify model or state files, dispatch work or close tasks.
+In Python, `exacly.execution_maintenance.inspect(ledger_path)`, `backup(ledger_path, output_directory)`, `recover(ledger_path, output_directory)` and `upgrade(ledger_path, output_directory)` return maintenance reports; each accepts the optional `lock_timeout` keyword. `as_text(report)` renders the same report, and `SCHEMA` defines its `0.2.0` format. Maintenance does not modify model or state files, dispatch work or close tasks.
+
+JSON consumers must handle maintenance report version `0.2.0`, which adds operation `upgrade`, status `upgraded` and ledger `store.user_version: 2` to the closed contract. Binding records and completion reports retain their separate `0.1.0` formats; the ledger's SQLite schema version is independent of these report versions.
+
+### Upgrade a ledger for completion
+
+Completion requires schema version 2. Upgrade a clean, validated version-1 ledger into a new directory:
+
+```sh
+exacly executions upgrade --ledger "$EXACLY_LEDGER_FILE" \
+  --out "$EXACLY_LEDGER_UPGRADE_DIR" --json
+```
+
+The bundle contains the exact source copy at `raw/ledger.sqlite3`, a validated version-2 copy at `upgraded/ledger.sqlite3`, and `manifest.json`. Upgrade preserves binding identities, supersession history and watermarks, and leaves the source unchanged. It succeeds with exit 0; invalid sources, unsupported formats and operational errors return 2. The destination has the same private-path, no-overwrite and atomic-publication rules as backup and recovery.
+
+Review the bundle, then explicitly select `upgraded/ledger.sqlite3` as the canonical ledger for subsequent commands. Stop using the old path as an active authority. The manifest does not prove global freshness, and ordinary commands never migrate a ledger or perform this cutover automatically.
 
 ## Preview verification reconciliation
 
@@ -572,7 +593,7 @@ Bound previews also accept `--lock-timeout SECONDS`, defaulting to 30 seconds; t
 
 A successfully checked bound preview records `claims.registered_binding_verified: true`. An unbound preview remains supported and records that claim as false, without implying that any pending-task binding was registered or checked. Neither mode removes pending work or changes the ledger or its watermark.
 
-Bound previews check the binding before fetching evidence and again immediately before reporting `ready`. The binding's `checked_at` records the last read. These are read snapshots; a future completion writer must still check its state and authorization preconditions atomically when committing a change.
+Bound previews check the binding before fetching evidence and again immediately before reporting `ready`. The binding's `checked_at` records the last read. These are read snapshots; the separate completion command checks current state and authorization preconditions under its commit-time locks.
 
 The report is advisory and unsigned. It does not prove that an executor produced the selected output revision, authorize task closure, dispatch work or maintain the execution ledger. Evidence origin, applicability and the admission limits on test honesty and acceptance coverage remain visible; an executor completion claim alone cannot make an action ready.
 
@@ -581,3 +602,50 @@ In Python, `exacly.reconciliation.preview(source, plan_doc, action_id, readiness
 `exacly.reconciliation.SCHEMA` defines the `0.2.0` JSON report. Existing unbound command and Python calls remain supported, but JSON consumers of report version `0.1.0` must handle the new version and required fields: `binding` is null or an object, and `claims.registered_binding_verified` is a boolean. Saved preview reports remain advisory artifacts rather than ledger registrations.
 
 The [live rehearsal report](../docs/verification-reconciliation-rehearsal.md) records an actual producer artifact, admission and reconciliation preview, including the transport coverage and environment limitation.
+
+## Complete registered verification work
+
+`exacly complete github-actions` explicitly authorizes completion of one registered local pending verification item. It requires a version-2 ledger, an active binding and the same reviewed plan, policies and output target used for that binding. Registration and a `ready` preview do not authorize mutation. Invoking this command with the selected inputs grants that local completion authority; it requires no additional confirmation prompt or authorization flag.
+
+```sh
+exacly complete github-actions --plan reports/plan.json \
+  --action "$EXACLY_ACTION_ID" --policy policies/verification.yaml \
+  --trust-policy trusted/github-verification.json --target targets/output.json \
+  --run "$EXACLY_RUN_ID" --attempt "$EXACLY_RUN_ATTEMPT" --date 2026-10-28 \
+  --ledger "$EXACLY_LEDGER_FILE" --binding "$EXACLY_BINDING_ID" \
+  --state observations/current.json --json
+```
+
+Each new evaluation performs fresh live admission for the exact GitHub run attempt and output implementation, using `GH_TOKEN` or `GITHUB_TOKEN` as for admission. It validates the approved model contract and actual current state, then rechecks the active binding, complete pending entry, lineage, serial, digest and registered watermark under ledger and state locks. Source-verification target restrictions remain the same as the preview: the approved model and context stay fixed while the resulting implementation may differ from the planning input.
+
+The command merges only the admitted observer's results using the source and binding replacement rules. It keeps unrelated assessments, evidence, relationships and pending entries, and evaluates the selected goal against this merged state. Retained applicable failures or missing required observations keep the task pending. Whole-policy readiness is reported separately; one completed action does not establish readiness of the whole product or release.
+
+When the goal is satisfied, completion removes only the exact registered pending entry, preserves namespace, context and lineage, and advances the serial once. Before publication, it durably records the admitted proof, request identity and prepared intent with the exact before-state identity and candidate after-state bytes. It publishes those exact bytes through the shared conditional atomic writer, then finalizes an immutable receipt while retaining the locks. SQLite and JSON remain separate resources joined by a recoverable protocol, rather than one atomic transaction. A failure after replacement retains the complete published state and prepared intent for explicit recovery.
+
+Version-2 ledger writes use SQLite DELETE journaling with `synchronous=EXTRA`, including synchronization of journal removal; state publication separately synchronizes the state file and its directory.
+
+The text and JSON reports describe the same result. `completed` exits 0; `pending`, `stale` and `conflict` exit 1; invalid inputs and operational errors exit 2. Optional `--out FILE` saves the report outside protected inputs and model folders. An output error does not undo a completion already recorded in the ledger. `--lock-timeout SECONDS` defaults to 30 and accepts finite nonnegative values, including zero for an immediate attempt; it limits lock waiting rather than live HTTP or whole-command time.
+
+Repeat the exact completed request, including its original evaluation date, run and attempt, to obtain the original durable receipt without HTTP, another task removal or a serial increment. A different request cannot reuse that completed binding or pending identity. A replayed receipt records historical completion; it does not assert that the current state file remains unchanged or that evidence is still current.
+
+Inspect a retained completion offline:
+
+```sh
+exacly completions show --ledger "$EXACLY_LEDGER_FILE" \
+  --completion "$EXACLY_COMPLETION_ID" --json
+```
+
+To resolve a prepared completion after interruption, use the same state destination:
+
+```sh
+exacly completions recover --ledger "$EXACLY_LEDGER_FILE" \
+  --completion "$EXACLY_COMPLETION_ID" --state observations/current.json --json
+```
+
+This recovery operates on the selected completion intent, separately from `executions recover`, which copies and repairs an interrupted SQLite transaction. Completion recovery verifies retained proof and binding history without HTTP. If the exact before-state remains, it marks the intent `aborted`; another completion attempt must obtain fresh admission. If the exact recorded after-state is present, it synchronizes the state and directory and finalizes the receipt once. Any third state reports `conflict` and remains untouched. Recovery never publishes a previously computed candidate blindly. Unresolved prepared intents continue to block conflicting registration changes.
+
+Show exits 0 for a valid retained phase, including `prepared` or `aborted`. Recovery exits 0 for `completed` or `aborted`, 1 for an unresolved result, and 2 for invalid inputs or operational errors. Both commands accept `--lock-timeout`, render text or JSON, retain their records in the ledger and need no GitHub token. Reports omit raw retained proof bytes.
+
+In Python, `exacly.completion.complete(source, plan_doc, action_id, readiness_policy, trust_policy, output_target, run_id, attempt, date, *, ledger, binding_id, state_path, lock_timeout=30)` returns the same report. `show(ledger, completion_id, lock_timeout=30)` inspects it; `recover(ledger, completion_id, state_path=..., lock_timeout=30)` resolves a prepared intent; `as_text(report)` renders it for people.
+
+Completion receipts remain unsigned and do not prove test honesty, acceptance coverage or that an executor produced the named output. These commands complete local verification work without closing external tickets, running candidate code, dispatching agents or granting release authority. The ledger must remain in the operator-controlled runtime; its file permissions do not isolate code running as the same operating-system user.

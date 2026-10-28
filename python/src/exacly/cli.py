@@ -5,10 +5,12 @@ exacly refresh PATH... --context CONTEXT --state FILE [--junit FILE...] [--distr
 exacly observe manual-qa PATH... --target FILE --state FILE [--revision REV] [--root DIR]
 exacly admit github-actions --trust-policy FILE --target FILE --run ID --attempt N --date YYYY-MM-DD --out DIR
 exacly reconcile github-actions --dry-run --plan FILE --action ID --policy FILE --trust-policy FILE --target FILE ...
+exacly complete github-actions --plan FILE --action ID --policy FILE --trust-policy FILE --target FILE ...
+exacly completions show|recover --ledger FILE --completion ID [--state FILE] [--json]
 exacly executions register --ledger FILE --plan FILE --action ID --state FILE --task TASK --opened-at ISO ...
 exacly executions show --ledger FILE --binding ID [--json]
 exacly executions inspect --ledger FILE [--lock-timeout SECONDS] [--json]
-exacly executions backup|recover --ledger FILE --out NEWDIR [--lock-timeout SECONDS] [--json]
+exacly executions backup|recover|upgrade --ledger FILE --out NEWDIR [--lock-timeout SECONDS] [--json]
 exacly plan [-m PATH]... --policy FILE --target FILE --date YYYY-MM-DD [--json] [--out FILE]
 exacly show|trace|impact|gaps [-m PATH]... [--json] ...; exacly mcp [-m PATH]...
 exacly view plan [--base REV] | site [--out DIR]
@@ -23,6 +25,7 @@ import glob
 import json
 import math
 import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -42,7 +45,7 @@ from exacly.core import binding_words, bindings, identity, is_state, validate_do
 from exacly.refresh import RefreshError, Run, check_distribution_identity, read_junit, refresh, unattributed
 
 if TYPE_CHECKING:
-    from exacly.admission import AdmissionResult
+    from exacly.admission import AdmissionResult, Source
 
 SUFFIXES = {".yaml", ".yml", ".json"}
 DEFAULT_MODEL = Path("spec/exacly")
@@ -623,6 +626,45 @@ def nonnegative_seconds(value: str) -> float:
     return seconds
 
 
+class GitHubCredentialsError(RuntimeError):
+    """Credential setup failed before a live evidence read, rather than evidence being rejected."""
+
+
+class LazyGitHubSource:
+    """A retained completion can replay without credentials or a GitHub client."""
+
+    def __init__(self) -> None:
+        self._source: Source | None = None
+        self._token: str | None = None
+
+    def _client(self) -> Source:
+        if self._source is None:
+            from exacly import github_evidence
+
+            token = os.environ.get("GH_TOKEN")
+            if not token or not token.strip():
+                token = os.environ.get("GITHUB_TOKEN")
+            if not token or not token.strip():
+                raise GitHubCredentialsError(
+                    "set GH_TOKEN or GITHUB_TOKEN to authenticate GitHub Actions evidence retrieval"
+                )
+            self._token = token
+            try:
+                self._source = github_evidence.GitHubClient(token)
+            except github_evidence.GitHubError:
+                raise GitHubCredentialsError("GitHub credentials are invalid") from None
+        return self._source
+
+    def get_json(self, path: str) -> dict[str, Any]:
+        return self._client().get_json(path)
+
+    def download_artifact(self, repository: str, artifact_id: int) -> bytes:
+        return self._client().download_artifact(repository, artifact_id)
+
+    def redact(self, error: Exception) -> str:
+        return str(error).replace(self._token, "[redacted]") if self._token else str(error)
+
+
 def write_admission(out: Path, inputs: Iterable[Path], trust_policy: dict[str, Any], result: AdmissionResult) -> None:
     """Publish one complete admission bundle in a new directory, preserving every input.
 
@@ -736,6 +778,47 @@ def protect_execution_ledger(ledger: Path, inputs: Iterable[Path], trust_policy:
         raise ValueError(f"execution ledger or protected input paths cannot be resolved: {error}") from error
 
 
+def protect_completion_paths(
+    state: Path, ledger: Path, inputs: list[Path], trust_policy: dict[str, Any], out: Path | None
+) -> None:
+    """Check all completion destinations before the authorized state transition can start."""
+    protect_execution_ledger(ledger, [state, *inputs], trust_policy)
+    try:
+        state_locations = (state.resolve(), state.parent.resolve() / state.name)
+        protected = {location for path in inputs for location in (path.resolve(), path.parent.resolve() / path.name)}
+        if any(location in protected for location in state_locations) or (
+            state.exists() and any(path.exists() and state.samefile(path) for path in inputs)
+        ):
+            raise ValueError("--state cannot overwrite a plan, policy, trust policy or target input or its alias")
+        if out is None:
+            return
+        if out.is_dir():
+            raise ValueError("--out must name a report file, not a directory")
+        destinations = (out.resolve(), out.parent.resolve() / out.name)
+        report_inputs = [state, *inputs, *execution_ledger_paths(ledger)]
+        protected.update(
+            location for path in report_inputs for location in (path.resolve(), path.parent.resolve() / path.name)
+        )
+        if any(location in protected for location in destinations) or (
+            out.exists() and any(path.exists() and out.samefile(path) for path in report_inputs)
+        ):
+            raise ValueError("--out cannot overwrite a completion input, state, ledger or its file alias")
+        for path in execution_ledger_paths(ledger):
+            for location in (path.resolve(), path.parent.resolve() / path.name):
+                if any(destination.is_relative_to(location) for destination in destinations):
+                    raise ValueError("--out cannot overlap the execution ledger or its auxiliary files")
+        folders = [Path(name).parent.resolve() for name in trust_policy["model"]["files"]]
+        if any(location.is_relative_to(folder) for location in destinations for folder in folders):
+            raise ValueError("--out must be outside the trust policy's declared model folders")
+        parent = out.parent.resolve()
+        while not parent.exists():
+            parent = parent.parent
+        if not parent.is_dir():
+            raise ValueError("--out parent must be a directory")
+    except RuntimeError as error:
+        raise ValueError(f"completion paths cannot be resolved: {error}") from error
+
+
 def exacly_main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv and argv[0] in ("validate", "refresh"):
@@ -800,13 +883,14 @@ def exacly_main(argv: list[str] | None = None) -> int:
     execution_show.add_argument(
         "--lock-timeout", type=nonnegative_seconds, help="maximum ledger lock wait in seconds (default: 30)"
     )
-    for operation in ("inspect", "backup", "recover"):
+    for operation in ("inspect", "backup", "recover", "upgrade"):
         maintenance_parser = execution_commands.add_parser(
             operation,
             help={
                 "inspect": "diagnose an existing ledger without changing it",
                 "backup": "save a consistent ledger backup in a new directory",
                 "recover": "recover into a new copy while preserving the source files",
+                "upgrade": "upgrade into a new copy while preserving the original ledger",
             }[operation],
         )
         maintenance_parser.add_argument("--ledger", required=True, type=Path, help="existing private execution ledger")
@@ -850,6 +934,43 @@ def exacly_main(argv: list[str] | None = None) -> int:
     reconcile.add_argument(
         "--lock-timeout", type=nonnegative_seconds, help="maximum registered-binding ledger lock wait in seconds"
     )
+    complete = commands.add_parser(
+        "complete", help="explicitly authorize local completion of one registered verification item"
+    )
+    complete.add_argument("source", choices=["github-actions"])
+    complete.add_argument("--plan", required=True, type=Path, help="saved verification plan YAML/JSON")
+    complete.add_argument("--action", required=True, help="action ID from the saved plan")
+    complete.add_argument("--policy", required=True, type=Path, help="readiness policy YAML/JSON")
+    complete.add_argument("--trust-policy", required=True, type=Path, help="approved producer and model policy")
+    complete.add_argument("--target", required=True, type=Path, help="registered output implementation target")
+    complete.add_argument("--run", required=True, type=positive_integer, help="GitHub Actions run ID")
+    complete.add_argument("--attempt", required=True, type=positive_integer, help="exact run attempt")
+    complete.add_argument("--date", required=True, type=dt.date.fromisoformat, help="evaluation date YYYY-MM-DD")
+    complete.add_argument("--ledger", required=True, type=Path, help="existing private version 2 execution ledger")
+    complete.add_argument("--binding", required=True, help="registered binding ID")
+    complete.add_argument(
+        "--state", required=True, type=Path, help="local state whose selected pending item to complete"
+    )
+    complete.add_argument(
+        "--lock-timeout", type=nonnegative_seconds, help="maximum shared ledger and state lock wait (default: 30)"
+    )
+    complete.add_argument("--json", action="store_true", help="print the completion report as JSON")
+    complete.add_argument("--out", type=Path, help="save JSON outside declared model folders, preserving input files")
+    completions = commands.add_parser("completions", help="inspect or recover retained local completion attempts")
+    completion_commands = completions.add_subparsers(dest="completion_command", required=True)
+    for operation in ("show", "recover"):
+        completion_parser = completion_commands.add_parser(
+            operation,
+            help="inspect a retained completion" if operation == "show" else "resolve one prepared local completion",
+        )
+        completion_parser.add_argument("--ledger", required=True, type=Path, help="existing private execution ledger")
+        completion_parser.add_argument("--completion", required=True, help="retained completion ID")
+        if operation == "recover":
+            completion_parser.add_argument("--state", required=True, type=Path, help="original local state path")
+        completion_parser.add_argument(
+            "--lock-timeout", type=nonnegative_seconds, help="maximum shared ledger and state lock wait (default: 30)"
+        )
+        completion_parser.add_argument("--json", action="store_true", help="print the completion report as JSON")
     assess = commands.add_parser(
         "assess", parents=[common], help="assess a record for an explicit implementation target"
     )
@@ -882,7 +1003,7 @@ def exacly_main(argv: list[str] | None = None) -> int:
     view.add_argument("--out", type=Path, metavar="DIR", help="site: the folder to write (default: reports/site)")
     args = parser.parse_args(argv)
     if args.command == "executions":
-        if args.execution_command in {"inspect", "backup", "recover"}:
+        if args.execution_command in {"inspect", "backup", "recover", "upgrade"}:
             import exacly.execution_maintenance as execution_maintenance
 
             try:
@@ -895,7 +1016,9 @@ def exacly_main(argv: list[str] | None = None) -> int:
                     protect_execution_copy(args.ledger, args.out)
                     maintenance_action = getattr(execution_maintenance, args.execution_command)
                     answer = maintenance_action(args.ledger, args.out, **options)
-                    expected_status = {"backup": "backed_up", "recover": "recovered"}[args.execution_command]
+                    expected_status = {"backup": "backed_up", "recover": "recovered", "upgrade": "upgraded"}[
+                        args.execution_command
+                    ]
                     if answer.get("status") != expected_status:
                         raise ValueError(f"execution {args.execution_command} returned an invalid status")
             except (query.QueryError, ValueError, OSError) as error:
@@ -944,6 +1067,87 @@ def exacly_main(argv: list[str] | None = None) -> int:
             return 2
         print(json.dumps(answer, indent=2, sort_keys=True, default=str) if args.json else executions.as_text(answer))
         return 0
+    if args.command == "completions":
+        import exacly.completion as completion
+
+        try:
+            completion_options: dict[str, Any] = {}
+            if args.lock_timeout is not None:
+                completion_options["lock_timeout"] = args.lock_timeout
+            if args.completion_command == "recover":
+                report = completion.recover(args.ledger, args.completion, state_path=args.state, **completion_options)
+            else:
+                report = completion.show(args.ledger, args.completion, **completion_options)
+            if report.get("status") not in {"completed", "pending", "stale", "prepared", "aborted", "conflict"}:
+                raise ValueError("completion returned an invalid status")
+        except (query.QueryError, ValueError, OSError) as error:
+            print(f"exacly completions: {error}", file=sys.stderr)
+            return 2
+        print(json.dumps(report, indent=2, sort_keys=True, default=str) if args.json else completion.as_text(report))
+        return 0 if args.completion_command == "show" or report["status"] in {"completed", "aborted"} else 1
+    if args.command == "complete":
+        import exacly.completion as completion
+
+        lazy_source = LazyGitHubSource()
+        try:
+            plan_doc, readiness_policy = read(args.plan), read(args.policy)
+            trust_policy = read(args.trust_policy)
+            target = Target(read(args.target))
+            completion_inputs = [args.plan, args.policy, args.trust_policy, args.target]
+            protect_completion_paths(args.state, args.ledger, completion_inputs, trust_policy, args.out)
+            complete_options: dict[str, Any] = {
+                "ledger": args.ledger,
+                "binding_id": args.binding,
+                "state_path": args.state,
+            }
+            if args.lock_timeout is not None:
+                complete_options["lock_timeout"] = args.lock_timeout
+            report = completion.complete(
+                lazy_source,
+                plan_doc,
+                args.action,
+                readiness_policy,
+                trust_policy,
+                target,
+                args.run,
+                args.attempt,
+                args.date,
+                **complete_options,
+            )
+            if report.get("status") not in {"completed", "pending", "stale", "prepared", "aborted", "conflict"}:
+                raise ValueError("completion returned an invalid status")
+            if args.out is not None:
+                try:
+                    write_reconciliation(
+                        args.out,
+                        [*completion_inputs, args.state, *execution_ledger_paths(args.ledger)],
+                        trust_policy,
+                        report,
+                    )
+                except (ValueError, OSError) as error:
+                    if report["status"] == "completed":
+                        completion_id = report.get("completion_id")
+                        inspect_command = shlex.join(
+                            [
+                                "exacly",
+                                "completions",
+                                "show",
+                                "--ledger",
+                                str(args.ledger),
+                                "--completion",
+                                str(completion_id),
+                            ]
+                        )
+                        raise ValueError(
+                            f"completion {completion_id} is already recorded; --out report could not be written: "
+                            f"{error}. Inspect the retained receipt with {inspect_command}"
+                        ) from error
+                    raise
+        except (query.QueryError, ValueError, OSError, GitHubCredentialsError) as error:
+            print(f"exacly complete: {lazy_source.redact(error)}", file=sys.stderr)
+            return 2
+        print(json.dumps(report, indent=2, sort_keys=True, default=str) if args.json else completion.as_text(report))
+        return 0 if report["status"] == "completed" else 1
     if args.command == "reconcile":
         from exacly import github_evidence, reconciliation
 
