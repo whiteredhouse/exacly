@@ -4,10 +4,14 @@ Keep a product model true to what ships, across the software development lifecyc
 
 ```mermaid
 flowchart LR
-    config["Config<br/>what you intend"] -- "plan" --> work["Work plan<br/>next work to close gaps"]
-    state["State<br/>what is observed"] -- "plan" --> work
-    work -- "apply:<br/>people, agents and workflows" --> product["Product<br/>code, tests, deployments"]
-    product -- "refresh:<br/>observe and cite evidence" --> state
+    state["State<br/>what is observed"]
+    config["Config<br/>what you intend"]
+    config --> plan(("plan"))
+    state --> plan
+    plan -- "work plan" --> apply(("apply"))
+    apply -- "people, agents<br/>and workflows" --> product["Product<br/>code, tests, deployments"]
+    product --> refresh(("refresh"))
+    refresh -- "evidence" --> state
 ```
 
 Exacly describes a product from business purpose down to the systems that run it: outcomes, capabilities, processes, requirements, information, applications and infrastructure, and how they relate. Teams and agents author that description as **config**. Tooling observes the real system (builds, tests, deployments, metrics) and records what it finds as **state**, with the evidence behind it. Comparing the two shows what is planned, what has shipped, and where the model and the product have drifted apart.
