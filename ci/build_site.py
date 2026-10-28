@@ -1,4 +1,4 @@
-"""Build the landing page and its model browsers from the checked-out source and recorded state."""
+"""Build the small invoice demonstration and a separate view of Exacly's recorded project state."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import io
 import json
 import shutil
 import tarfile
+import tempfile
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -15,8 +16,9 @@ from urllib.parse import urlsplit
 from exacly import query, views
 from exacly.cli import load
 
-MARKER = "<!-- PROJECT_EVIDENCE -->"
-PROJECT_RECORDS = ("REQ-013", "REQ-018")
+from ci.invoice_demo import prepare_demo
+
+MARKER = "<!-- DEMO_EVIDENCE -->"
 DIMENSIONS = ("verification", "delivery")
 
 
@@ -67,82 +69,63 @@ def observation(assessment: dict[str, Any]) -> str:
     body = (
         "".join(claims)
         + observed_at
-        + '<details class="project-receipt"><summary>Observation context and revisions</summary>'
+        + '<details class="demo-receipt"><summary>Observation context and revisions</summary>'
         + metadata
         + "".join(evidence_metadata)
         + "</details>"
     )
     return (
-        f'<details class="project-observation" data-dimension="{escape(dimension)}"{opened}>'
+        f'<details class="demo-observation" data-dimension="{escape(dimension)}"{opened}>'
         f"<summary>Recorded {escape(dimension)}: {escape(words(assessment['state']))}</summary>{body}</details>"
     )
 
 
-def project_evidence(model: query.Model) -> str:
-    """Render two useful records from the real model; summaries never substitute for assessment identity."""
-    records = []
-    for rid in PROJECT_RECORDS:
-        shown = query.show(model, rid)
-        record = shown["record"]
-        observed = shown["state"].get("main", {})
-        statuses = observed.get("status", {})
-        summary = "".join(
-            f"<div><dt>{escape(words(dimension))}</dt>"
-            f"<dd>{escape(words(statuses.get(dimension, 'not_observed')))}</dd></div>"
-            for dimension in DIMENSIONS
-        )
-        assessments = observed.get("assessments", [])
-        detail = "".join(
-            observation(assessment)
-            for dimension in DIMENSIONS
-            for assessment in assessments
-            if assessment["dimension"] == dimension
-        )
-        for dimension in DIMENSIONS:
-            if not any(assessment["dimension"] == dimension for assessment in assessments):
-                detail += f'<p class="project-observation">Recorded {escape(dimension)}: Not observed.</p>'
-        records.append(
-            f'<article class="project-record" data-record="{rid}" data-ui>'
-            f'<h3 class="project-record-title"><a href="./project/records/{views.page_name(rid)}">'
-            f"<code>{rid}</code> {escape(record['name'])}</a></h3>"
-            f"<p>Lifecycle: {escape(record['lifecycle'])}</p>"
-            f'<dl class="project-statuses">{summary}</dl>{detail}</article>'
-        )
-    state = model.states.get("main")
-    if state:
-        note = (
-            f'Main state written <time datetime="{escape(state["written_at"])}">'
-            f"{escape(state['written_at'])}</time>; serial {escape(state['serial'])}; "
-            f"config revision <code>{escape(state['config_revision'])}</code>. "
-            "Each observation retains its own subject and time below the summary."
-        )
-    else:
-        note = "No main state is recorded. Verification and delivery remain unobserved."
-    return "".join(records) + f'<p class="project-state-note">{note}</p>'
+def demo_evidence(model: query.Model) -> str:
+    """Show the single invoice requirement, preserving the demonstration assessment's identity."""
+    rid = "REQ-001"
+    shown = query.show(model, rid)
+    record = shown["record"]
+    observed = shown["state"].get("demo", {})
+    statuses = observed.get("status", {})
+    summary = f"<div><dt>Lifecycle</dt><dd>{escape(words(record['lifecycle']))}</dd></div>"
+    summary += "".join(
+        f"<div><dt>{escape(words(dimension))}</dt>"
+        f"<dd>{escape(words(statuses.get(dimension, 'not_observed')))}</dd></div>"
+        for dimension in DIMENSIONS
+    )
+    details = "".join(observation(a) for a in observed.get("assessments", []) if a["dimension"] in DIMENSIONS)
+    return (
+        f'<article class="demo-record" data-record="{rid}" data-ui>'
+        f'<h3 class="demo-record-title"><a href="./example/records/{views.page_name(rid)}">'
+        f"{escape(record['name'])}</a></h3>"
+        f"<p><code>{rid}</code> · Demonstration state</p>"
+        f'<dl class="demo-statuses">{summary}</dl>{details}</article>'
+    )
 
 
 def model_archive(source: Path, out: Path) -> None:
-    """Package canonical model documents, preserving their bytes and relative paths."""
+    """Package the prepared demonstration, including its explanation and illustrative report."""
     with tarfile.open(out, "w:gz") as archive:
         for path in sorted(source.rglob("*")):
             relative = path.relative_to(source)
-            if not path.is_file() or path.suffix not in {".yaml", ".yml", ".json"}:
+            if not path.is_file() or path.suffix not in {".yaml", ".yml", ".json", ".xml", ".md"}:
                 continue
             if any(part.startswith(".") for part in relative.parts):
                 continue
             content = path.read_bytes()
-            entry = tarfile.TarInfo((Path("project-model") / relative).as_posix())
+            entry = tarfile.TarInfo((Path("invoice-model") / relative).as_posix())
             entry.mode, entry.size = 0o644, len(content)
             archive.addfile(entry, io.BytesIO(content))
 
 
 def read_model(root: Path, source: Path) -> query.Model:
-    documents = {Path(name).relative_to(root).as_posix(): doc for name, doc in load([source]).items()}
+    base = root if source.is_relative_to(root) else source
+    documents = {Path(name).relative_to(base).as_posix(): doc for name, doc in load([source]).items()}
     return query.load(documents)
 
 
 def build(root: Path, out: Path) -> Path:
-    """Build into a fresh directory outside the checkout; never refresh or edit observations."""
+    """Build outside the checkout; derive a labelled demo without editing canonical inputs or real state."""
     root, out = root.resolve(), out.resolve()
     if out.is_relative_to(root) or root.is_relative_to(out):
         raise ValueError("The output directory must be outside the source checkout and its ancestors")
@@ -152,17 +135,26 @@ def build(root: Path, out: Path) -> Path:
     index = (source / "index.html").read_text()
     if index.count(MARKER) != 1:
         raise ValueError(f"The landing page must contain exactly one {MARKER} marker")
-    invoice_source, project_source = root / "spec/examples/0.2/invoice-reminders", root / "spec/exacly"
-    invoice = read_model(root, invoice_source)
-    project = read_model(root, project_source)
-    proof = project_evidence(project)
+    project = read_model(root, root / "spec/exacly")
     shutil.copytree(source, out, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     invoice_out = out / "example"
-    views.site(invoice, invoice_out)
-    for document in sorted(invoice_source.glob("*.yaml")):
-        shutil.copyfile(document, invoice_out / document.name)
+    with tempfile.TemporaryDirectory(prefix="exacly-invoice-demo-") as temporary:
+        demo = prepare_demo(root, Path(temporary) / "model")
+        invoice = read_model(root, demo)
+        proof = demo_evidence(invoice)
+        shutil.copytree(demo, invoice_out, dirs_exist_ok=True)
+        pages = views.site(invoice, invoice_out)
+        for page in pages:
+            prefix = "../" if page.parent.name == "records" else "./"
+            notice = (
+                "<aside><p><strong>Invoice demonstration.</strong> "
+                "Illustrative test results; delivery is not observed. "
+                f'<a href="{prefix}DEMO.md">Read the demo notes</a> · '
+                f'<a href="{prefix}sample-junit.xml">Sample test report</a></p></aside>'
+            )
+            page.write_text(page.read_text().replace("<body>", "<body>" + notice, 1))
+        model_archive(demo, out / "invoice-model.tar.gz")
     views.site(project, out / "project")
-    model_archive(project_source, out / "project-model.tar.gz")
     (out / "index.html").write_text(index.replace(MARKER, proof))
     return out
 

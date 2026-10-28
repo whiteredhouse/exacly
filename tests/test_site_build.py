@@ -1,11 +1,13 @@
-"""The published examples and evidence must come from canonical inputs without changing their identity."""
+"""The small fictional demo must stay distinct from Exacly's real recorded project state."""
 
 import html
-import importlib.util
+import importlib
 import json
 import re
 import shutil
+import sys
 import tarfile
+import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
@@ -13,28 +15,27 @@ from urllib.parse import unquote, urlsplit
 
 import pytest
 import yaml
+from exacly import query
+from exacly.cli import load
 
 ROOT = Path(__file__).resolve().parents[1]
-SPEC = importlib.util.spec_from_file_location("build_site", ROOT / "ci/build_site.py")
-assert SPEC is not None and SPEC.loader is not None
-BUILDER = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(BUILDER)
+sys.path.insert(0, str(ROOT))
+try:
+    BUILDER = importlib.import_module("ci.build_site")
+finally:
+    sys.path.pop(0)
 
 
 @pytest.fixture
 def source(tmp_path: Path) -> Path:
     root = tmp_path / "source"
-    for relative in ("spec/exacly", "spec/examples/0.2/invoice-reminders"):
+    for relative in (
+        "spec/exacly",
+        "spec/examples/0.2/invoice-reminders",
+        "ci/fixtures/invoice-reminders",
+        "docs/site",
+    ):
         shutil.copytree(ROOT / relative, root / relative)
-    site = root / "docs/site"
-    site.mkdir(parents=True)
-    (site / "index.html").write_text(
-        "<!doctype html><html><body><!-- PROJECT_EVIDENCE -->"
-        '<a href="./example/model.yaml">Boundary</a><a href="./example/billing.yaml">Records</a>'
-        '<a href="./example/">Example</a><a href="./project/">Project</a>'
-        '<a href="./project-model.tar.gz">Download</a></body></html>'
-    )
-    (site / ".nojekyll").touch()
     return root
 
 
@@ -51,98 +52,117 @@ class References(HTMLParser):
         self.urls.extend(value for key, value in attrs if key in {"href", "src"} and value)
 
 
-def test_build_keeps_sources_and_downloads_exact_and_generates_both_browsers(source: Path, tmp_path: Path) -> None:
+def test_build_preserves_canonical_sources_and_packages_the_published_demo(source: Path, tmp_path: Path) -> None:
     before = contents(source)
     out = BUILDER.build(source, tmp_path / "site")
     assert contents(source) == before
     assert (out / ".nojekyll").is_file()
     assert BUILDER.MARKER not in (out / "index.html").read_text()
-    for name in ("model.yaml", "billing.yaml"):
-        assert (out / "example" / name).read_bytes() == before[f"spec/examples/0.2/invoice-reminders/{name}"]
-    for relative in ("example/index.html", "example/records/REQ-001.html", "project/records/REQ-013.html"):
-        assert (out / relative).is_file()
-    for page in out.rglob("*.html"):
-        parser = References()
-        text = page.read_text()
-        assert str(source) not in text
-        parser.feed(text)
-        for value in parser.urls:
-            url = urlsplit(value)
-            if url.scheme or url.netloc or not url.path:
-                continue
-            path = (page.parent / unquote(url.path)).resolve()
-            assert path.is_relative_to(out)
-            assert (path / "index.html" if path.is_dir() else path).is_file(), (page, value)
-    with tarfile.open(out / "project-model.tar.gz") as archive:
-        expected = {
-            "project-model/" + name.removeprefix("spec/exacly/"): body
-            for name, body in before.items()
-            if name.startswith("spec/exacly/") and Path(name).suffix in {".yaml", ".yml", ".json"}
-        }
+    assert not (out / "project-model.tar.gz").exists()
+    demo = out / "example"
+    expected = {
+        "invoice-model/" + relative: (demo / relative).read_bytes()
+        for relative in ("model.yaml", "billing.yaml", "sample-junit.xml", "DEMO.md", "state/demo.json")
+    }
+    with tarfile.open(out / "invoice-model.tar.gz") as archive:
         assert set(archive.getnames()) == set(expected)
         for member in archive:
             assert member.isfile()
             stream = archive.extractfile(member)
             assert stream is not None and stream.read() == expected[member.name]
+    assert (demo / "sample-junit.xml").read_bytes() == before["ci/fixtures/invoice-reminders/sample-junit.xml"]
+    for page in out.rglob("*.html"):
+        parser = References()
+        text = page.read_text()
+        assert str(source) not in text and str(tmp_path / "site") not in text
+        parser.feed(text)
+        for value in parser.urls:
+            url = urlsplit(value)
+            if url.scheme or url.netloc or not url.path:
+                continue
+            assert not url.path.startswith("/"), (page, value)
+            path = (page.parent / unquote(url.path)).resolve()
+            assert path.is_relative_to(out)
+            assert (path / "index.html" if path.is_dir() else path).is_file(), (page, value)
 
 
-def test_proof_preserves_each_assessments_subject_time_and_evidence(source: Path, tmp_path: Path) -> None:
-    state = json.loads((source / "spec/exacly/state/main.json").read_text())
-    authored = {
-        record["id"]: record
-        for document in (source / "spec/exacly").glob("*.yaml")
-        for record in yaml.safe_load(document.read_text()).get("records", [])
-    }
-    page = (BUILDER.build(source, tmp_path / "site") / "index.html").read_text()
+def test_invoice_demo_is_active_verified_and_explicitly_fictional_with_unknown_delivery(
+    source: Path, tmp_path: Path
+) -> None:
+    out = BUILDER.build(source, tmp_path / "site")
+    model = query.load(load([out / "example"]))
+    shown = query.show(model, "REQ-001")
+    assert not model.report.errors
+    assert shown["record"]["lifecycle"] == "active"
+    observed = shown["state"]["demo"]
+    assert observed["status"]["verification"] == "passed"
+    assert all(assessment["dimension"] == "verification" for assessment in observed["assessments"])
+    assert "delivery" not in observed["status"] or observed["status"]["delivery"] != "released"
+    canonical = yaml.safe_load((source / "spec/examples/0.2/invoice-reminders/billing.yaml").read_text())
+    assert all(record["lifecycle"] == "proposed" for record in canonical["records"])
+    for page in (out / "example").rglob("*.html"):
+        assert "demonstration" in page.read_text().lower()
+        assert "DEMO.md" in page.read_text()
+    page = (out / "index.html").read_text()
+    assert "demonstration" in page.lower()
+    assert "Not observed" in page
+    parser = References()
+    parser.feed(page)
+    assert "./example/records/REQ-001.html" in parser.urls
+    assert all(not url.startswith(("./project", "project/")) for url in parser.urls)
+    assert "REQ-013" not in page and "REQ-018" not in page
+
+
+def test_demo_summary_preserves_its_observation_identity_and_real_project_browser_keeps_real_state(
+    source: Path, tmp_path: Path
+) -> None:
+    out = BUILDER.build(source, tmp_path / "site")
+    page = html.unescape((out / "index.html").read_text())
     records = dict(re.findall(r'<article[^>]+data-record="([^"]+)"[^>]*>(.*?)</article>', page))
-    assert set(records) == {"REQ-013", "REQ-018"}
-    assert state["written_at"] in page and state["config_revision"] in page
-    for rid, record in records.items():
-        observations = re.findall(r'<details[^>]+data-dimension="([^"]+)"[^>]*>(.*?)</details>', record)
-        for dimension in BUILDER.DIMENSIONS:
-            expected = [a for a in state["records"][rid]["assessments"] if a["dimension"] == dimension]
-            details = [detail for found, detail in observations if found == dimension]
-            assert len(details) == len(expected)
-            for assessment, detail in zip(expected, details, strict=True):
-                detail = html.unescape(detail)
-                assert assessment["at"] in detail
-                assert assessment["context"] in detail
-                for value in assessment["subject"].values():
-                    rendered = json.dumps(value, sort_keys=True) if isinstance(value, (dict, list)) else str(value)
-                    assert rendered in detail
-                for evidence in assessment["evidence"]:
-                    assert evidence["claim"] in detail and evidence["locator"] in detail
-                    if "observed_at" in evidence:
-                        assert evidence["observed_at"] in detail
-        assert f"Lifecycle: {authored[rid]['lifecycle']}" in record
+    assert set(records) == {"REQ-001"}
+    assessment = json.loads((out / "example/state/demo.json").read_text())["records"]["REQ-001"]["assessments"][0]
+    record = records["REQ-001"]
+    assert assessment["context"] in record and assessment["at"] in record
+    for value in assessment["subject"].values():
+        rendered = json.dumps(value, sort_keys=True) if isinstance(value, (dict, list)) else str(value)
+        assert rendered in record
+    for evidence in assessment["evidence"]:
+        assert evidence["claim"] in record and evidence["locator"] in record
+    assert 'data-dimension="delivery"' not in record
+    real_state = json.loads((source / "spec/exacly/state/main.json").read_text())
+    real_page = html.unescape((out / "project/records/REQ-013.html").read_text())
+    assert real_state["config_revision"][:12] in real_page
+    for actual in real_state["records"]["REQ-013"]["assessments"]:
+        assert actual["at"] in real_page
+        for evidence in actual["evidence"]:
+            assert evidence["claim"] in real_page and evidence["locator"] in real_page
 
 
-def test_missing_delivery_is_unknown_without_inventing_an_assessment(source: Path, tmp_path: Path) -> None:
-    path = source / "spec/exacly/state/main.json"
-    state = json.loads(path.read_text())
-    state["records"]["REQ-018"]["assessments"] = [
-        a for a in state["records"]["REQ-018"]["assessments"] if a["dimension"] != "delivery"
-    ]
-    path.write_text(json.dumps(state))
-    page = (BUILDER.build(source, tmp_path / "site") / "index.html").read_text()
-    records = dict(re.findall(r'<article[^>]+data-record="([^"]+)"[^>]*>(.*?)</article>', page))
-    assert "Recorded delivery: Not observed." in records["REQ-018"]
-    assert not any(
-        dimension == "delivery"
-        for dimension, _ in re.findall(
-            r'<details[^>]+data-dimension="([^"]+)"[^>]*>(.*?)</details>', records["REQ-018"]
-        )
-    )
+def test_demo_verification_is_derived_from_report_results(source: Path, tmp_path: Path) -> None:
+    report = source / "ci/fixtures/invoice-reminders/sample-junit.xml"
+    tree = ET.parse(report)
+    case = tree.find(".//testcase")
+    assert case is not None
+    ET.SubElement(case, "failure", {"message": "Illustrative failed reminder check"})
+    for suite in tree.getroot().iter():
+        if suite.tag in {"testsuites", "testsuite"}:
+            suite.set("failures", "1")
+    tree.write(report, encoding="utf-8", xml_declaration=True)
+    out = BUILDER.build(source, tmp_path / "site")
+    shown = query.show(query.load(load([out / "example"])), "REQ-001")
+    assert shown["state"]["demo"]["status"]["verification"] == "failed"
+    assert "Failed" in (out / "index.html").read_text()
+    assert all(a["dimension"] != "delivery" for a in shown["state"]["demo"]["assessments"])
 
 
-def test_proof_escapes_text_and_does_not_link_non_https_evidence(source: Path, tmp_path: Path) -> None:
-    path = source / "spec/exacly/state/main.json"
-    state: dict[str, Any] = json.loads(path.read_text())
-    evidence = state["records"]["REQ-013"]["assessments"][0]["evidence"][0]
+def test_demo_proof_escapes_text_and_does_not_link_non_https_evidence(source: Path, tmp_path: Path) -> None:
+    out = BUILDER.build(source, tmp_path / "site")
+    model = query.load(load([out / "example"]))
+    assessment: dict[str, Any] = model.states["demo"]["records"]["REQ-001"]["assessments"][0]
+    evidence = assessment["evidence"][0]
     evidence["claim"] = '<script>bad</script> & "claim"'
     evidence["locator"] = "javascript:alert(1)"
-    path.write_text(json.dumps(state))
-    page = (BUILDER.build(source, tmp_path / "site") / "index.html").read_text()
+    page = BUILDER.demo_evidence(model)
     assert "<script>bad</script>" not in page
     assert "&lt;script&gt;bad&lt;/script&gt; &amp; &quot;claim&quot;" in page
     parser = References()

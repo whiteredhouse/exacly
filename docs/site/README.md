@@ -1,12 +1,8 @@
 # Exacly landing page
 
-This directory contains the landing-page presentation. The build uses the
-repository's locked Python dependencies to generate model browsers and render
-recorded evidence. The published result is static HTML, CSS and JavaScript;
-it needs no application server or API key.
-
-Keep links relative so the site works at both a repository subpath and a custom
-domain. The main presentation files are `index.html`, `style.css` and `site.js`.
+The build generates static HTML, CSS and JavaScript using the repository's locked
+Python dependencies. The published site needs no application server or API key.
+Keep presentation links relative for GitHub project Pages.
 
 ## Preview
 
@@ -14,69 +10,58 @@ From the repository root, with uv available:
 
 ```sh
 site_preview_dir="$(mktemp -d)"
-uv run --locked python ci/build_site.py --out "$site_preview_dir"
+uv run --locked python -m ci.build_site --out "$site_preview_dir"
 python3 -m http.server 8000 --directory "$site_preview_dir"
 ```
 
-Open `http://localhost:8000`. Preview the built directory rather than serving
-`docs/site` directly: both model browsers, model downloads and project-evidence
-cards are generated during the build.
+Open `http://localhost:8000`. Serve the built directory: model browsers,
+downloads and the demonstration-state panel are generated during the build.
 
-The visitor quick start downloads `project-model.tar.gz`, extracts it, and opens
-`REQ-013` with `uvx exacly show REQ-013 -m project-model`. It uses the PyPI package
-without a repository clone or persistent Exacly installation. The invoice browser
-and its original YAML downloads remain a smaller fictional learning example.
-Keep the download URLs aligned with the Pages address. The contributor workflow
-remains `mise run check` from the repository root.
+## Invoice demonstration
 
-## Source models and recorded evidence
+The main example is derived from the existing
+`spec/examples/0.2/invoice-reminders/` model. `ci/invoice_demo.py` stages a copy,
+sets its environment to `demo`, and makes `REQ-001` active with an illustrative
+review date. Canonical source documents remain unchanged, including their
+proposed lifecycle values.
 
-`ci/build_site.py` builds from these authoritative inputs:
+Exacly's refresh observer reads the explicitly fictional report in
+`ci/fixtures/invoice-reminders/sample-junit.xml` and generates `state/demo.json`.
+The sample verification passes; delivery has no observation. Demo labels appear
+on the landing page, every invoice-browser page, the staged YAML and the bundled
+`DEMO.md`. The sample report does not establish real product verification or
+complete acceptance coverage.
 
-- `docs/site/` supplies the landing-page presentation and assets.
-- `spec/examples/0.2/invoice-reminders/` supplies the fictional invoice model.
-  Its original YAML is copied into the published `example/` directory, beside
-  the generated invoice-model browser. These records are proposed and have no
-  observed state.
-- `spec/exacly/` supplies Exacly's real product model and committed observations.
-  Its browser is generated into the published `project/` directory. The landing
-  page's project-evidence cards are derived from the same records and state.
-  The generated `project-model.tar.gz` contains its canonical YAML config and
-  JSON state documents under `project-model/`, including `state/main.json`,
-  preserving the source bytes. This archive is a build artifact, not another
-  maintained source snapshot.
+`ci/build_site.py` publishes the prepared model, report and state beside the
+generated browser in `example/`, and packages the same files as
+`invoice-model.tar.gz` under `invoice-model/`. The visitor runs two commands:
 
-Do not maintain duplicate YAML or generated-browser snapshots under `docs/site`.
-Rebuild to pick up source changes. The builder replaces the
-`<!-- PROJECT_EVIDENCE -->` marker in the staged landing page; keep that marker
-in the presentation source.
+```sh
+curl -fsSL https://whiteredhouse.github.io/exacly/invoice-model.tar.gz | tar -xz
+uvx exacly show REQ-001 -m invoice-model
+```
 
-The build reads recorded state without refreshing or modifying it. Each
-assessment keeps its own evidence, observation time and implementation identity;
-an absent delivery observation remains absent. Verification, delivery, operation
-and outcome evaluation are separate claims. Recorded observations identify the
-revision they concern and do not establish verification of a newer commit.
+Keep the `<!-- DEMO_EVIDENCE -->` marker in `index.html`: the builder replaces it
+with the requirement's demonstration state. Do not maintain duplicate config or
+generated-browser snapshots in this directory.
 
-Keep assertions about available commands aligned with `python/README.md` and
-the package release status. Target-aware verification planning is advisory;
-task dispatch and automated apply remain proposed.
+## Real project state
 
-## Publish through GitHub Pages
+The build also generates `project/` from `spec/exacly/` and its committed state.
+The repository README links to that full project view; the landing page stays
+focused on the invoice demonstration. Real state is read without refreshing or
+modifying it. Each assessment retains its own context, date and revision, so an
+observation does not establish verification of newer commits.
 
-Select **Settings → Pages → GitHub Actions** as the repository's publishing
-source. [The Landing page workflow](../../.github/workflows/pages.yml) then
-builds, checks local HTML references and publishes the validated artifact to
-the `github-pages` environment. The deployment summary provides the URL.
+## GitHub Pages
 
-Pull requests validate the build without publishing. Automatic publication
-follows a successful **Spec** workflow run from a push to this repository's
-`main` branch. Spec commits fresh observations with `[skip ci]`, so the Pages
-workflow listens for Spec completion and checks out `main` after that commit
-instead of relying on another push event. Failed runs, pull-request runs and
-runs from another repository cannot publish.
+Select **Settings → Pages → GitHub Actions**. The Landing page workflow builds
+the site and checks local references. Pull requests validate without publishing.
+Automatic publication follows a successful **Spec** push run on this repository's
+`main` branch, checking out main after Spec's `[skip ci]` state commit. Failed,
+pull-request and other-repository runs cannot publish. Production builds and
+deployment are serialized.
 
-Production builds and deployment are serialized.
-
-**Run workflow** also permits manual publication from `main`. The build job has
-read-only repository permissions; Pages deployment permissions are confined to
-the deployment job. The `.nojekyll` marker is preserved in the static artifact.
+**Run workflow** permits manual publication from `main`. The build has read-only
+repository permissions; Pages deployment permissions are confined to its deploy
+job. Run `mise run check` before pushing.
