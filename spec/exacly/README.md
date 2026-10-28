@@ -22,6 +22,20 @@ Exacly models itself, following the layout in section 13 of the specification. I
 - [`execution-maintenance.yaml`](execution-maintenance.yaml) covers bounded access, diagnosis, backup and copy-only ledger recovery.
 - [`automation.yaml`](automation.yaml) records the remaining automation roadmap as proposed Requirements, implementers and data concepts.
 
+## Implemented automation foundations
+
+These foundations are active in the model:
+
+| Record | Implemented work |
+| --- | --- |
+| REQ-010 | Separate model and implementation identities in refresh. |
+| REQ-018 | Target-specific saved verification plans. |
+| REQ-019 | Live GitHub evidence admission under an approved producer policy. |
+| REQ-020 | Read-only reconciliation previews. |
+| REQ-021 | Immutable operator registrations for existing pending tasks. |
+| REQ-022 | Ledger diagnosis, backup, copy-only recovery and bounded lock waits. |
+| REQ-023 | Conditional atomic state publication shared by current observers. |
+
 ## Proposed automation
 
 The [plan/apply research](../../docs/automated-plan-apply-research.md) informs these proposals. Their traceability runs through `PROC-004` and `CAP-004` to `OUT-001`.
