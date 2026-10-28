@@ -8,7 +8,10 @@ on:
       - "spec/exacly/**"
       - "spec/schema/**"
       - "python/src/exacly/**"
+      - "ci/__init__.py"
       - "ci/build_site.py"
+      - "ci/invoice_demo.py"
+      - "ci/fixtures/invoice-reminders/**"
       - "tests/**"
       - "pyproject.toml"
       - "uv.lock"
@@ -45,7 +48,7 @@ jobs:
       - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
       - name: Build the static site and both model browsers
         run: |
-          uv run --locked python ci/build_site.py --out "$RUNNER_TEMP/exacly-site"
+          uv run --locked python -m ci.build_site --out "$RUNNER_TEMP/exacly-site"
       - name: Check the static site's local references
         run: |
           python3 - <<'PY'

@@ -143,6 +143,8 @@ The check also evaluates [`ci/verification.yaml`](ci/verification.yaml) against 
 
 ## Status
 
+Browse [Exacly's own model and recorded state](https://whiteredhouse.github.io/exacly/project/). CI updates this view after successful checks on `main`. The [raw state](spec/exacly/state/main.json) retains each observation’s revision and time.
+
 Exacly is at 0.x and unstable: anything may change until 1.0, which comes with the first outside adopter. See [Versioning](spec/README.md#versioning).
 
 Each part of Exacly has its own version, tagged as `<part>-vX.Y.Z`, as release-please and Changesets tag the parts of one repository:
