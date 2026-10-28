@@ -22,6 +22,8 @@ Exacly models itself, following the layout in section 13 of the specification. I
 
 `mise run check` runs the same refresh locally and on pull requests, writing to `reports/state/main.json` without committing anything. A proposed change can show its effect on state this way, but never stores it. Validation in CI reads that fresh state rather than the committed one, so a change that removes a record isn't blocked by state from before it.
 
+Refresh and manual-QA observation use a shared conditional atomic writer for local state files. A command captures the earlier file before computing observations, then checks that it is unchanged under a parent-directory lock before replacing it. A conflict leaves the newer state in place and requires another observation. This local file protocol is separate from the workflow's Git push check and from execution-ledger transactions.
+
 `--distribution` says that main is how Exacly is distributed, since people install it from the repository. So an implementer present at the revision counts as released there.
 
 ## Bindings
