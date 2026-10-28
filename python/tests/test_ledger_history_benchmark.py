@@ -103,6 +103,7 @@ def test_profile_cli_reports_deterministic_work_and_exact_read_hash_bytes() -> N
         [sys.executable, str(ROOT / "benchmarks/ledger_history.py"), "--counts", "2", "--supersession-depth", "2"],
         cwd=ROOT,
         env={**os.environ, "PYTHONPATH": os.pathsep.join(str(ROOT / path) for path in ("python/src", "python/tests"))},
+        umask=0o022,
         check=False,
         capture_output=True,
         text=True,
@@ -120,6 +121,22 @@ def test_profile_cli_reports_deterministic_work_and_exact_read_hash_bytes() -> N
         sizes["binding_json_bytes"] + sizes["retained_payload_bytes"] + sizes["receipt_json_bytes"]
     )
     assert len(measured["repetitions"][0]["read_and_hash_digest"]) == 64
+
+
+def test_existing_benchmark_cli_keeps_private_workspaces_under_a_common_umask() -> None:
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "benchmarks/ledger_validation.py"), "--counts", "1", "--repeats", "1"],
+        cwd=ROOT,
+        env={**os.environ, "PYTHONPATH": os.pathsep.join(str(ROOT / path) for path in ("python/src", "python/tests"))},
+        umask=0o022,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    measured = json.loads(result.stdout)["results"]
+    assert [row["operation"] for row in measured] == ["show", "replay", "recover"]
+    assert [row["proof_derivations"] for row in measured] == [[1], [1], [3]]
 
 
 @pytest.mark.parametrize(

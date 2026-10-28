@@ -159,7 +159,7 @@ def measure(
     with tempfile.TemporaryDirectory(prefix="exacly-ledger-history-") as directory:
         for count in counts:
             root = Path(directory) / str(count)
-            root.mkdir()
+            root.mkdir(mode=0o700)
             history = build(
                 root,
                 count,
