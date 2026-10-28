@@ -267,7 +267,7 @@ def test_outputs_cannot_replace_local_policy_or_target(
     assert output.read_bytes() == before
 
 
-@pytest.mark.parametrize("which", ["default_model", "policy_model", "symlink_parent"])
+@pytest.mark.parametrize("which", ["policy_model", "symlink_parent"])
 def test_output_cannot_contaminate_model_folders(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -277,9 +277,7 @@ def test_output_cannot_contaminate_model_folders(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     args, _, _, _ = invocation(tmp_path)
-    if which == "default_model":
-        output = tmp_path / "spec" / "exacly" / "admission"
-    elif which == "policy_model":
+    if which == "policy_model":
         output = tmp_path / "models" / "admission"
     else:
         model = tmp_path / "models"
@@ -302,7 +300,8 @@ def test_model_folder_symlink_loop_is_a_clean_output_error(
     folder: str,
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    args, _, _, output = invocation(tmp_path)
+    args, trust_policy, _, output = invocation(tmp_path)
+    trust_policy.write_text(json.dumps({"model": {"files": [f"{folder}/model.yaml"]}}))
     loop = tmp_path / folder
     loop.parent.mkdir(parents=True, exist_ok=True)
     loop.symlink_to(loop.name, target_is_directory=True)
@@ -313,6 +312,17 @@ def test_model_folder_symlink_loop_is_a_clean_output_error(
     assert not captured.out
     assert loop.is_symlink()
     assert not output.parent.exists()
+
+
+def test_output_placement_uses_only_declared_model_folders(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, backend: dict[str, Any]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    args, _, _, _ = invocation(tmp_path)
+    output = tmp_path / "spec" / "exacly" / "admission"
+    args[args.index("--out") + 1] = str(output)
+    assert exacly_main(args) == 0
+    assert (output / "receipt.json").is_file()
 
 
 @pytest.mark.parametrize("which", ["policy", "target"])

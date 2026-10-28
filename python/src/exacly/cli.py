@@ -606,7 +606,7 @@ def write_admission(out: Path, inputs: Iterable[Path], trust_policy: dict[str, A
     try:
         destination = out.resolve()
         protected = {path.resolve() for path in inputs}
-        folders = [DEFAULT_MODEL.resolve(), *(Path(name).parent.resolve() for name in trust_policy["model"]["files"])]
+        folders = [Path(name).parent.resolve() for name in trust_policy["model"]["files"]]
     except RuntimeError as error:
         raise ValueError(f"--out or its protected input paths cannot be resolved: {error}") from error
     if destination in protected:

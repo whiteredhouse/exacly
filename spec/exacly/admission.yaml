@@ -17,15 +17,17 @@ records:
       then derive fresh verification state only from an admitted report and approved model files,
       retaining an explainable receipt with the scope and limits of the admission decision.
     acceptance_criteria:
-      - A strict policy identifies the repository by numeric ID and full name, main branch, approved workflow and job, workflow digest, observer fingerprint, and approved model revision, files and config digest; candidate-policy generation does not approve that policy.
+      - A strict policy explicitly identifies the repository by numeric ID and full name, protected branch, workflow path and digest, job ID and name, verification/package/upload step names, artifact prefix, observer selectors and digest, and approved model revision, files and config digest; the library supplies no repository layout defaults.
+      - Candidate-policy generation requires an explicit producer contract and observer selectors; repository proposals and generated fingerprints do not approve their producer, execution inputs or model.
       - Admission reads the live GitHub source with a read-permission token supplied through the environment and accepts no offline producer metadata or caller-authored state as origin evidence.
-      - The run must identify the approved repository, a push to main, the selected full implementation SHA and exact attempt, the approved workflow, and the single designated observation job; main must currently be protected.
-      - Workflow bytes and the observer code and dependency fingerprint must match the approved policy at the selected implementation; approved model files are fetched at their full revision and checked against the policy's config digest.
+      - The run must identify the approved repository, a push to the exact approved branch, the selected full implementation SHA and attempt, the configured workflow, and the single designated observation job; that branch must currently be protected and the selected context is independent of its name.
+      - Workflow bytes and the selected observer fingerprint must match the approved policy at the implementation revision; approved model files are fetched at their full revision and checked against the policy's config digest.
+      - Observer selectors are literal safe repository-relative files or directory subtrees with no glob patterns; explicitly selected absence is pinned, so later addition, removal or modification changes the fingerprint.
       - Admission requires conforming 0.2 config and rejects model inputs containing observed state; the explicit evaluation date governs model conformance and expiry checks.
       - Exactly one attempt-named artifact created within the observation job is accepted; its archive digest, manifest identity and report digest are checked, and unsafe or unexpected archive contents are rejected.
       - The receipt identifies the artifact's job and attempt association as an inference from the approved single-job contract and timing, and records the live branch-protection check's actual timestamp separately from as_of without claiming historical protection.
       - A producer job completed after the selected UTC evaluation date is rejected.
-      - The producer explicitly selects pyproject.toml for pytest configuration and packages only a manifest and a complete JUnit report for a completed verification step, retaining failures as observations; skipped or cancelled steps and missing reports are rejected.
+      - The approved producer packages only a manifest and a complete JUnit report for a completed verification step, retaining failures as observations; skipped or cancelled steps and missing reports are rejected.
       - Positive assessments from a failed verification step become inconclusive so that a reported positive cannot hide the failed step.
       - An admitted result derives fresh state using approved model and observed implementation identities without merging caller-supplied state; rejected results create no verification state.
       - A decision writes a receipt atomically to a new output directory; admitted results also retain the archive, report and state, while rejected results retain only the receipt.

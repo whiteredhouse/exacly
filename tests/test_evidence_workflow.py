@@ -1,4 +1,4 @@
-"""The evidence producer has one approved upload contract and preserves observed report bytes."""
+"""The example workflow follows its contract; the reusable producer preserves observed report bytes."""
 
 import hashlib
 import json
@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 import yaml
+from exacly import admission
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = ".github/workflows/verification-evidence.yml"
@@ -40,6 +41,12 @@ def package(tmp_path: Path, report: bytes = PASSING, **overrides: str) -> tuple[
     out = tmp_path / "evidence"
     manifest = PRODUCER["package"](source, out, environ=environment(**overrides), checkout=lambda: SHA)
     return manifest, out
+
+
+def test_configured_example_matches_the_actual_producer_workflow() -> None:
+    profile = yaml.safe_load((ROOT / "ci/evidence-producer.yaml").read_text())
+    producer = admission.validate_producer(profile["producer"])
+    admission.workflow_contract((ROOT / producer["workflow"]["path"]).read_bytes(), producer)
 
 
 def test_workflow_is_one_read_only_push_main_job_without_dynamic_job_expansion() -> None:
@@ -117,6 +124,31 @@ def test_bundle_preserves_report_and_records_only_producer_identity_and_integrit
     assert json.loads((out / "manifest.json").read_text()) == manifest
 
 
+@pytest.mark.parametrize(
+    "branch,workflow_path",
+    [
+        ("release/stable", ".github/workflows/quality.yaml"),
+        ("release@stable", ".github/workflows/quality@ci.yaml"),
+    ],
+)
+def test_publisher_accepts_another_repository_branch_workflow_and_job(
+    tmp_path: Path, branch: str, workflow_path: str
+) -> None:
+    manifest, out = package(
+        tmp_path,
+        GITHUB_REPOSITORY="another-company/widget",
+        GITHUB_REPOSITORY_ID="789",
+        GITHUB_REF=f"refs/heads/{branch}",
+        GITHUB_WORKFLOW_REF=f"another-company/widget/{workflow_path}@refs/heads/{branch}",
+        GITHUB_JOB="audit",
+    )
+    assert manifest["repository"] == "another-company/widget"
+    assert manifest["repository_id"] == 789
+    assert manifest["workflow_path"] == workflow_path
+    assert manifest["job"] == "audit"
+    assert (out / "junit.xml").read_bytes() == PASSING
+
+
 @pytest.mark.parametrize("outcome,child", [("failure", '<failure message="incorrect"/>'), ("success", "<skipped/>")])
 def test_failed_and_skipped_case_observations_are_retained(tmp_path: Path, outcome: str, child: str) -> None:
     report = f'<testsuite><testcase name="case">{child}</testcase></testsuite>'.encode()
@@ -134,10 +166,17 @@ def test_failed_and_skipped_case_observations_are_retained(tmp_path: Path, outco
         {"GITHUB_RUN_ID": "-1"},
         {"GITHUB_RUN_ATTEMPT": "attempt-two"},
         {"GITHUB_SHA": "short"},
-        {"GITHUB_JOB": "other-job"},
+        {"GITHUB_JOB": ""},
+        {"GITHUB_JOB": "job with spaces"},
+        {"GITHUB_JOB": "123job"},
+        {"GITHUB_JOB": "parent/child"},
         {"GITHUB_EVENT_NAME": "pull_request"},
         {"GITHUB_REF": "refs/heads/other"},
         {"GITHUB_WORKFLOW_REF": "acme/example/other.yml@refs/heads/main"},
+        {"GITHUB_WORKFLOW_REF": "other/example/.github/workflows/quality.yaml@refs/heads/main"},
+        {"GITHUB_WORKFLOW_REF": "acme/example/.github/workflows/nested/quality.yaml@refs/heads/main"},
+        {"GITHUB_WORKFLOW_REF": "acme/example/.github/workflows/quality.json@refs/heads/main"},
+        {"GITHUB_WORKFLOW_REF": "acme/example/.github/workflows/quality.yaml@refs/heads/other"},
         {"EXACLY_TEST_OUTCOME": "cancelled"},
         {"EXACLY_TEST_OUTCOME": "skipped"},
         {"EXACLY_TEST_OUTCOME": ""},
@@ -151,6 +190,35 @@ def test_unsupported_producer_metadata_creates_no_output(tmp_path: Path, overrid
         PRODUCER["package"](report, out, environ=environment(**overrides), checkout=lambda: SHA)
     assert not out.parent.exists()
     assert report.read_bytes() == PASSING
+
+
+@pytest.mark.parametrize(
+    "ref",
+    [
+        "refs/tags/main",
+        "refs/heads/",
+        "refs/heads/release//stable",
+        "refs/heads/release/../stable",
+        "refs/heads/release/.hidden",
+        "refs/heads/release.lock/stable",
+        "refs/heads/release/stable.",
+        "refs/heads/release@{stable",
+        "refs/heads/release stable",
+        "refs/heads/-release",
+    ],
+)
+def test_invalid_branch_reference_is_rejected_even_when_workflow_reference_matches(tmp_path: Path, ref: str) -> None:
+    report = tmp_path / "junit.xml"
+    report.write_bytes(PASSING)
+    out = tmp_path / "evidence"
+    with pytest.raises(PRODUCER["EvidenceError"], match="branch reference"):
+        PRODUCER["package"](
+            report,
+            out,
+            environ=environment(GITHUB_REF=ref, GITHUB_WORKFLOW_REF=f"acme/example/{WORKFLOW_PATH}@{ref}"),
+            checkout=lambda: SHA,
+        )
+    assert not out.exists()
 
 
 def test_wrong_actual_checkout_creates_no_output(tmp_path: Path) -> None:

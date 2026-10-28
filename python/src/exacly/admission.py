@@ -9,7 +9,6 @@ from __future__ import annotations
 import base64
 import copy
 import datetime as dt
-import fnmatch
 import hashlib
 import io
 import json
@@ -22,6 +21,7 @@ import zlib
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Protocol, cast
+from urllib.parse import quote
 
 import jsonschema
 import yaml
@@ -34,45 +34,40 @@ from exacly.refresh import Run, read_junit, refresh
 
 Doc = dict[str, Any]
 VERSION = "0.1.0"
-WORKFLOW_PATH = ".github/workflows/verification-evidence.yml"
-JOB_ID, JOB_NAME = "observe", "Observe verification"
-STEPS = ("Run verification", "Package verification evidence", "Upload verification evidence")
-ARTIFACT_TEMPLATE = "exacly-evidence-${{ github.run_id }}-${{ github.run_attempt }}"
 REPORT_LIMIT = 8 * 1024 * 1024
 MANIFEST_LIMIT = 64 * 1024
 SHA = {"type": "string", "pattern": "^[0-9a-f]{40}$"}
-OBSERVER_PATHS = (
-    WORKFLOW_PATH,
-    "ci/package_verification_evidence.py",
-    "pyproject.toml",
-    "uv.lock",
-    "mise.toml",
-    "python/tests/*",
-    "spec/tests/*",
-    "tests/*",
-    "conftest.py",
-    "*/conftest.py",
+TEXT = {"type": "string", "pattern": r"\S"}
+JOB_KEY = {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"}
+STEP_SCHEMA: Doc = planning.fields({key: TEXT for key in ("verification", "package", "upload")})
+ARTIFACT_SCHEMA: Doc = planning.fields(
+    {"name_prefix": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$", "maxLength": 100}}
+)
+WORKFLOW_PRODUCER_SCHEMA: Doc = planning.fields(
+    {"path": TEXT, "job_id": JOB_KEY, "job_name": TEXT, "steps": STEP_SCHEMA}
+)
+PRODUCER_SCHEMA: Doc = planning.fields(
+    {"branch": TEXT, "workflow": WORKFLOW_PRODUCER_SCHEMA, "artifact": ARTIFACT_SCHEMA}
 )
 POLICY_SCHEMA: Doc = planning.fields(
     {
-        "name": {"type": "string", "minLength": 1},
-        "version": {"type": "string", "minLength": 1},
+        "name": TEXT,
+        "version": TEXT,
         "repository": planning.fields(
             {
                 "id": {"type": "integer", "minimum": 1},
                 "full_name": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
             }
         ),
-        "branch": {"const": "main"},
-        "workflow": planning.fields(
+        "branch": TEXT,
+        "workflow": planning.fields({**WORKFLOW_PRODUCER_SCHEMA["properties"], "digest": planning.DIGEST}),
+        "artifact": ARTIFACT_SCHEMA,
+        "observer": planning.fields(
             {
-                "path": {"const": WORKFLOW_PATH},
+                "paths": {"type": "array", "minItems": 1, "uniqueItems": True, "items": TEXT},
                 "digest": planning.DIGEST,
-                "job_id": {"const": JOB_ID},
-                "job_name": {"const": JOB_NAME},
             }
         ),
-        "observer_digest": planning.DIGEST,
         "model": planning.fields(
             {
                 "revision": SHA,
@@ -89,8 +84,8 @@ MANIFEST_SCHEMA: Doc = planning.fields(
         "repository": {"type": "string"},
         "run_id": {"type": "integer", "minimum": 1},
         "run_attempt": {"type": "integer", "minimum": 1},
-        "workflow_path": {"const": WORKFLOW_PATH},
-        "job": {"const": JOB_ID},
+        "workflow_path": TEXT,
+        "job": JOB_KEY,
         "implementation_revision": SHA,
         "report_digest": planning.DIGEST,
         "check_outcome": {"enum": ["success", "failure"]},
@@ -155,28 +150,74 @@ def safe_path(path: Any) -> bool:
     )
 
 
-def observer_digest(entries: list[Doc]) -> str:
-    """Pin observer code, locked dependencies and all files in the controlled check collection roots."""
-    selected = []
+def safe_workflow_path(path: Any) -> bool:
+    return (
+        safe_path(path)
+        and len(path.split("/")) == 3
+        and path.startswith(".github/workflows/")
+        and PurePosixPath(path).suffix in {".yml", ".yaml"}
+        and bool(PurePosixPath(path).stem)
+        and not any(char in path for char in "*?[]")
+    )
+
+
+def safe_branch(branch: Any) -> bool:
+    """An exact Git branch that is also literal in GitHub's branch-filter syntax."""
+    return (
+        isinstance(branch, str)
+        and bool(branch)
+        and branch != "@"
+        and not branch.startswith("-")
+        and not branch.endswith(".")
+        and ".." not in branch
+        and "@{" not in branch
+        and not any(ord(char) <= 32 or ord(char) == 127 or char in "~^:?*[\\+!%]" for char in branch)
+        and all(part and not part.startswith(".") and not part.endswith(".lock") for part in branch.split("/"))
+    )
+
+
+def validate_observer_paths(paths: Any) -> list[str]:
+    if (
+        not isinstance(paths, list)
+        or not paths
+        or not all(safe_path(path) and not any(char in path for char in "*?[]") for path in paths)
+    ):
+        raise ValueError("observer paths must be explicit safe literal file or directory paths")
+    if len(paths) != len(set(paths)):
+        raise ValueError("observer paths must not contain duplicate selectors")
+    return list(paths)
+
+
+def observer_digest(entries: list[Doc], paths: list[str]) -> str:
+    """Pin selected regular Git files and absence beneath explicit literal selectors.
+
+    A selector may name a file or a directory subtree. Empty selections intentionally pin absence;
+    independent policy approval owns whether the selected coverage is sufficient.
+    """
+    selectors = validate_observer_paths(paths)
+    selected: list[Doc] = []
+    relevant: set[str] = set()
     for entry in entries:
         path = entry.get("path")
-        if not isinstance(path, str) or not any(fnmatch.fnmatchcase(path, pattern) for pattern in OBSERVER_PATHS):
+        if not isinstance(path, str):
             continue
-        if entry.get("type") == "tree":
+        included = any(path == selector or path.startswith(selector + "/") for selector in selectors)
+        ancestor = any(selector.startswith(path + "/") for selector in selectors)
+        if not included and not ancestor:
             continue
-        if not safe_path(path) or entry.get("type") != "blob" or entry.get("mode") not in ("100644", "100755"):
+        if not safe_path(path) or path in relevant:
+            raise ValueError("observer Git paths are unsafe or ambiguous")
+        relevant.add(path)
+        if entry.get("type") == "tree" and entry.get("mode") == "040000":
+            continue
+        if ancestor:
+            raise ValueError("observer path has a non-directory ancestor")
+        if entry.get("type") != "blob" or entry.get("mode") not in ("100644", "100755"):
             raise ValueError("observer files must be regular Git blobs")
-        if not re.fullmatch(r"[0-9a-f]{40}", str(entry.get("sha", ""))):
+        if not isinstance(entry.get("sha"), str) or not re.fullmatch(r"[0-9a-f]{40}", entry["sha"]):
             raise ValueError("observer file has an invalid Git identity")
         selected.append({key: entry[key] for key in ("path", "mode", "sha")})
-    names = [entry["path"] for entry in selected]
-    if len(names) != len(set(names)) or not set(OBSERVER_PATHS[:5]).issubset(names):
-        raise ValueError("observer closure is incomplete or ambiguous")
-    if not all(
-        any(path.startswith(prefix + "/") for path in names) for prefix in ("python/tests", "spec/tests", "tests")
-    ):
-        raise ValueError("observer check collection roots must be present")
-    return planning.digest(sorted(selected, key=lambda entry: entry["path"]))
+    return planning.digest({"paths": sorted(selectors), "files": sorted(selected, key=lambda entry: entry["path"])})
 
 
 def config_digest(documents: Doc) -> str:
@@ -253,29 +294,44 @@ def pages(source: Source, path: str, field: str) -> list[Doc]:
     raise Rejected("GitHub metadata exceeds the supported page limit")
 
 
-def workflow_contract(content: bytes) -> None:
+def workflow_contract(content: bytes, selected: Doc) -> None:
     try:
         document = mapping(yaml.safe_load(content))
     except yaml.YAMLError:
         raise Rejected("approved workflow cannot be parsed") from None
+    workflow = selected["workflow"]
     trigger = mapping(document.get("on", cast(dict[Any, Any], document).get(True)))
+    require(set(trigger) == {"push"}, "unsupported workflow events")
+    push = mapping(trigger["push"])
     require(
-        set(trigger) == {"push"} and mapping(trigger["push"]).get("branches") == ["main"], "unsupported workflow events"
+        set(push) == {"branches"} and push["branches"] == [selected["branch"]],
+        "unsupported workflow branch selector",
     )
     jobs = mapping(document.get("jobs"))
-    require(set(jobs) == {JOB_ID}, "observer workflow must have exactly one producer job")
-    job = mapping(jobs[JOB_ID])
+    require(set(jobs) == {workflow["job_id"]}, "observer workflow must have exactly one selected producer job")
+    job = mapping(jobs[workflow["job_id"]])
     require(
-        job.get("name") == JOB_NAME and not any(key in job for key in ("uses", "strategy")), "unsupported producer job"
+        job.get("name") == workflow["job_name"] and not any(key in job for key in ("uses", "strategy")),
+        "unsupported producer job",
     )
+    require(job.get("continue-on-error", False) is False, "producer job must preserve verification failures")
     steps = job.get("steps", [])
     require(isinstance(steps, list) and all(isinstance(step, dict) for step in steps), "invalid workflow steps")
-    require(all(sum(step.get("name") == name for step in steps) == 1 for name in STEPS), "ambiguous producer steps")
-    uploads = [step for step in steps if str(step.get("uses", "")).startswith("actions/upload-artifact@")]
-    require(len(uploads) == 1 and uploads[0].get("name") == STEPS[2], "observer must have one designated uploader")
+    names = workflow["steps"]
     require(
-        mapping(uploads[0].get("with")).get("name") == ARTIFACT_TEMPLATE, "artifact name must identify run and attempt"
+        all(sum(step.get("name") == name for step in steps) == 1 for name in names.values()),
+        "ambiguous producer steps",
     )
+    verification = next(step for step in steps if step.get("name") == names["verification"])
+    require(
+        verification.get("continue-on-error", False) is False, "verification step must preserve verification failures"
+    )
+    uploads = [step for step in steps if str(step.get("uses", "")).startswith("actions/upload-artifact@")]
+    require(
+        len(uploads) == 1 and uploads[0].get("name") == names["upload"], "observer must have one designated uploader"
+    )
+    template = selected["artifact"]["name_prefix"] + "-${{ github.run_id }}-${{ github.run_attempt }}"
+    require(mapping(uploads[0].get("with")).get("name") == template, "artifact name must identify run and attempt")
     checkouts = [step for step in steps if str(step.get("uses", "")).startswith("actions/checkout@")]
     require(len(checkouts) == 1, "observer must have one explicit implementation checkout")
     require(mapping(checkouts[0].get("with")).get("ref") == "${{ github.sha }}", "checkout must select the run commit")
@@ -317,6 +373,8 @@ def unpack(archive: bytes) -> tuple[Doc, bytes]:
         RecursionError,
     ):
         raise Rejected("artifact archive or manifest is invalid") from None
+    require(safe_workflow_path(manifest["workflow_path"]), "manifest workflow path is invalid")
+    require(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*", manifest["job"]), "manifest job key is invalid")
     require(sha256(report) == manifest["report_digest"], "retained report digest does not match manifest")
     try:
         report_text = report.decode("utf-8")
@@ -346,11 +404,42 @@ def unpack(archive: bytes) -> tuple[Doc, bytes]:
     return dict(manifest), report
 
 
+def validate_producer(producer: Any) -> Doc:
+    try:
+        jsonschema.validate(producer, PRODUCER_SCHEMA)
+    except jsonschema.ValidationError as error:
+        raise ValueError(f"invalid producer contract: {error.message}") from error
+    if not safe_branch(producer["branch"]):
+        raise ValueError("producer branch must be a safe exact Git branch")
+    workflow = producer["workflow"]
+    if not safe_workflow_path(workflow["path"]):
+        raise ValueError("producer workflow must name one file in .github/workflows")
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*", workflow["job_id"]):
+        raise ValueError("producer job ID must be a valid GitHub Actions key")
+    prefix = producer["artifact"]["name_prefix"]
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", prefix):
+        raise ValueError("producer artifact prefix must be a safe literal name")
+    names = list(workflow["steps"].values())
+    if len(set(names)) != len(names):
+        raise ValueError("producer step names must be distinct")
+    if any(any(ord(char) < 32 or ord(char) == 127 for char in name) for name in [workflow["job_name"], *names]):
+        raise ValueError("producer job and step names cannot contain control characters")
+    return copy.deepcopy(producer)
+
+
 def validate_policy(policy_doc: Any) -> Doc:
     try:
         jsonschema.validate(policy_doc, POLICY_SCHEMA)
     except jsonschema.ValidationError as error:
         raise ValueError(f"invalid trust policy: {error.message}") from error
+    validate_producer(
+        {
+            "branch": policy_doc["branch"],
+            "workflow": {key: value for key, value in policy_doc["workflow"].items() if key != "digest"},
+            "artifact": policy_doc["artifact"],
+        }
+    )
+    validate_observer_paths(policy_doc["observer"]["paths"])
     for path in policy_doc["model"]["files"]:
         if not safe_path(path) or PurePosixPath(path).suffix not in {".yaml", ".yml", ".json"}:
             raise ValueError("trust policy model files must be safe relative config paths")
@@ -365,29 +454,37 @@ def propose_policy(
     revision: str,
     model_files: list[str],
     *,
+    producer: Doc,
+    observer_paths: list[str],
     name: str = "github-verification",
     version: str = "1",
 ) -> Doc:
-    """Build candidate fingerprints from an approved checkout for independent review, without granting trust."""
+    """Prepare explicit producer/model fingerprints for independent approval; grant no trust."""
+    contract = validate_producer(producer)
+    selectors = validate_observer_paths(observer_paths)
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository) or not re.fullmatch(r"[0-9a-f]{40}", revision):
         raise ValueError("repository and full immutable revision are required")
+    if (
+        not model_files
+        or len(model_files) != len(set(model_files))
+        or not all(safe_path(path) and PurePosixPath(path).suffix in {".yaml", ".yml", ".json"} for path in model_files)
+    ):
+        raise ValueError("model files must be distinct safe relative config paths")
     base = f"/repos/{repository}"
     info = source.get_json(base)
     entries = tree(source, base, revision)
-    workflow = blob(source, base, entries, WORKFLOW_PATH)
-    workflow_contract(workflow)
+    workflow = blob(source, base, entries, contract["workflow"]["path"])
+    workflow_contract(workflow, contract)
     documents = {}
     for path in model_files:
-        if not safe_path(path):
-            raise ValueError("model files must be safe relative paths")
         documents[path] = yaml.safe_load(blob(source, base, entries, path).decode("utf-8"))
     candidate = {
         "name": name,
         "version": version,
         "repository": {"id": info.get("id"), "full_name": repository},
-        "branch": "main",
-        "workflow": {"path": WORKFLOW_PATH, "digest": sha256(workflow), "job_id": JOB_ID, "job_name": JOB_NAME},
-        "observer_digest": observer_digest(entries),
+        **contract,
+        "workflow": {**contract["workflow"], "digest": sha256(workflow)},
+        "observer": {"paths": selectors, "digest": observer_digest(entries, selectors)},
         "model": {"revision": revision, "files": model_files, "digest": config_digest(documents)},
     }
     return validate_policy(candidate)
@@ -408,6 +505,10 @@ def admit(source: Source, policy_doc: Any, target: Target, run_id: int, attempt:
     if selection["model_revision"] != chosen["model"]["revision"]:
         raise ValueError("target model revision must match the independently approved trust policy")
     repository = chosen["repository"]["full_name"]
+    selected_branch = chosen["branch"]
+    selected_workflow = chosen["workflow"]
+    workflow_path = selected_workflow["path"]
+    job_key, job_name = selected_workflow["job_id"], selected_workflow["job_name"]
     base = f"/repos/{repository}"
     receipt: Doc = {
         "schema_version": VERSION,
@@ -432,10 +533,13 @@ def admit(source: Source, policy_doc: Any, target: Target, run_id: int, attempt:
             and info.get("full_name") == repository,
             "repository identity mismatch",
         )
-        branch = source.get_json(f"{base}/branches/main")
-        require(branch.get("name") == "main" and branch.get("protected") is True, "main is not currently protected")
+        branch = source.get_json(f"{base}/branches/{quote(selected_branch, safe='')}")
+        require(
+            branch.get("name") == selected_branch and branch.get("protected") is True,
+            "selected branch is not currently protected",
+        )
         receipt["checks"].append(
-            {"code": stage, "passed": True, "reason": "repository matched and main is currently protected"}
+            {"code": stage, "passed": True, "reason": "repository matched and selected branch is currently protected"}
         )
         stage = "run"
         run = source.get_json(f"{base}/actions/runs/{run_id}/attempts/{attempt}")
@@ -454,8 +558,8 @@ def admit(source: Source, policy_doc: Any, target: Target, run_id: int, attempt:
             "run is from another repository",
         )
         require(
-            run.get("event") == "push" and run.get("head_branch") == "main",
-            "only same-repository main push runs are supported",
+            run.get("event") == "push" and run.get("head_branch") == selected_branch,
+            "only same-repository push runs on the selected branch are supported",
         )
         require(run.get("head_sha") == selection["revision"], "run implementation identity does not match target")
         require(
@@ -463,7 +567,8 @@ def admit(source: Source, policy_doc: Any, target: Target, run_id: int, attempt:
             "run is incomplete or interrupted",
         )
         require(
-            run.get("path") in (WORKFLOW_PATH, WORKFLOW_PATH + "@main", WORKFLOW_PATH + "@refs/heads/main")
+            run.get("path")
+            in (workflow_path, workflow_path + "@" + selected_branch, workflow_path + "@refs/heads/" + selected_branch)
             and positive_id(run.get("workflow_id")),
             "unexpected observer workflow",
         )
@@ -471,7 +576,7 @@ def admit(source: Source, policy_doc: Any, target: Target, run_id: int, attempt:
         require(
             positive_id(workflow_info.get("id"))
             and workflow_info.get("id") == run["workflow_id"]
-            and workflow_info.get("path") == WORKFLOW_PATH,
+            and workflow_info.get("path") == workflow_path,
             "workflow identity mismatch",
         )
         receipt["checks"].append(
@@ -479,11 +584,11 @@ def admit(source: Source, policy_doc: Any, target: Target, run_id: int, attempt:
         )
         stage = "observer"
         entries = tree(source, base, selection["revision"])
-        workflow = blob(source, base, entries, WORKFLOW_PATH)
+        workflow = blob(source, base, entries, workflow_path)
         require(sha256(workflow) == chosen["workflow"]["digest"], "workflow content is not approved")
-        workflow_contract(workflow)
+        workflow_contract(workflow, chosen)
         require(
-            observer_digest(entries) == chosen["observer_digest"],
+            observer_digest(entries, chosen["observer"]["paths"]) == chosen["observer"]["digest"],
             "observer code, dependencies or check definitions changed",
         )
         documents = model_files(source, base, chosen["model"], date)
@@ -492,7 +597,7 @@ def admit(source: Source, policy_doc: Any, target: Target, run_id: int, attempt:
         )
         stage = "producer"
         jobs = pages(source, f"{base}/actions/runs/{run_id}/attempts/{attempt}/jobs", "jobs")
-        require(len(jobs) == 1 and jobs[0].get("name") == JOB_NAME, "ambiguous or unexpected producer job")
+        require(len(jobs) == 1 and jobs[0].get("name") == job_name, "ambiguous or unexpected producer job")
         job = jobs[0]
         require(
             positive_id(job.get("id"))
@@ -509,7 +614,7 @@ def admit(source: Source, policy_doc: Any, target: Target, run_id: int, attempt:
         steps = job.get("steps", [])
         require(isinstance(steps, list) and all(isinstance(step, dict) for step in steps), "producer steps are invalid")
         selected_steps = []
-        for name in STEPS:
+        for name in (selected_workflow["steps"][key] for key in ("verification", "package", "upload")):
             found = [step for step in steps if step.get("name") == name]
             require(
                 len(found) == 1 and found[0].get("status") == "completed",
@@ -533,7 +638,7 @@ def admit(source: Source, policy_doc: Any, target: Target, run_id: int, attempt:
             {"code": stage, "passed": True, "reason": "exact-attempt single producer completed checks and retention"}
         )
         stage = "artifact"
-        name = f"exacly-evidence-{run_id}-{attempt}"
+        name = f"{chosen['artifact']['name_prefix']}-{run_id}-{attempt}"
         matches = [
             artifact
             for artifact in pages(source, f"{base}/actions/runs/{run_id}/artifacts", "artifacts")
@@ -556,7 +661,7 @@ def admit(source: Source, policy_doc: Any, target: Target, run_id: int, attempt:
             "artifact workflow origin does not match",
         )
         require(
-            origin.get("head_sha") == selection["revision"] and origin.get("head_branch") == "main",
+            origin.get("head_sha") == selection["revision"] and origin.get("head_branch") == selected_branch,
             "artifact implementation does not match",
         )
         require(
@@ -571,8 +676,8 @@ def admit(source: Source, policy_doc: Any, target: Target, run_id: int, attempt:
             "repository": repository,
             "run_id": run_id,
             "run_attempt": attempt,
-            "workflow_path": WORKFLOW_PATH,
-            "job": JOB_ID,
+            "workflow_path": workflow_path,
+            "job": job_key,
             "implementation_revision": selection["revision"],
             "check_outcome": check["conclusion"],
         }
@@ -600,8 +705,8 @@ def admit(source: Source, policy_doc: Any, target: Target, run_id: int, attempt:
                 model_revision=selection["model_revision"],
                 context=selection["context"],
                 observed_at=completed,
-                workflow=WORKFLOW_PATH,
-                job=JOB_ID,
+                workflow=workflow_path,
+                job=job_key,
                 job_status=check["conclusion"],
                 url=f"https://github.com/{repository}/actions/runs/{run_id}/attempts/{attempt}",
                 source_url=f"https://github.com/{repository}/blob/{selection['revision']}",
@@ -623,10 +728,10 @@ def admit(source: Source, policy_doc: Any, target: Target, run_id: int, attempt:
             "run_id": run_id,
             "run_attempt": attempt,
             "workflow_revision": selection["revision"],
-            "workflow_path": WORKFLOW_PATH,
+            "workflow_path": workflow_path,
             "job_id": job.get("id"),
-            "job_key": JOB_ID,
-            "job_name": JOB_NAME,
+            "job_key": job_key,
+            "job_name": job_name,
             "artifact_id": artifact["id"],
             "artifact_name": name,
             "archive_digest": sha256(archive),

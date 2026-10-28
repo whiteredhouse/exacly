@@ -143,23 +143,30 @@ It writes one verification assessment per platform of each binding, with source 
 
 `exacly admit github-actions` reads a live GitHub Actions run and artifact through authenticated GitHub APIs, checks them against an independently approved trust policy, and derives fresh verification state from the accepted JUnit report. Admission requires conforming 0.2 config; approved model inputs cannot contain observed state. It accepts neither caller-authored state nor offline run metadata as evidence of origin.
 
-The initial producer is [the verification evidence workflow](../.github/workflows/verification-evidence.yml). It runs on pushes to `main`, has one approved job named `Observe verification`, explicitly selects the pytest configuration with `-c pyproject.toml`, and packages `manifest.json` and `junit.xml` in an artifact named `exacly-evidence-RUN-ATTEMPT`. The packaging helper checks the checkout and supported run metadata before producing the bundle. Admission independently compares that metadata with GitHub responses and the approved policy.
+Each trust policy supplies its exact protected branch, workflow path, job ID and name, verification/package/upload step names, artifact name prefix and observer paths. The library supplies no repository layout or producer defaults. The supported producer contract remains one job in a push workflow on the approved branch.
+
+Exacly's own [producer proposal](../ci/evidence-producer.yaml) selects [the verification evidence workflow](../.github/workflows/verification-evidence.yml). This example runs on pushes to `main`, has one job named `Observe verification`, explicitly selects the pytest configuration with `-c pyproject.toml`, and packages `manifest.json` and `junit.xml` in an artifact named `exacly-evidence-RUN-ATTEMPT`. Other repositories supply their own contract. The packaging helper checks the checkout and supported run metadata before producing the bundle; admission independently compares that metadata with GitHub responses and the approved policy.
 
 ### Approve a producer policy
 
-The trust policy names the repository by numeric ID and full name, the `main` branch, the approved workflow path and byte digest, the observation job, an observer-code and dependency fingerprint, and the approved model revision, file list and config digest. The model revision and selected implementation revision must be full Git commit SHAs. The implementation may be a newer revision whose approved workflow and observer fingerprint still match.
+The trust policy names the repository by numeric ID and full name, the exact approved branch, `workflow` with its path, byte digest, job ID/name and step names, `artifact.name_prefix`, `observer` with approved paths and digest, and the approved model revision, file list and config digest. The model revision and selected implementation revision must be full Git commit SHAs. The implementation may be a newer revision whose approved workflow and observer fingerprint still match.
 
-Prepare a candidate policy from an already reviewed commit containing the producer workflow. Set `EXACLY_APPROVED_REVISION` to that commit's full SHA and provide a read-permission GitHub token through `GH_TOKEN`:
+Observer paths are literal, safe repository-relative file or directory selectors, with no glob patterns. Each selector pins that file or directory subtree. An explicitly selected absent path pins its absence, so adding it later changes the fingerprint; removing or changing selected content also changes it. Reviewers must check that the selectors cover the observer's execution inputs, including applicable configuration and ancestor test hooks. Selectors identify Git content and absence; they do not discover a complete runtime dependency closure or prove test honesty.
+
+Prepare a candidate policy from an already reviewed commit containing the producer workflow. Run from a checkout of that revision to read its producer proposal, set `EXACLY_APPROVED_REVISION` to its full SHA and provide a read-permission GitHub token through `GH_TOKEN`:
 
 ```python
 import json
 import os
 from pathlib import Path
 
+import yaml
+
 from exacly.admission import propose_policy
 from exacly.github_evidence import GitHubClient
 
 source = GitHubClient(os.environ["GH_TOKEN"])
+proposal = yaml.safe_load(Path("ci/evidence-producer.yaml").read_text())
 candidate = propose_policy(
     source,
     "whiteredhouse/exacly",
@@ -172,15 +179,19 @@ candidate = propose_policy(
         "spec/exacly/planning.yaml",
         "spec/exacly/admission.yaml",
     ],
+    producer=proposal["producer"],
+    observer_paths=proposal["observer_paths"],
 )
 Path("admission-policy.candidate.json").write_text(json.dumps(candidate, indent=2) + "\n")
 ```
 
-Review the candidate policy independently of the implementation being evaluated, then keep the approved policy in controlled storage outside model directories. Generating hashes from a candidate implementation does not approve its workflow, observer or model. The helper prepares policy content; it grants no execution authority or approval.
+`producer` must explicitly supply `branch`, `workflow` with `path`, `job_id`, `job_name` and `steps` (`verification`, `package`, `upload`), and `artifact.name_prefix`. `observer_paths` is also required. The helper computes the workflow, observer and model fingerprints from the selected revision.
+
+Review both the proposal and generated policy independently of the implementation being evaluated, then keep the approved policy in controlled storage outside model directories. A repository proposal is not an approved policy. Generating hashes from candidate content does not approve its workflow, observer paths or model. The helper prepares policy content; it grants no execution authority or approval.
 
 ### Admit an exact run attempt
 
-The target selects context `main`, the policy's approved `model_revision`, and the observed implementation `revision`. After approving the policy, set `EXACLY_IMPLEMENTATION_REVISION` to the full implementation SHA from the intended run and prepare the target:
+The target selects a named context, the policy's approved `model_revision`, and the observed implementation `revision`. The context is independent of the producer branch; Exacly's example uses `main`. After approving the policy, set `EXACLY_IMPLEMENTATION_REVISION` to the full implementation SHA from the intended run and prepare the target:
 
 ```python
 import json
@@ -209,7 +220,7 @@ exacly admit github-actions --trust-policy trusted/github-verification.json \
 
 The command reads `GH_TOKEN`, falling back to `GITHUB_TOKEN`; it has no command-line token option. The token needs read access to the repository content, workflow runs, jobs and artifacts used by admission.
 
-Admission checks the repository identity, current protection of `main`, a push run on `main` for the selected implementation SHA and exact attempt, the approved workflow and single observation job, matching workflow and observer fingerprints, and one uniquely named artifact created during the job. It verifies the API's archive digest, the strict manifest and report digest, and the ZIP contents. Approved model files are fetched at their full revision through GitHub and checked against the policy's config digest before refresh derives state with that model and implementation identity.
+Admission checks the repository identity, current protection of the approved branch, a push run on that exact branch for the selected implementation SHA and attempt, the configured workflow and single observation job, matching workflow and observer fingerprints, and one uniquely named artifact created during the job. The artifact name is the approved prefix followed by the run ID and attempt. Admission verifies the API's archive digest, the strict manifest and report digest, and the ZIP contents. Approved model files are fetched at their full revision through GitHub and checked against the policy's config digest before refresh derives state with that model and implementation identity.
 
 GitHub's artifact metadata does not directly identify its producing job or attempt. The receipt therefore records that association as an inference from the approved single-job producer contract, exact artifact name and job timing. Current branch protection is an admission precondition; its `branch_protection_checked_at` timestamp does not prove historical protection at the evaluation date or when the run occurred.
 

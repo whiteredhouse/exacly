@@ -1,7 +1,7 @@
 """Package a GitHub verification report without making verification or admission claims.
 
-The approved workflow is the producer contract. These environment values are metadata; consumers must
-verify them against GitHub and an independently approved policy before admitting this bundle.
+The current push workflow supplies producer metadata. Consumers must verify it against GitHub and an
+independently approved policy before admitting this bundle.
 """
 
 from __future__ import annotations
@@ -19,8 +19,6 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-WORKFLOW = ".github/workflows/verification-evidence.yml"
-JOB = "observe"
 MAX_REPORT_BYTES = 8 * 1024 * 1024
 
 
@@ -42,6 +40,36 @@ def checkout_revision() -> str:
         raise EvidenceError("cannot establish the checked-out implementation revision") from error
 
 
+def workflow_origin(environ: Mapping[str, str], repository: str) -> tuple[str, str]:
+    """Read a consistent branch, workflow path and job from the current push context."""
+    ref = environ.get("GITHUB_REF", "")
+    branch = ref.removeprefix("refs/heads/")
+    if (
+        environ.get("GITHUB_EVENT_NAME") != "push"
+        or not ref.startswith("refs/heads/")
+        or not branch
+        or branch.startswith("-")
+        or branch.endswith(".")
+        or ".." in branch
+        or "@{" in branch
+        or re.search(r"[\x00-\x20\x7f~^:?*\[\\]", branch)
+        or any(not part or part.startswith(".") or part.endswith(".lock") for part in branch.split("/"))
+    ):
+        raise EvidenceError("only push runs with a valid branch reference are supported")
+    job = environ.get("GITHUB_JOB", "")
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*", job):
+        raise EvidenceError("GITHUB_JOB must identify a valid workflow job key")
+    workflow_ref = environ.get("GITHUB_WORKFLOW_REF", "")
+    prefix = f"{repository}/"
+    suffix = f"@{ref}"
+    if not workflow_ref.startswith(prefix) or not workflow_ref.endswith(suffix):
+        raise EvidenceError("the workflow reference must match the repository and branch reference")
+    workflow_path = workflow_ref[len(prefix) : -len(suffix)]
+    if not re.fullmatch(r"\.github/workflows/[^/\\\x00-\x1f\x7f]+\.ya?ml", workflow_path):
+        raise EvidenceError("the workflow reference must identify a workflow YAML file")
+    return workflow_path, job
+
+
 def package(
     report: Path,
     out: Path,
@@ -58,12 +86,7 @@ def package(
     repository = env.get("GITHUB_REPOSITORY", "")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*", repository):
         raise EvidenceError("GITHUB_REPOSITORY must identify one repository")
-    if env.get("GITHUB_EVENT_NAME") != "push" or env.get("GITHUB_REF") != "refs/heads/main":
-        raise EvidenceError("only push runs on main are supported")
-    if env.get("GITHUB_JOB") != JOB:
-        raise EvidenceError("the designated observation job must produce the bundle")
-    if env.get("GITHUB_WORKFLOW_REF") != f"{repository}/{WORKFLOW}@refs/heads/main":
-        raise EvidenceError("the designated workflow must produce the bundle")
+    workflow_path, job = workflow_origin(env, repository)
     revision = env.get("GITHUB_SHA", "")
     if not re.fullmatch(r"[0-9a-f]{40}", revision):
         raise EvidenceError("GITHUB_SHA must be a full implementation revision")
@@ -108,8 +131,8 @@ def package(
         "repository": repository,
         "run_id": run_id,
         "run_attempt": attempt,
-        "workflow_path": WORKFLOW,
-        "job": JOB,
+        "workflow_path": workflow_path,
+        "job": job,
         "implementation_revision": revision,
         "report_digest": "sha256:" + hashlib.sha256(content).hexdigest(),
         "check_outcome": outcome,

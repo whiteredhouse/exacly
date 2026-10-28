@@ -12,7 +12,7 @@ import warnings
 import zipfile
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 import pytest
 import yaml
@@ -35,6 +35,34 @@ READINESS: dict[str, Any] = {
     "name": "verification",
     "version": "1",
     "requirements": [{"record": "REQ-1", "dimensions": ["verification"]}],
+}
+STANDARD_PRODUCER: dict[str, Any] = {
+    "branch": "main",
+    "workflow": {
+        "path": WORKFLOW,
+        "job_id": "observe",
+        "job_name": "Observe verification",
+        "steps": {
+            "verification": "Run verification",
+            "package": "Package verification evidence",
+            "upload": "Upload verification evidence",
+        },
+    },
+    "artifact": {"name_prefix": "exacly-evidence"},
+}
+CUSTOM_PRODUCER: dict[str, Any] = {
+    "branch": "release/stable",
+    "workflow": {
+        "path": ".github/workflows/quality.yaml",
+        "job_id": "audit",
+        "job_name": "Check release contracts",
+        "steps": {
+            "verification": "Exercise release behavior",
+            "package": "Build retained results",
+            "upload": "Retain contract report",
+        },
+    },
+    "artifact": {"name_prefix": "quality-report"},
 }
 
 
@@ -62,12 +90,24 @@ def bundle(entries: list[tuple[str, bytes, int]]) -> bytes:
 class Source:
     """Authoritative GitHub metadata and artifact bytes, with no network or external writes."""
 
-    def __init__(self, outcome: str = "success", report: bytes | None = None) -> None:
+    def __init__(self, outcome: str = "success", report: bytes | None = None, *, layout: str = "standard") -> None:
         self.calls: list[str] = []
         self.downloads: list[tuple[str, int]] = []
-        self.config = config(requirement("REQ-1", {"workflow": WORKFLOW, "job": "observe", "cases": [CASE]}))
+        self.producer = copy.deepcopy(STANDARD_PRODUCER if layout == "standard" else CUSTOM_PRODUCER)
+        self.branch = self.producer["branch"]
+        self.workflow_path = self.producer["workflow"]["path"]
+        self.job_id = self.producer["workflow"]["job_id"]
+        self.job_name = self.producer["workflow"]["job_name"]
+        self.step_names = self.producer["workflow"]["steps"]
+        self.artifact_prefix = self.producer["artifact"]["name_prefix"]
+        self.model_file = MODEL_FILE if layout == "standard" else ".quality/contracts.yaml"
+        self.case = CASE if layout == "standard" else "checks/test_contract.py::test_release_contract"
+        self.config = config(
+            requirement("REQ-1", {"workflow": self.workflow_path, "job": self.job_id, "cases": [self.case]})
+        )
+        test_file, test_name = self.case.split("::")
         self.report = report or (
-            b'<testsuite><testcase file="python/tests/test_requirement.py" name="test_requirement">'
+            f'<testsuite><testcase file="{test_file}" name="{test_name}">'.encode()
             + (b'<failure message="wrong behavior"/>' if outcome == "failure" else b"")
             + b"</testcase></testsuite>"
         )
@@ -77,8 +117,8 @@ class Source:
             "repository": REPOSITORY,
             "run_id": RUN_ID,
             "run_attempt": ATTEMPT,
-            "workflow_path": WORKFLOW,
-            "job": "observe",
+            "workflow_path": self.workflow_path,
+            "job": self.job_id,
             "implementation_revision": B,
             "report_digest": sha256(self.report),
             "check_outcome": outcome,
@@ -90,9 +130,9 @@ class Source:
             "event": "push",
             "status": "completed",
             "conclusion": outcome,
-            "head_branch": "main",
+            "head_branch": self.branch,
             "head_sha": B,
-            "path": WORKFLOW,
+            "path": self.workflow_path,
             "workflow_id": 99,
             "repository": {"id": REPOSITORY_ID, "full_name": REPOSITORY},
             "head_repository": {"id": REPOSITORY_ID, "full_name": REPOSITORY},
@@ -105,7 +145,7 @@ class Source:
             "id": 444,
             "run_id": RUN_ID,
             "run_attempt": ATTEMPT,
-            "name": "Observe verification",
+            "name": self.job_name,
             "status": "completed",
             "conclusion": outcome,
             "head_sha": B,
@@ -116,18 +156,16 @@ class Source:
                     "name": name,
                     "number": i,
                     "status": "completed",
-                    "conclusion": outcome if name == "Run verification" else "success",
+                    "conclusion": outcome if name == self.step_names["verification"] else "success",
                     "started_at": START,
                     "completed_at": END,
                 }
-                for i, name in enumerate(
-                    ["Run verification", "Package verification evidence", "Upload verification evidence"], 1
-                )
+                for i, name in enumerate(self.step_names.values(), 1)
             ],
         }
         self.artifact: dict[str, Any] = {
             "id": ARTIFACT_ID,
-            "name": f"exacly-evidence-{RUN_ID}-{ATTEMPT}",
+            "name": f"{self.artifact_prefix}-{RUN_ID}-{ATTEMPT}",
             "expired": False,
             "created_at": "2026-10-26T09:03:00Z",
             "updated_at": "2026-10-26T09:04:00Z",
@@ -136,25 +174,25 @@ class Source:
                 "id": RUN_ID,
                 "repository_id": REPOSITORY_ID,
                 "head_repository_id": REPOSITORY_ID,
-                "head_branch": "main",
+                "head_branch": self.branch,
                 "head_sha": B,
             },
         }
         self.pages: dict[str, dict[str, Any]] = {
             BASE: {"id": REPOSITORY_ID, "full_name": REPOSITORY, "default_branch": "main"},
-            f"{BASE}/branches/main": {"name": "main", "protected": True, "commit": {"sha": B}},
+            f"{BASE}/branches/{self.branch}": {"name": self.branch, "protected": True, "commit": {"sha": B}},
             f"{BASE}/actions/runs/{RUN_ID}/attempts/{ATTEMPT}": self.run,
-            f"{BASE}/actions/workflows/99": {"id": 99, "path": WORKFLOW, "state": "active"},
+            f"{BASE}/actions/workflows/99": {"id": 99, "path": self.workflow_path, "state": "active"},
             f"{BASE}/actions/runs/{RUN_ID}/attempts/{ATTEMPT}/jobs?page=1": {"total_count": 1, "jobs": [self.job]},
             f"{BASE}/actions/runs/{RUN_ID}/artifacts?page=1": {"total_count": 1, "artifacts": [self.artifact]},
             f"{BASE}/actions/artifacts/{ARTIFACT_ID}": self.artifact,
             f"{BASE}/git/commits/{A}": {"sha": A, "tree": {"sha": MODEL_TREE}},
             f"{BASE}/git/commits/{B}": {"sha": B, "tree": {"sha": IMPLEMENTATION_TREE}},
         }
-        workflow = (ROOT / WORKFLOW).read_bytes()
+        workflow = (ROOT / WORKFLOW).read_bytes() if layout == "standard" else self.custom_workflow()
         self.workflow = workflow
         files = {
-            WORKFLOW: workflow,
+            self.workflow_path: workflow,
             "ci/package_verification_evidence.py": b"# pinned publisher\n",
             "pyproject.toml": b"# pinned package definition\n",
             "uv.lock": b"# pinned dependencies\n",
@@ -163,37 +201,93 @@ class Source:
             "spec/tests/test_schema.py": b"# pinned schema checks\n",
             "tests/test_ci.py": b"# pinned workflow checks\n",
         }
+        self.observer_paths = [
+            self.workflow_path,
+            "ci/package_verification_evidence.py",
+            "pyproject.toml",
+            "uv.lock",
+            "mise.toml",
+            "python/tests",
+            "spec/tests",
+            "tests",
+            "conftest.py",
+        ]
+        if layout != "standard":
+            files = {
+                self.workflow_path: workflow,
+                "tools/report_bundle.py": b"# pinned custom report packager\n",
+                "requirements.lock": b"# pinned custom dependencies\n",
+                "quality.toml": b"# pinned custom runner configuration\n",
+                test_file: b"# pinned release checks\n",
+            }
+            self.observer_paths = [
+                self.workflow_path,
+                "tools",
+                "requirements.lock",
+                "quality.toml",
+                "checks",
+                "quality_hooks.py",
+            ]
+        config_bytes = yaml.safe_dump(self.config).encode()
+        files.update({self.model_file: config_bytes, "src/service.py": b"# unselected implementation\n"})
         self.tree = [self.add_blob(path, content) for path, content in files.items()]
         self.pages[f"{BASE}/git/trees/{IMPLEMENTATION_TREE}"] = {
             "sha": IMPLEMENTATION_TREE,
             "truncated": False,
             "tree": self.tree,
         }
-        config_bytes = yaml.safe_dump(self.config).encode()
         self.pages[f"{BASE}/git/trees/{MODEL_TREE}"] = {
             "sha": MODEL_TREE,
             "truncated": False,
-            "tree": [self.add_blob(MODEL_FILE, config_bytes)],
+            "tree": [self.add_blob(self.model_file, config_bytes)],
         }
         self.policy: dict[str, Any] = {
             "name": "trusted-ci",
             "version": "1",
             "repository": {"id": REPOSITORY_ID, "full_name": REPOSITORY},
-            "branch": "main",
-            "workflow": {
-                "path": WORKFLOW,
-                "digest": sha256(workflow),
-                "job_id": "observe",
-                "job_name": "Observe verification",
+            **copy.deepcopy(self.producer),
+            "observer": {
+                "paths": self.observer_paths,
+                "digest": admission.observer_digest(self.tree, self.observer_paths),
             },
-            "observer_digest": admission.observer_digest(self.tree),
             "model": {
                 "revision": A,
-                "files": [MODEL_FILE],
-                "digest": admission.config_digest({MODEL_FILE: self.config}),
+                "files": [self.model_file],
+                "digest": admission.config_digest({self.model_file: self.config}),
             },
         }
+        self.policy["workflow"]["digest"] = sha256(workflow)
         self.rebundle()
+
+    def custom_workflow(self) -> bytes:
+        workflow = self.producer["workflow"]
+        return yaml.safe_dump(
+            {
+                "on": {"push": {"branches": [self.branch]}},
+                "jobs": {
+                    self.job_id: {
+                        "name": self.job_name,
+                        "runs-on": "ubuntu-latest",
+                        "steps": [
+                            {"uses": "actions/checkout@" + "1" * 40, "with": {"ref": "${{ github.sha }}"}},
+                            {
+                                "name": workflow["steps"]["verification"],
+                                "run": "pytest checks --junitxml=out/junit.xml",
+                            },
+                            {"name": workflow["steps"]["package"], "run": "python tools/report_bundle.py"},
+                            {
+                                "name": workflow["steps"]["upload"],
+                                "uses": "actions/upload-artifact@" + "2" * 40,
+                                "with": {
+                                    "name": self.artifact_prefix + "-${{ github.run_id }}-${{ github.run_attempt }}",
+                                    "path": "out/bundle",
+                                },
+                            },
+                        ],
+                    }
+                },
+            }
+        ).encode()
 
     def add_blob(self, path: str, content: bytes) -> dict[str, Any]:
         sha = blob_sha(content)
@@ -219,7 +313,7 @@ class Source:
     def get_json(self, relative_path: str) -> dict[str, Any]:
         self.calls.append(relative_path)
         url = urlsplit(relative_path)
-        path = url.path.lstrip("/")
+        path = unquote(url.path).lstrip("/")
         query = parse_qs(url.query)
         if path.endswith(("/jobs", "/artifacts")):
             path += "?page=" + query.get("page", ["1"])[0]
@@ -268,6 +362,166 @@ def test_admitted_origin_preserves_success_and_failure_observations(outcome: str
     assert result.receipt["claims"]["self_authenticating"] is False
     assert (source.policy, source.pages) == before
     assert source.downloads == [(REPOSITORY, ARTIFACT_ID)]
+
+
+@pytest.mark.parametrize("layout", ["standard", "custom"])
+def test_explicit_producer_layouts_admit_and_propose_independent_policies(layout: str) -> None:
+    source = Source(layout=layout)
+    before = copy.deepcopy((source.policy, source.pages))
+    candidate = admission.propose_policy(
+        source,
+        REPOSITORY,
+        B,
+        [source.model_file],
+        producer=source.producer,
+        observer_paths=source.observer_paths,
+        name="reviewed-repository-contract",
+        version="3",
+    )
+    expected = copy.deepcopy(source.policy)
+    expected.update(name="reviewed-repository-contract", version="3")
+    expected["model"]["revision"] = B
+    assert candidate == expected
+    assert source.downloads == []
+    selected = Target({"context": "main", "model_revision": B, "revision": B})
+    result = admission.admit(source, candidate, selected, RUN_ID, ATTEMPT, WHEN)
+    assert result.receipt["status"] == "admitted", result.receipt
+    assert result.state is not None
+    observed = result.state["records"]["REQ-1"]["assessments"][0]
+    assert observed["state"] == "passed"
+    assert observed["subject"] == {"model_revision": B, "revision": B}
+    assert result.receipt["origin"]["workflow_path"] == source.workflow_path
+    assert result.receipt["origin"]["job_key"] == source.job_id
+    assert result.receipt["origin"]["artifact_name"] == source.artifact["name"]
+    if layout == "custom":
+        assert any("branches/release%2Fstable" in call for call in source.calls)
+    assert (source.policy, source.pages) == before
+
+
+@pytest.mark.parametrize("case", ["branch", "workflow", "job", "step", "artifact", "manifest_job"])
+def test_custom_layout_metadata_must_match_its_explicit_contract(case: str) -> None:
+    source = Source(layout="custom")
+    if case == "branch":
+        source.run["head_branch"] = "main"
+    elif case == "workflow":
+        source.run["path"] = WORKFLOW
+    elif case == "job":
+        source.job["name"] = "Observe verification"
+    elif case == "step":
+        source.job["steps"][0]["name"] = "Run verification"
+    elif case == "artifact":
+        source.artifact["name"] = f"exacly-evidence-{RUN_ID}-{ATTEMPT}"
+    else:
+        source.manifest["job"] = "observe"
+        source.rebundle()
+    rejected(admit(source))
+
+
+@pytest.mark.parametrize("case", ["modify", "add", "delete", "fill_absent", "nonselected"])
+def test_literal_observer_scope_detects_changes_and_pins_absence(case: str) -> None:
+    source = Source(layout="custom")
+    path = "checks/test_contract.py"
+    if case == "delete":
+        source.tree[:] = [entry for entry in source.tree if entry["path"] != path]
+    elif case in {"add", "fill_absent"}:
+        source.tree.append(source.add_blob("checks/new_check.py" if case == "add" else "quality_hooks.py", b"# new\n"))
+    else:
+        if case == "nonselected":
+            path = "src/service.py"
+        index = next(i for i, entry in enumerate(source.tree) if entry["path"] == path)
+        source.tree[index] = source.add_blob(path, b"# changed\n")
+    result = admit(source)
+    if case == "nonselected":
+        assert result.receipt["status"] == "admitted", result.receipt
+    else:
+        rejected(result)
+
+
+def test_observer_selectors_are_literal_subtrees_and_part_of_the_fingerprint() -> None:
+    source = Source(layout="custom")
+    original = admission.observer_digest(source.tree, ["checks"])
+    source.tree.append(source.add_blob("checks-extra/test_other.py", b"# outside selected directory\n"))
+    assert admission.observer_digest(source.tree, ["checks"]) == original
+    source.tree.append(source.add_blob("checks/nested/test_new.py", b"# selected nested check\n"))
+    assert admission.observer_digest(source.tree, ["checks"]) != original
+    assert admission.observer_digest([], ["absent.py"]) != admission.observer_digest([], ["other_absent.py"])
+    assert admission.observer_digest(source.tree, source.observer_paths) == admission.observer_digest(
+        list(reversed(source.tree)), list(reversed(source.observer_paths))
+    )
+
+
+def test_an_explicit_observer_scope_can_pin_zero_current_matches() -> None:
+    source = Source(layout="custom")
+    paths = ["future/check.py"]
+    source.policy["observer"] = {"paths": paths, "digest": admission.observer_digest(source.tree, paths)}
+    assert admit(source).receipt["status"] == "admitted"
+    source.tree.append(source.add_blob("future/check.py", b"# newly selected check\n"))
+    rejected(admit(source))
+
+
+@pytest.mark.parametrize(
+    "paths",
+    [[], ["checks", "checks"], ["../checks"], ["/checks"], ["checks/*"], ["checks?.py"], ["checks/[ab].py"]],
+)
+def test_unsafe_ambiguous_or_glob_observer_selectors_are_invalid_policy(paths: list[str]) -> None:
+    source = Source(layout="custom")
+    source.policy["observer"]["paths"] = paths
+    with pytest.raises(ValueError):
+        admit(source)
+    assert source.calls == []
+
+
+@pytest.mark.parametrize("mode,kind", [("120000", "blob"), ("160000", "commit")])
+def test_selected_observer_files_cannot_be_symlinks_or_submodules(mode: str, kind: str) -> None:
+    source = Source(layout="custom")
+    entry = next(entry for entry in source.tree if entry["path"] == "checks/test_contract.py")
+    entry.update(mode=mode, type=kind)
+    rejected(admit(source))
+
+
+@pytest.mark.parametrize("mode,kind", [("100644", "blob"), ("120000", "blob"), ("160000", "commit")])
+def test_an_absent_observer_path_cannot_hide_a_non_directory_ancestor(mode: str, kind: str) -> None:
+    entries = [{"path": "checks", "mode": mode, "type": kind, "sha": "c" * 40}]
+    with pytest.raises(ValueError):
+        admission.observer_digest(entries, ["checks/future/test_contract.py"])
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "branch",
+        "workflow.path",
+        "workflow.job_id",
+        "workflow.job_name",
+        "workflow.steps",
+        "workflow.steps.verification",
+        "artifact",
+        "artifact.name_prefix",
+        "observer",
+        "observer.paths",
+        "observer.digest",
+    ],
+)
+def test_producer_and_observer_configuration_have_no_implicit_policy_defaults(path: str) -> None:
+    source = Source()
+    parts = path.split(".")
+    parent = source.policy
+    for part in parts[:-1]:
+        parent = parent[part]
+    parent.pop(parts[-1])
+    with pytest.raises(ValueError):
+        admit(source)
+    assert source.calls == []
+
+
+@pytest.mark.parametrize("missing", ["producer", "observer_paths"])
+def test_proposal_requires_explicit_producer_and_observer_configuration(missing: str) -> None:
+    source = Source()
+    options: dict[str, Any] = {"producer": source.producer, "observer_paths": source.observer_paths}
+    options.pop(missing)
+    with pytest.raises(TypeError):
+        admission.propose_policy(source, REPOSITORY, B, [source.model_file], **options)
+    assert source.calls == []
 
 
 def test_admission_of_a_skipped_report_cannot_establish_verification() -> None:
@@ -493,7 +747,7 @@ def test_approved_fingerprints_cannot_bypass_the_supported_workflow_profile(case
     index = next(i for i, entry in enumerate(source.tree) if entry["path"] == WORKFLOW)
     source.tree[index] = source.add_blob(WORKFLOW, content)
     source.policy["workflow"]["digest"] = sha256(content)
-    source.policy["observer_digest"] = admission.observer_digest(source.tree)
+    source.policy["observer"]["digest"] = admission.observer_digest(source.tree, source.observer_paths)
     rejected(admit(source))
 
 
