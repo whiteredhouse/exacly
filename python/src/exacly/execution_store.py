@@ -27,6 +27,8 @@ except ImportError:  # pragma: no cover - the filesystem boundary requires POSIX
 Doc = dict[str, Any]
 APPLICATION_ID = 0x4558434C  # EXCL
 USER_VERSION = 1
+COMPLETION_VERSION = 2
+MAX_USER_VERSION = COMPLETION_VERSION
 DEFAULT_LOCK_TIMEOUT = 30.0
 MAX_LOCK_TIMEOUT = (2**31 - 1) / 1000
 LOCK_RETRY_INTERVAL = 0.01
@@ -281,7 +283,7 @@ def check_file_info(info: os.stat_result) -> None:
     )
 
 
-def header(fd: int) -> None:
+def header(fd: int) -> int:
     content = os.pread(fd, 100, 0)
     require(
         len(content) == 100 and content[:16] == b"SQLite format 3\0",
@@ -289,7 +291,9 @@ def header(fd: int) -> None:
     )
     require(content[18:20] == b"\x01\x01", "execution store requires DELETE journaling")
     require(int.from_bytes(content[68:72], "big") == APPLICATION_ID, "unrecognized execution store application")
-    require(int.from_bytes(content[60:64], "big") == USER_VERSION, "unsupported execution store schema version")
+    version = int.from_bytes(content[60:64], "big")
+    require(version in (USER_VERSION, COMPLETION_VERSION), "unsupported execution store schema version")
+    return version
 
 
 @contextmanager
@@ -352,16 +356,19 @@ def validate(
         execute("PRAGMA application_id").fetchone() == (APPLICATION_ID,),
         "unrecognized execution store application",
     )
-    require(
-        execute("PRAGMA user_version").fetchone() == (USER_VERSION,),
-        "unsupported execution store schema version",
-    )
+    version = execute("PRAGMA user_version").fetchone()[0]
+    require(version in (USER_VERSION, COMPLETION_VERSION), "unsupported execution store schema version")
     require(
         execute("PRAGMA journal_mode").fetchone() == ("delete",),
         "execution store requires DELETE journaling",
     )
     objects = execute("SELECT type, name, tbl_name, sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'").fetchall()
-    expected = sorted(("table", name, name, sql) for name, sql in SCHEMA.items())
+    schema = dict(SCHEMA)
+    if version == COMPLETION_VERSION:
+        from exacly import completion_store
+
+        schema.update(completion_store.SCHEMA)
+    expected = sorted(("table", name, name, sql) for name, sql in schema.items())
     require(sorted(objects) == expected, "unrecognized execution store schema")
     require(execute("PRAGMA quick_check").fetchall() == [("ok",)], "execution store integrity check failed")
     require(not execute("PRAGMA foreign_key_check").fetchall(), "execution store relationships are invalid")
@@ -408,11 +415,17 @@ def validate(
             seen == {identity for identity, value in records.items() if value["pending_key"] == pending},
             "execution supersession chain is incomplete",
         )
+    if version == COMPLETION_VERSION:
+        completion_store.validate(connection, records, active, watermarks, deadline=deadline)
     return records, active, watermarks
 
 
 def configure(connection: sqlite3.Connection, *, deadline: Deadline | None = None) -> None:
-    for statement in ("PRAGMA journal_mode=DELETE", "PRAGMA synchronous=FULL", "PRAGMA foreign_keys=ON"):
+    if deadline is not None:
+        busy_timeout(connection, deadline)
+    version = connection.execute("PRAGMA user_version").fetchone()[0]
+    synchronous = "EXTRA" if version == COMPLETION_VERSION else "FULL"
+    for statement in ("PRAGMA journal_mode=DELETE", f"PRAGMA synchronous={synchronous}", "PRAGMA foreign_keys=ON"):
         if deadline is not None:
             busy_timeout(connection, deadline)
         connection.execute(statement)
@@ -445,6 +458,10 @@ def put(path: Path, value: Doc, *, lock_timeout: float = DEFAULT_LOCK_TIMEOUT) -
                 busy_timeout(connection, deadline)
                 connection.execute("BEGIN IMMEDIATE")
             identity, pending = proposed["id"], proposed["pending_key"]
+            if connection.execute("PRAGMA user_version").fetchone() == (COMPLETION_VERSION,):
+                from exacly import completion_store
+
+                completion_store.registration_allowed(connection, pending, deadline=deadline)
             current = active.get(pending)
             existing = records.get(identity)
             if existing is not None:

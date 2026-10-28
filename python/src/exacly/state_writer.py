@@ -164,6 +164,11 @@ class Snapshot:
     def digest(self) -> str | None:
         return "sha256:" + hashlib.sha256(self._content).hexdigest() if self._content is not None else None
 
+    @property
+    def content(self) -> bytes | None:
+        """The immutable, exact captured bytes, or None for captured absence."""
+        return self._content
+
 
 def _supported() -> None:
     _require(os.name == "posix" and fcntl is not None, "conditional state publication requires POSIX directory locks")
@@ -308,16 +313,21 @@ def _stage(descriptor: int, content: bytes, mode: int) -> str:
     return name
 
 
-def publish(snapshot: Snapshot, state: Doc, *, lock_timeout: float = DEFAULT_LOCK_TIMEOUT) -> None:
-    """Publish only if the captured bytes/absence and state identity still match.
-
-    A new state starts at serial one. An update keeps namespace, context and lineage and advances one
-    serial. There is no automatic retry: after a conflict, observation must be recomputed from a new
-    snapshot. A PublicationDurabilityError means the new state is already visible and must be inspected.
-    """
-    _supported()
-    duration = _duration(lock_timeout)
+def serialize(state: Doc) -> bytes:
+    """Return validated 0.2 state bytes suitable for a retained publication intent."""
     content = _encode(state)
+    _decode(content)
+    return content
+
+
+def decode(content: bytes) -> Doc:
+    """Validate exact retained state bytes without changing their representation."""
+    _require(isinstance(content, bytes), "state content must be bytes")
+    return _decode(content)
+
+
+def _successor(snapshot: Snapshot, content: bytes) -> None:
+    _require(isinstance(content, bytes), "state content must be bytes")
     next_header = _header(_decode(content))
     if snapshot._content is None:
         _require(next_header[3] == 1, "initial state must have serial 1")
@@ -327,24 +337,49 @@ def publish(snapshot: Snapshot, state: Doc, *, lock_timeout: float = DEFAULT_LOC
         _require(next_header[:3] == previous_header[:3], "state namespace, context and lineage must stay the same")
         _require(next_header[3] == previous_header[3] + 1, "state serial must increase by exactly one")
 
-    descriptor: int | None = None
+
+def check_parent(snapshot: Snapshot, parent_fd: int) -> None:
+    """Check a pinned parent supplied by a caller holding the shared directory lock."""
+    _supported()
+    _check_directory(snapshot, parent_fd)
+
+
+def read_locked(snapshot: Snapshot, parent_fd: int) -> Snapshot:
+    """Read the current state through its pinned, already locked parent directory.
+
+    File contents may have advanced since snapshot capture. A replaced parent still conflicts.
+    The caller owns the lock and must retain it through any conditional publication.
+    """
+    check_parent(snapshot, parent_fd)
+    content, _ = _read_bytes(parent_fd, snapshot.path.name)
+    header = _header(_decode(content)) if content is not None else None
+    _check_directory(snapshot, parent_fd)
+    return Snapshot(snapshot.path, content, header, snapshot.path.parent, _identity(os.fstat(parent_fd)))
+
+
+def publish_locked(snapshot: Snapshot, content: bytes, parent_fd: int) -> None:
+    """Conditionally publish the exact retained bytes while the caller keeps the parent locked.
+
+    This operation never acquires or releases a lock. It allows a completion coordinator to retain
+    the same lock through intent preparation, publication and receipt finalization.
+    """
+    _supported()
+    _successor(snapshot, content)
     staged: str | None = None
     try:
-        descriptor = _open_parent(snapshot)
-        _lock(descriptor, duration)
-        _check_directory(snapshot, descriptor)
-        current, mode = _read_bytes(descriptor, snapshot.path.name)
+        _check_directory(snapshot, parent_fd)
+        current, mode = _read_bytes(parent_fd, snapshot.path.name)
         if current != snapshot._content:
             raise StateConflictError("state changed since capture; capture a fresh snapshot and recompute")
         # Compare frozen headers as well as exact bytes; the digest is available for audit, not authority.
         if current is not None and _header(_decode(current)) != snapshot._header:
             raise StateConflictError("state identity changed since capture; capture a fresh snapshot and recompute")
-        staged = _stage(descriptor, content, mode)
-        _check_directory(snapshot, descriptor)
-        os.replace(staged, snapshot.path.name, src_dir_fd=descriptor, dst_dir_fd=descriptor)
+        staged = _stage(parent_fd, content, mode)
+        _check_directory(snapshot, parent_fd)
+        os.replace(staged, snapshot.path.name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
         staged = None
         try:
-            os.fsync(descriptor)
+            os.fsync(parent_fd)
         except OSError as error:
             raise PublicationDurabilityError(
                 f"state was atomically published at {snapshot.path}, but directory sync failed; "
@@ -355,8 +390,64 @@ def publish(snapshot: Snapshot, state: Doc, *, lock_timeout: float = DEFAULT_LOC
     except OSError as error:
         raise StateWriteError(f"cannot publish state at {snapshot.path}: {error}") from error
     finally:
+        if staged is not None:
+            with contextlib.suppress(OSError):
+                os.unlink(staged, dir_fd=parent_fd)
+
+
+def sync_locked(snapshot: Snapshot, parent_fd: int) -> None:
+    """Confirm and synchronize an already visible state before finalizing recovery.
+
+    A prior process can die after rename but before directory fsync. Exact after-state bytes alone
+    do not prove durability; recovery must finish file and directory synchronization under the lock.
+    """
+    check_parent(snapshot, parent_fd)
+    _require(snapshot.content is not None, "cannot synchronize absent state")
+    current, _ = _read_bytes(parent_fd, snapshot.path.name)
+    if current != snapshot.content:
+        raise StateConflictError("state changed before recovery synchronization")
+    descriptor: int | None = None
+    try:
+        descriptor = os.open(snapshot.path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent_fd)
+        info = os.fstat(descriptor)
+        _require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1, "state must be a regular file with one link")
+        os.fsync(descriptor)
+        if _identity(info) != _identity(os.stat(snapshot.path.name, dir_fd=parent_fd, follow_symlinks=False)):
+            raise StateConflictError("state changed during recovery synchronization")
+        current, _ = _read_bytes(parent_fd, snapshot.path.name)
+        if current != snapshot.content:
+            raise StateConflictError("state changed during recovery synchronization")
+        _check_directory(snapshot, parent_fd)
+        os.fsync(parent_fd)
+    except OSError as error:
+        raise PublicationDurabilityError(
+            f"state is visible at {snapshot.path}, but recovery synchronization failed; "
+            "retain the prepared intent and retry recovery"
+        ) from error
+    finally:
         if descriptor is not None:
-            if staged is not None:
-                with contextlib.suppress(OSError):
-                    os.unlink(staged, dir_fd=descriptor)
+            os.close(descriptor)
+
+
+def publish(snapshot: Snapshot, state: Doc, *, lock_timeout: float = DEFAULT_LOCK_TIMEOUT) -> None:
+    """Publish one successor while owning the shared directory lock for this call.
+
+    After a conflict, recompute from a fresh snapshot. A PublicationDurabilityError means the new state
+    is already visible and must be inspected. Coordinators use publish_locked to keep locks longer.
+    """
+    _supported()
+    duration = _duration(lock_timeout)
+    content = serialize(state)
+    _successor(snapshot, content)
+    descriptor: int | None = None
+    try:
+        descriptor = _open_parent(snapshot)
+        _lock(descriptor, duration)
+        publish_locked(snapshot, content, descriptor)
+    except StateWriteError:
+        raise
+    except OSError as error:
+        raise StateWriteError(f"cannot publish state at {snapshot.path}: {error}") from error
+    finally:
+        if descriptor is not None:
             os.close(descriptor)

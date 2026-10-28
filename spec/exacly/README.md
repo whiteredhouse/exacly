@@ -19,7 +19,7 @@ Exacly models itself, following the layout in section 13 of the specification. C
 - [`admission.yaml`](admission.yaml) covers live GitHub evidence admission under an approved producer policy.
 - [`reconciliation.yaml`](reconciliation.yaml) covers read-only completion previews.
 - [`executions.yaml`](executions.yaml) covers operator registrations and the private execution ledger.
-- [`execution-maintenance.yaml`](execution-maintenance.yaml) covers bounded access, diagnosis, backup and copy-only ledger recovery.
+- [`execution-maintenance.yaml`](execution-maintenance.yaml) covers bounded access, diagnosis, backup and copy-only ledger recovery and upgrade.
 - [`automation.yaml`](automation.yaml) covers verification completion, candidate isolation, dispatch and executor control.
 
 ## Automation roadmap
@@ -31,6 +31,8 @@ The YAML records define requirements, implementers, dependencies and lifecycle. 
 - Run `exacly show RECORD`, `exacly trace RECORD` or `exacly gaps` from the repository root to inspect the local checkout. Preview a branch's model with `exacly view site --out reports/model-site`.
 
 Implementation and runtime references can be marked `planned`; observation bindings have no special planned mode. A binding with case patterns that select no executed tests produces `not_checked` and establishes no successful verification claim.
+
+The [completion commands](../../python/README.md#complete-registered-verification-work) authorize local state publication for an existing registered task. The wider process still includes proposed dispatch and candidate execution; completing a local task does not run candidate code or establish an isolation boundary.
 
 When implementing a proposal, update its lifecycle and planned references, review the acceptance tests and observation bindings, and update the [verification policy](../../ci/verification.yaml) in the same change. CI checks that this policy covers every active Requirement; successful verification still requires matching observations.
 

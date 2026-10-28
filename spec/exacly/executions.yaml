@@ -23,8 +23,10 @@ records:
       - Verification pending work can be registered directly; a missing dimension requires explicit adopt-verification consent without modifying state, and other dimensions are rejected.
       - The ledger is an explicitly selected SQLite file outside Git working trees, model folders and input paths, in a pre-existing operator-owned POSIX 0700 directory with file mode 0600; no repository discovery or JSON binding import grants authority.
       - The operator's controlled runtime and directory provide the storage authority boundary; permissions do not isolate candidate code running as the same operating-system user.
-      - Repeating the same pending identity and contract is idempotent and retains the original record's evaluation date, registration timestamp and historical snapshot; a different active contract conflicts unless supersedes names the exact current binding for that pending key.
+      - Newly initialized registration stores use schema version 1; existing supported version-1 and version-2 stores retain their format, and registration never performs an implicit schema upgrade.
+      - Before completion, repeating the same pending identity and contract is idempotent and retains the original record's evaluation date, registration timestamp and historical snapshot; a different active contract conflicts unless supersedes names the exact current binding for that pending key.
       - Explicit supersession atomically appends an immutable replacement, preserves the prior record as inactive history and rejects a concurrent change to the active binding.
+      - An unresolved prepared completion intent blocks registration and supersession for that pending identity, and a completed pending identity cannot be registered or reused; aborted completion intents remain historical records and permit a fresh attempt.
       - The store remembers the latest registered state serial and digest by pending identity, rejects rollback and same-serial divergence, and permits later refreshed state preserving the same pending entry; a newer registration can advance the watermark without rewriting the immutable record.
       - Watermarks guard registered history for the bound pending item without authenticating global state freshness or proving the supplied file is the latest filesystem snapshot.
       - Show and bound-preview reads require an existing valid store, refuse unknown schemas and existing journal or WAL sidecars, and neither initialize, migrate, recover nor modify its schema, records or watermarks.
@@ -66,13 +68,13 @@ records:
   - id: INF-003
     type: Infrastructure
     name: Private execution ledger
-    description: An operator-selected SQLite database in a protected directory outside Git working trees and model folders.
+    description: An operator-selected SQLite database in a protected directory outside Git working trees and model folders, with explicit schema selection for completion storage.
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
     last_reviewed_at: "2026-10-28"
     kind: Local SQLite storage
-    purpose: Retain immutable execution bindings, supersession history and registered-state watermarks under operator control.
+    purpose: Retain immutable execution bindings, supersession history and registered-state watermarks, plus admitted completion proof, intents and receipts in explicitly upgraded version-2 stores, under operator control.
     operational_ref: { locator: "Operator-selected protected SQLite file supplied through --ledger." }
 
 relationships:

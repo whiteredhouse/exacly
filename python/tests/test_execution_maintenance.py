@@ -18,9 +18,9 @@ from typing import Any
 
 import jsonschema
 import pytest
+from exacly import completion_store, executions, operation_locks, planning
 from exacly import execution_maintenance as maintenance
 from exacly import execution_store as store
-from exacly import executions, planning
 from exacly.refresh import refresh
 from test_admission import READINESS, Source
 from test_applicability import WHEN
@@ -292,7 +292,7 @@ def test_unsupported_headers_are_diagnosed_without_sqlite_or_source_changes(
     else:
         store.put(ledger, binding())
         raw = bytearray(ledger.read_bytes())
-        raw[60:64] = (store.USER_VERSION + 1).to_bytes(4, "big")
+        raw[60:64] = (store.MAX_USER_VERSION + 1).to_bytes(4, "big")
         ledger.write_bytes(raw)
     before = snapshot(ledger.parent)
     monkeypatch.setattr(sqlite3, "connect", lambda *args, **kwargs: pytest.fail("unknown header must not open SQLite"))
@@ -454,3 +454,262 @@ def test_validation_failure_does_not_publish_an_output(ledger: Path, output: Pat
     assert not output.exists()
     assert list(output.parent.iterdir()) == []
     assert snapshot(ledger.parent) == before
+
+
+def upgrade_fixture_in_place(path: Path) -> None:
+    """Only fixtures use the connection helper directly; the public maintenance operation copies."""
+    with store.database(path, create=True) as (connection, _):
+        completion_store.upgrade(connection, deadline=store.Deadline())
+
+
+def test_upgrade_publishes_exact_v1_backup_and_valid_private_v2_copy(ledger: Path, output: Path) -> None:
+    first, current = committed_history(ledger)
+    before = snapshot(ledger.parent)
+    report = maintenance.upgrade(ledger, output)
+    valid_report(report, output)
+    assert report["operation"] == "upgrade" and report["status"] == "upgraded"
+    assert report["observed_store"]["user_version"] == store.USER_VERSION
+    assert report["store"]["user_version"] == store.COMPLETION_VERSION
+    assert report["validation"] == {"status": "passed", "bindings": 2, "active": 1}
+    assert {item["path"] for item in report["files"]} == {"raw/ledger.sqlite3", "upgraded/ledger.sqlite3"}
+    assert snapshot(ledger.parent) == before
+    assert (output / "raw/ledger.sqlite3").read_bytes() == before[ledger.name]
+    upgraded = output / "upgraded/ledger.sqlite3"
+    assert int.from_bytes(upgraded.read_bytes()[60:64], "big") == store.COMPLETION_VERSION
+    inspected = maintenance.inspect(upgraded)
+    assert inspected["status"] == "clean" and inspected["store"]["user_version"] == store.COMPLETION_VERSION
+    assert executions.get(upgraded, first["id"])["superseded_by"] == current["id"]
+    assert executions.get(upgraded, current["id"]) == executions.get(ledger, current["id"])
+    assert json.loads((output / "manifest.json").read_text()) == report
+    assert snapshot(ledger.parent) == before
+    private_tree(output)
+
+
+def test_inspect_and_backup_preserve_version_2(ledger: Path, output: Path) -> None:
+    proposed = binding()
+    store.put(ledger, proposed)
+    upgrade_fixture_in_place(ledger)
+    before = snapshot(ledger.parent)
+    inspected = maintenance.inspect(ledger)
+    assert inspected["status"] == "clean"
+    assert inspected["store"]["user_version"] == inspected["observed_store"]["user_version"] == store.COMPLETION_VERSION
+    valid_report(inspected)
+    report = maintenance.backup(ledger, output)
+    valid_report(report, output)
+    assert report["store"]["user_version"] == report["observed_store"]["user_version"] == store.COMPLETION_VERSION
+    copied = output / "ledger.sqlite3"
+    assert maintenance.inspect(copied)["status"] == "clean"
+    assert executions.get(copied, proposed["id"])["binding"] == proposed
+    assert snapshot(ledger.parent) == before
+    private_tree(output)
+
+
+def test_interrupted_version_2_write_recovers_only_a_version_2_copy(ledger: Path, output: Path) -> None:
+    first, current = committed_history(ledger)
+    upgrade_fixture_in_place(ledger)
+    proposed = binding("third", serial=6, state="state6", supersedes=current["id"])
+    kill_writer(ledger, proposed)
+    before = snapshot(ledger.parent)
+    inspected = maintenance.inspect(ledger)
+    assert inspected["status"] == "recovery_required"
+    assert inspected["store"]["user_version"] == store.COMPLETION_VERSION
+    report = maintenance.recover(ledger, output)
+    valid_report(report, output)
+    assert report["store"]["user_version"] == store.COMPLETION_VERSION
+    recovered = output / "recovered/ledger.sqlite3"
+    assert executions.get(recovered, first["id"])["superseded_by"] == current["id"]
+    assert executions.get(recovered, current["id"])["active"] is True
+    with pytest.raises(store.StoreError):
+        store.get(recovered, proposed["id"])
+    assert snapshot(ledger.parent) == before
+    assert (output / "raw/ledger.sqlite3").read_bytes() == before[ledger.name]
+    private_tree(output)
+
+
+def interrupted_completion_prepare(case: Any, control: Connection) -> None:
+    """Pause with a real v2 completion intent inserted but its SQLite transaction uncommitted."""
+    original_connect = sqlite3.connect
+
+    class PausedPrepare(sqlite3.Connection):
+        def commit(self) -> None:
+            row = self.execute("SELECT id FROM completion_intents WHERE phase='prepared'").fetchone()
+            if row is not None:
+                control.send(("ready", row[0]))
+                control.recv()
+            super().commit()
+
+    def connect(*args: Any, **kwargs: Any) -> sqlite3.Connection:
+        connection = original_connect(*args, **kwargs, factory=PausedPrepare)
+        connection.execute("PRAGMA cache_size=1")
+        connection.execute("PRAGMA cache_spill=1")
+        return connection
+
+    try:
+        with pytest.MonkeyPatch.context() as patched:
+            patched.setattr(sqlite3, "connect", connect)
+            control.send(("unexpected_result", case.complete()))
+    except BaseException as error:
+        control.send(("error", repr(error)))
+        raise
+    finally:
+        control.close()
+
+
+def test_sigkill_during_v2_completion_prepare_recovers_only_a_clean_copy(tmp_path: Path, output: Path) -> None:
+    from test_completion_faults import prepare_case
+
+    case = prepare_case(tmp_path)
+    # Keep the execution contract but advance current state and retain a large legal extension so the
+    # prepared before/after-state BLOBs force a real spill and hot rollback journal before COMMIT.
+    before = json.loads(case.state_path.read_bytes())
+    before["serial"] += 1
+    before["x-maintenance-payload"] = "a" * (512 * 1024)
+    case.state_path.write_text(json.dumps(before) + "\n")
+    state_bytes = case.state_path.read_bytes()
+    context = multiprocessing.get_context("fork")
+    parent, child = context.Pipe()
+    process = context.Process(target=interrupted_completion_prepare, args=(case, child))
+    process.start()
+    child.close()
+    try:
+        assert parent.poll(15), "completion prepare never reached its uncommitted SQLite boundary"
+        message = parent.recv()
+        assert message[0] == "ready", message
+        assert process.pid is not None
+        os.kill(process.pid, signal.SIGKILL)
+        process.join(timeout=10)
+        assert not process.is_alive() and process.exitcode == -signal.SIGKILL
+    finally:
+        if process.is_alive():
+            process.kill()
+            process.join(timeout=10)
+        parent.close()
+    ledger = case.ledger
+    journal = Path(str(ledger) + "-journal")
+    assert journal.read_bytes().startswith(JOURNAL_MAGIC)
+    residue = snapshot(ledger.parent)
+    assert case.state_path.read_bytes() == state_bytes
+    assert maintenance.inspect(ledger)["status"] == "recovery_required"
+    report = maintenance.recover(ledger, output)
+    valid_report(report, output)
+    assert report["store"]["user_version"] == store.COMPLETION_VERSION
+    recovered = output / "recovered/ledger.sqlite3"
+    assert maintenance.inspect(recovered)["status"] == "clean"
+    with sqlite3.connect(recovered) as connection:
+        assert connection.execute("SELECT count(*) FROM completion_intents").fetchone() == (0,)
+        assert connection.execute("SELECT count(*) FROM completion_receipts").fetchone() == (0,)
+    assert executions.get(recovered, case.binding["id"])["active"] is True
+    assert snapshot(ledger.parent) == residue
+    assert case.state_path.read_bytes() == state_bytes
+    assert (output / "raw/ledger.sqlite3").read_bytes() == residue[ledger.name]
+    assert (output / "raw/ledger.sqlite3-journal").read_bytes() == residue[journal.name]
+    private_tree(output)
+
+
+def test_backup_retains_and_validates_committed_v2_completion_proof(tmp_path: Path, output: Path) -> None:
+    from test_completion_faults import prepare_case
+
+    case = prepare_case(tmp_path)
+    completed = case.complete()
+    assert completed["status"] == "completed", completed
+    before = snapshot(case.ledger.parent)
+    report = maintenance.backup(case.ledger, output)
+    valid_report(report, output)
+    assert report["store"]["user_version"] == store.COMPLETION_VERSION
+    copied = output / "ledger.sqlite3"
+    with (
+        store.database(case.ledger, create=False) as (source, _),
+        store.database(copied, create=False) as (destination, _created),
+    ):
+        original = completion_store.get(source, completed["completion_id"])
+        retained = completion_store.get(destination, completed["completion_id"])
+        assert retained == original and retained["phase"] == "committed"
+        assert retained["receipt"] == completed["receipt"]
+    assert maintenance.inspect(copied)["status"] == "clean"
+    assert snapshot(case.ledger.parent) == before
+    private_tree(output)
+
+
+def test_corrupt_v2_completion_proof_is_never_inspected_or_backed_up_as_clean(tmp_path: Path, output: Path) -> None:
+    from test_completion_faults import prepare_case
+
+    case = prepare_case(tmp_path)
+    completed = case.complete()
+    assert completed["status"] == "completed", completed
+    with sqlite3.connect(case.ledger) as connection:
+        connection.execute("UPDATE completion_intents SET report=?", (b"forged report bytes",))
+    before = snapshot(case.ledger.parent)
+    inspected = maintenance.inspect(case.ledger)
+    assert inspected["status"] == "corrupt" and inspected["validation"]["status"] == "failed"
+    assert inspected["store"]["user_version"] == store.COMPLETION_VERSION
+    with pytest.raises(store.StoreError):
+        maintenance.backup(case.ledger, output)
+    assert snapshot(case.ledger.parent) == before
+    assert not output.exists() and list(output.parent.iterdir()) == []
+
+
+@pytest.mark.parametrize("case", ["hot_journal", "version_2", "invalid_contract"])
+def test_upgrade_rejects_unsafe_sources_without_output_or_source_changes(ledger: Path, output: Path, case: str) -> None:
+    if case == "hot_journal":
+        hot_journal(ledger)
+    else:
+        original = binding()
+        store.put(ledger, original)
+        if case == "version_2":
+            upgrade_fixture_in_place(ledger)
+        else:
+            tamper_target(ledger, original["id"], "c" * 40)
+    before = snapshot(ledger.parent)
+    with pytest.raises(store.StoreError):
+        maintenance.upgrade(ledger, output)
+    assert snapshot(ledger.parent) == before
+    assert not output.exists() and list(output.parent.iterdir()) == []
+
+
+def test_upgrade_failure_does_not_publish_or_modify_the_v1_source(
+    ledger: Path, output: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store.put(ledger, binding())
+    before = snapshot(ledger.parent)
+
+    def fail_after_schema_upgrade(connection: sqlite3.Connection, *, deadline: store.Deadline) -> None:
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute("CREATE TABLE interrupted_upgrade (value TEXT)")
+        raise store.StoreError("injected upgrade failure")
+
+    monkeypatch.setattr(completion_store, "upgrade", fail_after_schema_upgrade)
+    with pytest.raises(store.StoreError, match="injected upgrade failure"):
+        maintenance.upgrade(ledger, output)
+    assert snapshot(ledger.parent) == before
+    assert not output.exists() and list(output.parent.iterdir()) == []
+
+
+def test_upgrade_requires_the_copy_to_reach_version_2(
+    ledger: Path, output: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store.put(ledger, binding())
+    before = snapshot(ledger.parent)
+    monkeypatch.setattr(completion_store, "upgrade", lambda connection, *, deadline: None)
+    with pytest.raises(store.StoreError, match="does not have the completion schema"):
+        maintenance.upgrade(ledger, output)
+    assert snapshot(ledger.parent) == before
+    assert not output.exists() and list(output.parent.iterdir()) == []
+
+
+def test_maintenance_uses_shared_ordered_directory_locks(
+    ledger: Path, output: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    proposed = binding()
+    store.put(ledger, proposed)
+    original = operation_locks.directories
+    selected: list[tuple[set[Path], bool]] = []
+
+    def recorded(paths: Any, *, write: bool, deadline: store.Deadline) -> Any:
+        values = list(paths)
+        selected.append((set(values), write))
+        return original(values, write=write, deadline=deadline)
+
+    monkeypatch.setattr(operation_locks, "directories", recorded)
+    assert maintenance.inspect(ledger)["status"] == "clean"
+    assert maintenance.backup(ledger, output)["status"] == "backed_up"
+    assert selected == [({ledger.parent}, False), ({ledger.parent, output.parent}, True)]

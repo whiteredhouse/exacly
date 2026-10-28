@@ -17,11 +17,11 @@ from contextlib import ExitStack, closing, contextmanager
 from pathlib import Path
 from typing import Any
 
+from exacly import completion_store, executions, operation_locks, planning
 from exacly import execution_store as store
-from exacly import executions, planning
 
 Doc = dict[str, Any]
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 JOURNAL_MAGIC = bytes.fromhex("d9d505f920a163d7")
 CHUNK = 64 * 1024
 CLAIMS = {
@@ -33,18 +33,20 @@ CLAIMS = {
 }
 SCHEMA: Doc = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "title": "Exacly ledger maintenance snapshot 0.1.0",
+    "title": "Exacly ledger maintenance snapshot 0.2.0",
     **planning.fields(
         {
             "schema_version": {"const": VERSION},
-            "operation": {"enum": ["inspect", "backup", "recover"]},
-            "status": {"enum": ["clean", "recovery_required", "unsupported", "corrupt", "backed_up", "recovered"]},
+            "operation": {"enum": ["inspect", "backup", "recover", "upgrade"]},
+            "status": {
+                "enum": ["clean", "recovery_required", "unsupported", "corrupt", "backed_up", "recovered", "upgraded"]
+            },
             "ledger": {"type": "string"},
             "as_of": {"type": "string", "format": "date-time"},
             "store": planning.fields(
                 {
                     "application_id": {"const": store.APPLICATION_ID},
-                    "user_version": {"const": store.USER_VERSION},
+                    "user_version": {"enum": [store.USER_VERSION, store.COMPLETION_VERSION]},
                     "journal_mode": {"const": "delete"},
                 }
             ),
@@ -129,21 +131,20 @@ def _journal(fd: int, database_fd: int) -> None:
 @contextmanager
 def _locks(path: Path, out: Path | None, budget: store.Deadline) -> Iterator[Path]:
     source = store.location(path)
-    selected = {source.parent: source}
+    selected = {source.parent}
     if out is not None:
         store.require(isinstance(out, Path) and out.name not in ("", ".", ".."), "invalid maintenance output")
         destination = out.absolute()
         # location validates the parent; this synthetic name is never opened or created.
         store.location(destination.parent / ".execution-maintenance-output")
-        selected.setdefault(destination.parent, destination.parent / ".execution-maintenance-output")
+        selected.add(destination.parent)
         protected = [source, *(Path(str(source) + suffix) for suffix in ("-journal", "-wal", "-shm"))]
         store.require(
             not any(item.is_relative_to(destination) or destination.is_relative_to(item) for item in protected),
             "maintenance output overlaps its source or SQLite sidecar paths",
         )
-    with ExitStack() as stack:
-        for parent in sorted(selected, key=str):
-            stack.enter_context(store.locked(selected[parent], write=out is not None, deadline=budget))
+    with operation_locks.directories(list(selected), write=out is not None, deadline=budget):
+        store.require(store.location(path) == source, "ledger source path changed while locking")
         if out is not None:
             store.require(not os.path.lexists(out), "maintenance output must be a new directory")
         yield source
@@ -172,10 +173,13 @@ def _finish(report: Doc) -> Doc:
     return report
 
 
-def _validate(path: Path, budget: store.Deadline) -> Doc:
+def _validate(path: Path, budget: store.Deadline, report: Doc) -> Doc:
     try:
         with store.database(path, create=False, deadline=budget) as (connection, _):
             records, active, _ = store.validate(connection, deadline=budget)
+            store.busy_timeout(connection, budget)
+            version = connection.execute("PRAGMA user_version").fetchone()[0]
+            store.require(version in (store.USER_VERSION, store.COMPLETION_VERSION), "unsupported ledger version")
             try:
                 for record in records.values():
                     executions.validate_record(record)
@@ -185,6 +189,7 @@ def _validate(path: Path, budget: store.Deadline) -> Doc:
         if store.sqlite_lock_error(error):
             raise store.LockTimeoutError(store.LOCK_TIMEOUT_MESSAGE) from None
         raise store.StoreError("ledger integrity validation failed") from None
+    report["store"]["user_version"] = version
     return {"status": "passed", "bindings": len(records), "active": len(active)}
 
 
@@ -206,8 +211,10 @@ def _capture(stack: ExitStack, path: Path, report: Doc) -> dict[str, tuple[int, 
     return found
 
 
-def _supported(found: dict[str, tuple[int, Doc]]) -> bool:
-    store.header(found["ledger.sqlite3"][0])
+def _supported(found: dict[str, tuple[int, Doc]], report: Doc) -> bool:
+    fd = found["ledger.sqlite3"][0]
+    store.header(fd)
+    report["store"]["user_version"] = int.from_bytes(os.pread(fd, 4, 60), "big")
     store.require(not any(name.endswith(("-wal", "-shm")) for name in found), "WAL and SHM residue are unsupported")
     journal = found.get("ledger.sqlite3-journal")
     if journal is not None:
@@ -232,7 +239,7 @@ def inspect(path: Path, *, lock_timeout: float = store.DEFAULT_LOCK_TIMEOUT) -> 
             report = _report(source, "inspect")
             found = _capture(stack, source, report)
             try:
-                has_journal = _supported(found)
+                has_journal = _supported(found, report)
             except store.StoreError as error:
                 report["diagnostics"].append(str(error))
             else:
@@ -241,7 +248,7 @@ def inspect(path: Path, *, lock_timeout: float = store.DEFAULT_LOCK_TIMEOUT) -> 
                     report["diagnostics"].append("Recognized rollback journal; explicit copy recovery is required.")
                 else:
                     try:
-                        report["validation"] = _validate(source, budget)
+                        report["validation"] = _validate(source, budget, report)
                         report["status"] = "clean"
                     except store.StoreError as error:
                         if isinstance(error, store.LockTimeoutError):
@@ -325,15 +332,19 @@ def _maintain(path: Path, out: Path, operation: str, lock_timeout: float) -> Doc
         with _locks(path, out, budget) as source, ExitStack() as stack:
             report = _report(source, operation)
             found = _capture(stack, source, report)
-            has_journal = _supported(found)
+            has_journal = _supported(found, report)
             store.require(
                 has_journal == (operation == "recover"),
-                "use explicit recovery for journals, or backup for a clean ledger",
+                "use explicit recovery for journals and a clean ledger for backup or upgrade",
             )
+            if operation == "upgrade":
+                store.require(
+                    report["store"]["user_version"] == store.USER_VERSION, "upgrade requires a version 1 ledger"
+                )
             with tempfile.TemporaryDirectory(prefix=".execution-maintenance-", dir=out.parent) as temporary:
                 folder = Path(temporary)
                 if operation == "backup":
-                    report["validation"] = _validate(source, budget)
+                    report["validation"] = _validate(source, budget, report)
                     result = folder / "ledger.sqlite3"
                     _write(result, b"")
                     with (
@@ -343,6 +354,22 @@ def _maintain(path: Path, out: Path, operation: str, lock_timeout: float) -> Doc
                         connection.backup(
                             destination, pages=64, progress=lambda s, r, t: _progress(budget, s, r, t), sleep=0.01
                         )
+                elif operation == "upgrade":
+                    report["validation"] = _validate(source, budget, report)
+                    raw, upgraded = folder / "raw", folder / "upgraded"
+                    raw.mkdir(mode=0o700)
+                    upgraded.mkdir(mode=0o700)
+                    source_fd, captured = found["ledger.sqlite3"]
+                    _copy(source_fd, raw / "ledger.sqlite3")
+                    store.require(
+                        _file(raw / "ledger.sqlite3", folder)["digest"] == captured["digest"],
+                        "raw ledger backup does not match the captured source",
+                    )
+                    _copy(source_fd, upgraded / "ledger.sqlite3")
+                    result = upgraded / "ledger.sqlite3"
+                    with store.database(result, create=True, deadline=budget) as (connection, _):
+                        completion_store.upgrade(connection, deadline=budget)
+                    store.auxiliary_files(result)
                 else:
                     raw, recovered = folder / "raw", folder / "recovered"
                     raw.mkdir(mode=0o700)
@@ -364,8 +391,13 @@ def _maintain(path: Path, out: Path, operation: str, lock_timeout: float) -> Doc
                         records, active, _ = store.validate(connection, deadline=budget)
                         report["validation"].update(bindings=len(records), active=len(active))
                     store.auxiliary_files(result)
-                report["validation"] = _validate(result, budget)
-                report["status"] = "backed_up" if operation == "backup" else "recovered"
+                report["validation"] = _validate(result, budget, report)
+                if operation == "upgrade":
+                    store.require(
+                        report["store"]["user_version"] == store.COMPLETION_VERSION,
+                        "upgraded ledger does not have the completion schema",
+                    )
+                report["status"] = {"backup": "backed_up", "recover": "recovered", "upgrade": "upgraded"}[operation]
                 report["output"] = str(out.absolute())
                 report["files"] = [_file(item, folder) for item in sorted(folder.rglob("*")) if item.is_file()]
                 _stable(found, source)
@@ -389,6 +421,11 @@ def backup(path: Path, out: Path, *, lock_timeout: float = store.DEFAULT_LOCK_TI
 
 def recover(path: Path, out: Path, *, lock_timeout: float = store.DEFAULT_LOCK_TIMEOUT) -> Doc:
     return _maintain(path, out, "recover", lock_timeout)
+
+
+def upgrade(path: Path, out: Path, *, lock_timeout: float = store.DEFAULT_LOCK_TIMEOUT) -> Doc:
+    """Retain an exact clean v1 source and publish a separate validated v2 copy without cutting over."""
+    return _maintain(path, out, "upgrade", lock_timeout)
 
 
 def as_text(report: Doc) -> str:

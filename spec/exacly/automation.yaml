@@ -1,5 +1,5 @@
-# Proposed automation roadmap. These records describe intended behavior, not delivered features.
-# The future test selectors intentionally match no current cases; implementation references are planned.
+# Automation contracts. Local verification completion is active; dispatch and candidate execution remain proposed.
+# Proposed records retain future test selectors and explicitly planned implementation references.
 exacly: "0.2.0"
 
 records:
@@ -49,7 +49,7 @@ records:
     name: Complete registered verification work from admitted observations
     description: Close one exact local pending item only through explicit authority, applicable evidence and recoverable publication.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
     last_reviewed_at: "2026-10-28"
     statement: >-
@@ -57,25 +57,30 @@ records:
       evidence for its output target, complete only the registered pending verification item when the
       merged current state satisfies the unchanged goal, preserving unrelated work and durable history.
     acceptance_criteria:
-      - Completion requires explicit operator authorization scoped to the binding, goal, target, policies and state destination; registration, a saved plan digest and a ready preview alone do not grant mutation authority.
+      - Invoking exacly complete github-actions explicitly authorizes local completion scoped to its binding, goal, output target, policies and state destination; registration, a saved plan digest and a ready preview alone do not grant mutation authority, and no confirmation prompt or extra authorization flag is required.
       - Each new completion evaluation performs fresh live admission for the exact output revision, run and attempt under the approved producer policy; executor self-reports, PR merge and imported receipts cannot substitute for admission.
       - The approved model, criteria, bindings and readiness and trust policies remain the registered contract; the resulting implementation may differ from the planning input without relabeling retained observations.
       - Validate the actual current state against the approved model before merging; recheck the active binding, complete pending-entry identity, lineage, serial, digest and registered watermark at commit time, rejecting stale or corrupt inputs without pruning unrelated work.
       - Apply admitted observations through the existing source and binding replacement rules, preserving unrelated assessments, evidence, relationships and pending entries, then evaluate the selected goal against the merged candidate state; retained applicable failures or missing required observations prevent completion.
       - Remove only the exact registered pending entry after the selected goal is satisfied; preserve namespace, context and lineage and advance the serial exactly once, while reporting whole-policy readiness separately from completion of this action.
-      - Retain the admitted evidence bytes and receipt with their identities and digests, and persist a prepared completion intent containing the exact before-state identity and candidate after-state bytes and digest before conditional publication.
+      - Retain the admitted evidence bytes and receipt with their identities and digests, and commit a prepared completion intent containing the exact before-state identity and candidate after-state bytes and digest before conditional publication; publish those exact recorded bytes rather than reserializing a different candidate.
       - Hold the ledger and state locks in a deterministic deduplicated order through intent preparation, conditional atomic state publication and receipt finalization; bounded waits and unresolved intents prevent conflicting registration changes.
       - SQLite ledger updates and JSON state publication form a recoverable protocol rather than one atomic transaction; failures after replacement preserve the complete published state and prepared intent and report the unfinished operation.
-      - Repeating a completed operation returns its original durable receipt without removing another task or increasing the serial again; recovery recognizes exact before-state as unpublished and exact after-state as published, while a third state conflicts without overwrite or blind replay of a stale candidate.
-      - Ledger schema extensions require an explicit validated upgrade with a recoverable backup; ordinary reads, registration and completion never silently migrate or recover a ledger.
+      - Repeating the exact completed request, including binding, state destination, plan and action, policies, target, run, attempt and evaluation date, returns its original durable receipt without HTTP, removing another task or increasing the serial again; a different request cannot reuse a completed binding or pending identity.
+      - Explicit offline recovery aborts an intent when the exact before-state remains and requires fresh admission for another attempt; when the exact after-state is present it verifies the retained proof and binding, synchronizes the state and directory and finalizes once without HTTP; any third state conflicts without overwrite or replay of a stale candidate.
+      - Completion requires ledger schema version 2, obtained through explicit copy-only upgrade of a clean version-1 ledger into a new validated bundle with the source preserved; ordinary reads, registration and completion never silently migrate or recover a ledger.
+      - Show reads the retained completion phase without exposing raw proof bytes; completion reports distinguish completed, pending, stale and conflict, and preserve unfinished intent after an operational error. Receipts describe historical completion rather than authenticating the latest state, test honesty, acceptance coverage or executor-to-output provenance.
+      - Complete exits 0 only for completed and 1 for an unmet, stale or conflicting result; show exits 0 for a valid retained phase, offline recovery exits 0 for completed or aborted and 1 for an unresolved result, and invalid inputs or operational errors exit 2. Optional report-output failure does not undo an already recorded completion.
       - Local completion records observation-confirmed verification without closing an external ticket, dispatching an agent, granting release authority or claiming a machine-verified executor-to-output link.
-    verification_method: Future completion contract, command, concurrency and process-kill tests at every durable boundary, including supersession races and retained failing observations.
+    verification_method: Completion contract, command, storage, concurrency and process-kill tests at durable boundaries, including supersession races, exact request replay and retained failing observations.
     observe:
       tests:
         cases:
           - "python/tests/test_completion.py::*"
           - "python/tests/test_completion_cli.py::*"
           - "python/tests/test_completion_faults.py::*"
+          - "python/tests/test_completion_store.py::*"
+          - "python/tests/test_completion_locks.py::*"
 
   - id: REQ-025
     type: Requirement
@@ -164,14 +169,14 @@ records:
   - id: APP-012
     type: Application
     name: Verification completion reconciler
-    description: Proposed explicit local completion command and recoverable publication core.
+    description: Explicit local completion, inspection and recovery commands with a durable publication core.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
     last_reviewed_at: "2026-10-28"
     responsibility: Admit fresh evidence, evaluate merged current state and complete one registered verification task through durable intent and receipt recovery.
-    interfaces: [Planned explicit local completion command, Planned completion and recovery Python API]
-    implementation_ref: { locator: python/src/exacly/completion.py, planned: true }
+    interfaces: [exacly complete github-actions command, exacly completions show command, exacly completions recover command, exacly.completion Python API]
+    implementation_ref: { locator: python/src/exacly/completion.py }
 
   - id: APP-013
     type: Application
@@ -200,12 +205,12 @@ records:
   - id: INFO-004
     type: Information
     name: Completion intents and receipts
-    description: Proposed durable proof and publication history for exact pending verification tasks.
+    description: Durable admitted proof and publication history for exact pending verification tasks.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
     last_reviewed_at: "2026-10-28"
-    definition: Versioned completion authorization and prepared intent, retained admission proof, exact before and after state identities and bytes, recovery outcome and finalized immutable receipt.
+    definition: Versioned completion request and authorization, prepared intent, retained admission proof, exact before-state identity and candidate after-state bytes and digest, recovery outcome and finalized immutable receipt in a version-2 ledger.
     identifiers: [completion ID, binding ID, pending identity, plan and action IDs, target identity, evidence digests, state lineage and serial]
     steward: exacly-maintainers
 
@@ -275,5 +280,5 @@ relationships:
   - { source: APP-014, type: depends_on, target: INF-003, conditions: The trusted supervisor retains attempts through an explicit ledger extension without exposing the ledger to candidate code. }
   - { source: APP-014, type: reads, target: INFO-005 }
   - { source: APP-014, type: writes, target: INFO-005 }
-  - { source: INF-003, type: stores, target: INFO-004, role: system_of_record, conditions: Proposed completion history after an explicit ledger schema upgrade; absent from the current ledger format. }
+  - { source: INF-003, type: stores, target: INFO-004, role: system_of_record, conditions: Completion history in ledger schema version 2 selected through explicit copy-only upgrade; absent from version 1. }
   - { source: INF-003, type: stores, target: INFO-005, role: system_of_record, conditions: Proposed dispatch and attempt history after an explicit ledger schema upgrade; absent from the current ledger format. }

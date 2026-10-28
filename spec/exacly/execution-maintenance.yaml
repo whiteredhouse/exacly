@@ -1,4 +1,4 @@
-# Exacly's own model: explicit diagnosis, backup and copy-only ledger recovery.
+# Exacly's own model: explicit diagnosis, backup and copy-only ledger recovery and upgrade.
 # Source observations, pending state and ledger files are never repaired in place.
 exacly: "0.2.0"
 
@@ -6,23 +6,26 @@ records:
   - id: REQ-022
     type: Requirement
     name: Diagnose and preserve execution ledgers without implicit recovery
-    description: Give operators bounded access to diagnosis, consistent backup and validated recovery copies while preserving source ledger files.
+    description: Give operators bounded access to diagnosis, consistent backup and validated recovery or upgrade copies while preserving source ledger files.
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
     last_reviewed_at: "2026-10-28"
     statement: >-
       Given an explicitly selected private execution ledger, diagnose its condition without modifying
-      it, back up a clean valid store or recover a supported interrupted transaction into a new
-      validated copy, preserving source files and requiring an explicit operator cutover.
+      it, back up a clean valid store, recover a supported interrupted transaction or explicitly
+      upgrade a clean version-1 store into a new validated copy, preserving source files and requiring
+      an explicit operator cutover.
     acceptance_criteria:
       - Inspection is read-only and does not open SQLite on residue or unknown formats that could cause recovery; clean supported stores exit 0, recovery-needed, unsupported or corrupt stores exit 1, and invalid inputs or operational errors exit 2.
       - Backup accepts only a clean valid ledger and writes a consistent SQLite backup with a manifest into a new destination, validating the copied schema, records, supersession chains and watermarks without changing source database contents.
+      - Supported ledger schemas are exactly versions 1 and 2; inspection, backup and recovery validate the selected schema, binding history and, for version 2, every retained completion intent, receipt, proof digest and state identity without changing its version.
+      - Explicit upgrade accepts a clean validated version-1 source and publishes a new private bundle containing raw/ledger.sqlite3, upgraded/ledger.sqlite3 in schema version 2, and a manifest; it preserves binding identities and watermarks, leaves the source untouched and requires the operator to select one canonical ledger path.
       - Recovery preserves raw copies of the database and rollback journal, performs supported SQLite DELETE-journal recovery only on a working copy, and validates its complete schema, records, supersession chains and watermarks before reporting success.
       - Recovery leaves source database and journal files untouched; it never deletes source residue, repairs in place, replaces the active ledger or makes normal registration, show or bound previews recover implicitly.
       - Unknown schemas, WAL or SHM residue, super-journals and partial initialization are diagnosed without automatic recovery; recovery rejects them with no published output and preserves the source files.
       - A valid recovery bundle is published atomically with relative raw and recovered paths in its manifest; failed copied-store validation publishes no partial bundle and leaves the source intact.
-      - Backup and recovery require a new destination outside Git working trees, model folders and protected inputs, reject source overlap and overwrite, create POSIX 0700 directories and 0600 files, and exit 0 on success or 2 on error.
+      - Backup, recovery and upgrade require a new destination outside Git working trees, model folders and protected inputs, reject source overlap and overwrite, create POSIX 0700 directories and 0600 files, and exit 0 on success or 2 on error.
       - Maintenance accepts a finite nonnegative lock timeout defaulting to 30 seconds; one monotonic budget bounds directory and SQLite waits, zero permits an immediate attempt, and timeout reports an actionable nonmutating error without limiting whole-operation copying or computation.
       - Reports identify the source, diagnosis and copied content in a versioned format; manifests do not authenticate global freshness, alter binding identities or grant new approval or task-closure authority.
       - Operators explicitly select one canonical ledger after reviewing a recovered copy; old and recovered copies must not operate as parallel active authorities, and same-user candidate code remains outside the protection provided by directory permissions.
@@ -34,17 +37,18 @@ records:
           - "python/tests/test_execution_maintenance.py::*"
           - "python/tests/test_execution_maintenance_cli.py::*"
           - "python/tests/test_execution_store.py::*"
+          - "python/tests/test_completion_store.py::*"
 
   - id: APP-011
     type: Application
     name: Execution ledger maintenance
-    description: Explicit offline ledger diagnosis, consistent backup and copy-only recovery commands and shared API.
+    description: Explicit offline ledger diagnosis, consistent backup, copy-only recovery and schema upgrade commands and shared API.
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
     last_reviewed_at: "2026-10-28"
-    responsibility: Preserve execution binding data through read-only diagnosis and validated backup or recovery copies under bounded lock waits.
-    interfaces: [exacly executions inspect command, exacly executions backup command, exacly executions recover command, exacly.execution_maintenance Python API]
+    responsibility: Preserve execution binding and completion data through read-only diagnosis and validated backup, recovery or schema upgrade copies under bounded lock waits.
+    interfaces: [exacly executions inspect command, exacly executions backup command, exacly executions recover command, exacly executions upgrade command, exacly.execution_maintenance Python API]
     implementation_ref: { locator: python/src/exacly/execution_maintenance.py }
 
 relationships:
@@ -53,5 +57,7 @@ relationships:
   - { source: PROC-002, type: uses, target: APP-011 }
   - { source: APP-011, type: reads, target: INFO-003 }
   - { source: APP-011, type: writes, target: INFO-003 }
+  - { source: APP-011, type: reads, target: INFO-004, conditions: Validates completion history in version-2 stores before publishing backup or recovery copies. }
+  - { source: APP-011, type: writes, target: INFO-004, conditions: Preserves existing version-2 completion history only in explicit backup and recovery copies. }
   - { source: APP-011, type: depends_on, target: APP-010, conditions: "Validates the same immutable binding format and registration history as the execution registry." }
   - { source: APP-011, type: depends_on, target: INF-003, conditions: "Requires explicit operator-selected protected local storage and creates new private copies without changing the source." }

@@ -283,6 +283,33 @@ def match(
 ) -> tuple[bool, str, Doc]:
     """Check a registered association against a current pending item without modifying the ledger."""
     envelope = get(ledger, binding_id, lock_timeout=lock_timeout)
+    return match_envelope(
+        ledger,
+        envelope,
+        plan_doc=plan_doc,
+        action_id=action_id,
+        state_doc=state_doc,
+        readiness_policy=readiness_policy,
+        trust_policy=trust_policy,
+        output_target=output_target,
+        date=date,
+    )
+
+
+def match_envelope(
+    ledger: Path,
+    envelope: Doc,
+    *,
+    plan_doc: Any,
+    action_id: str,
+    state_doc: Any,
+    readiness_policy: Any,
+    trust_policy: Any,
+    output_target: Target,
+    date: dt.date,
+) -> tuple[bool, str, Doc]:
+    """Match an already validated store read while the caller holds its operation locks."""
+    validate_record(envelope["binding"])
     binding = envelope["binding"]
     contract = binding["contract"]
     pending = contract["pending"]
