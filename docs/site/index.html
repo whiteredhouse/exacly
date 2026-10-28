@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#eef0f3">
+  <meta name="description" content="Exacly connects product intent to evidence. An open product model and CLI that gives people and coding agents the context behind what ships.">
+  <meta property="og:title" content="Exacly — Product intent, connected to evidence">
+  <meta property="og:description" content="Know why a requirement exists, what implements it, and what is actually verified. A shared product model for people and coding agents.">
+  <meta property="og:type" content="website">
+  <title>Exacly — Product intent, connected to evidence</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="./fonts/libre-franklin-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./site.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <a class="wordmark" href="#main" aria-label="Exacly home">exacly</a>
+    <nav class="desktop-nav" aria-label="Main navigation">
+      <a href="#model">The model</a><a href="#evidence">Evidence</a><a href="#agents">For agents</a><a href="https://github.com/whiteredhouse/exacly/tree/main/spec">Specification <svg class="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg></a>
+    </nav>
+    <details class="mobile-nav">
+      <summary>Menu <span aria-hidden="true">＋</span></summary>
+      <nav aria-label="Mobile navigation"><a href="#model">The model</a><a href="#evidence">Evidence</a><a href="#agents">For agents</a><a href="#start">Try Exacly</a><a href="https://github.com/whiteredhouse/exacly/tree/main/spec">Specification <svg class="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg></a></nav>
+    </details>
+    <a class="header-action" href="#start">Try Exacly <span aria-hidden="true"><svg class="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg></span></a>
+  </header>
+
+  <main id="main">
+    <section class="hero board" aria-labelledby="hero-title">
+      <div class="hero-name tile">
+        <h1 id="hero-title">EXACLY</h1>
+        <p class="lead">The product model for people<br class="desktop-break"> and coding agents.</p>
+        <p>Keep what you intend connected to what you can prove.</p>
+        <a class="mobile-hero-action" href="#model">Explore the example <span aria-hidden="true"><svg class="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg></span></a>
+      </div>
+      <div class="hero-trace tile" data-ui>
+        <div class="fragment-heading"><span>Why does this requirement exist?</span><span aria-hidden="true"><svg class="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg></span></div>
+        <div class="trace-graphic">
+          <div class="trace-node"><code>OUT-001</code><span>Faster invoice payment</span></div>
+          <p class="trace-link">contributes to <span aria-hidden="true">↑</span></p>
+          <div class="trace-node"><code>CAP-001</code><span>Collect payments</span></div>
+          <p class="trace-link">uses capability <span aria-hidden="true">↑</span></p>
+          <div class="trace-node"><code>PROC-001</code><span>Collect an invoice payment</span></div>
+          <p class="trace-link">supports <span aria-hidden="true">↑</span></p>
+          <div class="trace-node selected"><code>REQ-001</code><span>Remind before due date</span></div>
+        </div>
+        <p class="fragment-note">The invoice-reminders example · all records proposed</p>
+      </div>
+      <div class="hero-config tile" data-ui>
+        <div class="fragment-heading"><span>billing.yaml</span><span>Authored intent</span></div>
+        <pre><code><span class="syntax-key">id:</span> REQ-001
+<span class="syntax-key">type:</span> Requirement
+<span class="syntax-key">name:</span> Remind before due date
+<span class="syntax-key">statement:</span> &gt;-
+  Send one reminder three days before
+  the due date if the invoice remains
+  unpaid and the customer can receive email.
+<span class="syntax-key">observe:</span>
+  tests:
+    cases: ["tests/reminders/*"]</code></pre>
+        <p class="fragment-note">A requirement. A reason. A way to check.</p>
+      </div>
+      <div class="hero-close board">
+        <div class="hero-statement tile"><p>Intent, meet evidence.</p><a href="https://github.com/whiteredhouse/exacly">Open source on GitHub <span aria-hidden="true"><svg class="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg></span></a></div>
+        <a class="hero-cta tile" href="#model"><span>Follow one<br>requirement.</span><span class="big-arrow" aria-hidden="true"><svg class="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg></span><span class="cta-caption">Explore the example</span></a>
+      </div>
+    </section>
+
+    <section id="model" class="model-section section-space" aria-labelledby="model-title">
+      <div class="section-intro">
+        <h2 id="model-title" data-enter>A reminder<br>has a reason.</h2>
+        <div data-enter><p class="lead">“Send an email” is only part of the story.</p><p>In Exacly, a requirement connects to the process it supports, the outcome it serves and the systems that implement it. Follow those links before changing the code.</p><p class="small">This fictional billing example is included in the specification.</p></div>
+      </div>
+      <div class="question-board board" data-enter>
+        <div class="question-choices tile">
+          <h3>Ask the model.</h3>
+          <p>One requirement.<br>Three useful questions.</p>
+          <div class="question-controls" hidden role="tablist" aria-label="Questions about the example">
+            <button id="tab-why" type="button" role="tab" aria-selected="true" aria-controls="answer-why" data-question="why">Why does it exist? <span aria-hidden="true"><svg class="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg></span></button>
+            <button id="tab-how" type="button" role="tab" aria-selected="false" aria-controls="answer-how" tabindex="-1" data-question="how">What implements it? <span aria-hidden="true"><svg class="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg></span></button>
+            <button id="tab-gaps" type="button" role="tab" aria-selected="false" aria-controls="answer-gaps" tabindex="-1" data-question="gaps">What’s unverified? <span aria-hidden="true"><svg class="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg></span></button>
+          </div>
+          <a class="text-link" href="./example/">Browse all 10 records <span aria-hidden="true"><svg class="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg></span></a>
+        </div>
+        <div class="answers tile" data-ui>
+          <article id="answer-why" class="answer" aria-labelledby="answer-why-title">
+            <h3 id="answer-why-title">Why it exists</h3>
+            <pre class="command"><code>$ exacly trace REQ-001 -m example</code></pre>
+            <pre class="answer-output"><code>Why
+REQ-001 Requirement: Remind before due date (proposed)
+  supports → PROC-001 Process: Collect an invoice payment
+    uses_capability → CAP-001 Capability: Collect payments
+      contributes_to → OUT-001 Outcome: Faster invoice payment</code></pre>
+            <p>The reminder exists to help freelancers get paid sooner. The model records the intended connection; measuring the outcome is a separate step.</p>
+          </article>
+          <article id="answer-how" class="answer" aria-labelledby="answer-how-title">
+            <h3 id="answer-how-title">What implements it</h3>
+            <pre class="command"><code>$ exacly trace REQ-001 -m example</code></pre>
+            <pre class="answer-output"><code>How
+REQ-001 Requirement: Remind before due date (proposed)
+  implements ← APP-001 Application: Reminder service
+    depends_on → INF-001 Infrastructure: Scheduler
+    depends_on → INF-002 Infrastructure: Message queue
+    depends_on → INF-003 Infrastructure: Billing database
+    reads → INFO-001 Information: Invoice
+    writes → INFO-001 Information: Invoice</code></pre>
+            <p>The reminder service implements the requirement. Its dependencies make the surrounding system visible before a change.</p>
+          </article>
+          <article id="answer-gaps" class="answer" aria-labelledby="answer-gaps-title">
+            <h3 id="answer-gaps-title">What’s unverified</h3>
+            <pre class="command"><code>$ exacly gaps -m example</code></pre>
+            <pre class="answer-output"><code>Result: conforms
+State: none
+
+Requirements not verified in any context (1)
+  REQ-001 Requirement: Remind before due date (proposed)
+
+Requirements not released in any context (1)
+  REQ-001 Requirement: Remind before due date (proposed)</code></pre>
+            <p>The config is valid. No tests or release have been observed. Exacly keeps that uncertainty visible.</p>
+          </article>
+          <p class="fragment-note">Selected CLI output, shortened for display. “example” refers to the included invoice-reminders model.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="evidence" class="evidence-section section-space" aria-labelledby="evidence-title">
+      <div class="section-intro">
+        <h2 id="evidence-title" data-enter>Intent needs<br>evidence.</h2>
+        <div data-enter><p class="lead">A spec can say “done”. A test run can say why.</p><p>Config belongs to people and agents. State is written by tooling from observations, with the source and context attached. Review both as the product changes.</p></div>
+      </div>
+      <div class="evidence-board board">
+        <details class="evidence-step tile" open data-enter><summary>Describe intent<span aria-hidden="true">＋</span></summary><div><p>Write outcomes, requirements, systems and their relationships in YAML. Review intent in the same pull request as the change.</p><pre data-ui><code>observe:
+  tests:
+    workflow: .github/workflows/ci.yml
+    cases: ["tests/reminders/*"]</code></pre></div></details>
+        <details class="evidence-step tile" open data-enter><summary>Observe tests<span aria-hidden="true">＋</span></summary><div><p>In CI, read the bound test results. Record what passed, failed, was skipped or did not run. Keep the reference to the evidence.</p><pre data-ui><code>exacly refresh spec/exacly \
+  --context ci --state reports/state/ci.json \
+  --junit reports/junit.xml \
+  --revision "$GITHUB_SHA"</code></pre></div></details>
+        <details class="evidence-step tile" open data-enter><summary>Check evidence<span aria-hidden="true">＋</span></summary><div><p>Ask what remains unverified. Assess a specific implementation and evaluate the readiness policy your team defines.</p><p class="step-emphasis">Passing tests and observed delivery are separate facts.</p></div></details>
+      </div>
+      <div class="evidence-note" data-enter><p>Missing evidence stays unknown.</p><p>Skipped or unmatched test cases cannot establish a pass. A successful test run does not establish deployment.</p><a href="https://github.com/whiteredhouse/exacly/blob/main/python/README.md#refresh">Read how observations work <svg class="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg></a></div>
+    </section>
+
+    <section id="agents" class="agents-section section-space" aria-labelledby="agents-title">
+      <div class="agents-heading tile"><h2 id="agents-title" data-enter>Give agents<br>the why.</h2><p class="lead" data-enter>More code needs more context.</p><p data-enter>Connect your coding agent to the same product model your team reviews. Before editing, it can trace purpose, inspect requirements and find what a change might affect.</p><a class="text-link" href="https://github.com/whiteredhouse/exacly/blob/main/skills/exacly/SKILL.md" data-enter>Read the Exacly agent skill <svg class="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg></a></div>
+      <div class="agent-interface tile" data-ui data-enter>
+        <div class="fragment-heading"><span>Exacly MCP</span><span>4 read-only tools</span></div>
+        <dl class="tool-list"><div><dt><code>exacly_show</code></dt><dd>What is the requirement?</dd></div><div><dt><code>exacly_trace</code></dt><dd>Why does it exist?</dd></div><div><dt><code>exacly_impact</code></dt><dd>What could this change affect?</dd></div><div><dt><code>exacly_gaps</code></dt><dd>What is missing or failing?</dd></div></dl>
+        <div class="agent-output"><pre><code>$ exacly impact APP-001 -m example
+
+Outcomes: OUT-001
+
+Check again
+  REQ-001 Remind before due date:
+  .github/workflows/ci.yml cases tests/reminders/*</code></pre></div>
+        <p class="fragment-note">Selected output from the included example. Potential impact tells the agent what to check again.</p>
+      </div>
+      <div class="mcp-setup tile"><p>Add to Claude Code from a repository containing your model.</p><pre><code id="mcp-command">claude mcp add exacly -- uvx exacly mcp</code></pre><button class="copy-button" type="button" data-copy="mcp-command" hidden>Copy command <span aria-hidden="true"><svg class="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg></span></button></div>
+    </section>
+
+    <section class="today-section section-space" aria-labelledby="today-title">
+      <div class="today-heading" data-enter><h2 id="today-title">Working now.<br>Growing next.</h2><p>Exacly is open source and at 0.x. The specification and tools are evolving.</p></div>
+      <div class="today-content" data-enter><h3>Use today</h3><p>Validate config. Refresh state from test results. Trace purpose and inspect change impact. Browse a model, connect an agent, or evaluate a readiness policy in CI.</p><a class="text-link" href="https://github.com/whiteredhouse/exacly-action">Use the GitHub Action <svg class="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg></a><h3>Planning on main</h3><p><code>exacly plan</code> proposes verification work for a selected target and policy. It distinguishes known failures, missing evidence and missing observation bindings.</p><p class="small">Available on main ahead of the next package release. Plans are advisory; task dispatch and automated apply remain planned. The PR “plan” view still reports model changes and potential impact.</p></div>
+    </section>
+
+    <section id="start" class="start-section section-space" aria-labelledby="start-title">
+      <div class="start-heading tile"><h2 id="start-title" data-enter>Start with one<br>requirement.</h2><p class="lead" data-enter>Install. Validate. Ask why.</p><p data-enter>Try the included model, then describe one slice of your own product.</p><a class="text-link" href="https://github.com/whiteredhouse/exacly/blob/main/python/README.md" data-enter>Read the CLI documentation <svg class="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg></a></div>
+      <div class="start-commands tile" data-ui data-enter><div class="fragment-heading"><span>Your terminal</span><span>Python 3.12+ · uv</span></div><pre><code id="start-command">uv tool install exacly
+
+git clone https://github.com/whiteredhouse/exacly.git
+cd exacly
+
+exacly validate spec/examples/0.2/invoice-reminders
+exacly trace REQ-001 \
+  -m spec/examples/0.2/invoice-reminders</code></pre><button class="copy-button" type="button" data-copy="start-command" hidden>Copy commands <span aria-hidden="true"><svg class="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg></span></button><p class="fragment-note">Need uv? <a href="https://docs.astral.sh/uv/getting-started/installation/">Install it here <svg class="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg></a></p></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-links"><p>Product intent, connected to evidence.</p><nav aria-label="Footer navigation"><a href="https://github.com/whiteredhouse/exacly">GitHub <svg class="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg></a><a href="https://pypi.org/project/exacly/">PyPI <svg class="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg></a><a href="https://github.com/whiteredhouse/exacly/tree/main/spec">Specification <svg class="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg></a><a href="https://github.com/whiteredhouse/exacly/blob/main/LICENSE">Apache 2.0 <svg class="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg></a></nav></div>
+    <a class="footer-name" href="#main" aria-label="Exacly — back to top">exacly<span aria-hidden="true"><svg class="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg></span></a>
+    <p class="footer-status">An open product model. Early, useful, evolving.</p>
+  </footer>
+  <p id="copy-status" class="sr-only" role="status" aria-live="polite"></p>
+</body>
+</html>

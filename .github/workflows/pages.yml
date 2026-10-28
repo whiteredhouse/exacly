@@ -1,0 +1,88 @@
+name: Landing page
+
+on:
+  pull_request:
+    paths:
+      - "docs/site/**"
+      - ".github/workflows/pages.yml"
+  push:
+    branches: [main]
+    paths:
+      - "docs/site/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check the static site's local references
+        run: |
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          from urllib.parse import unquote, urlsplit
+
+          root = Path("docs/site").resolve()
+          assert (root / "index.html").is_file(), "Missing landing page"
+          assert (root / ".nojekyll").is_file(), "Missing .nojekyll"
+
+          class Page(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.references = []
+
+              def handle_starttag(self, tag, attrs):
+                  for name, value in attrs:
+                      if name in ("href", "src") and value:
+                          self.references.append(value)
+
+          checked = 0
+          for source in root.rglob("*.html"):
+              page = Page()
+              page.feed(source.read_text(encoding="utf-8"))
+              for reference in page.references:
+                  url = urlsplit(reference)
+                  if url.scheme or url.netloc or not url.path:
+                      continue
+                  assert not url.path.startswith("/"), (
+                      f"{source}: use a relative URL for GitHub project Pages: {reference}"
+                  )
+                  target = (source.parent / unquote(url.path)).resolve()
+                  assert target.is_relative_to(root), (
+                      f"{source}: reference leaves the published directory: {reference}"
+                  )
+                  if target.is_dir():
+                      target /= "index.html"
+                  assert target.is_file(), f"{source}: missing local reference: {reference}"
+                  checked += 1
+          print(f"Checked {checked} local references")
+          PY
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/site
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
