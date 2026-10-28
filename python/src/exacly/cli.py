@@ -3,6 +3,7 @@
 exacly validate PATH... [--revision REV] [--date YYYY-MM-DD] [--json]
 exacly refresh PATH... --context CONTEXT --state FILE [--junit FILE...] [--distribution] [run options]
 exacly observe manual-qa PATH... --target FILE --state FILE [--revision REV] [--root DIR]
+exacly plan [-m PATH]... --policy FILE --target FILE --date YYYY-MM-DD [--json] [--out FILE]
 exacly show|trace|impact|gaps [-m PATH]... [--json] ...; exacly mcp [-m PATH]...
 exacly view plan [--base REV] | site [--out DIR]
 exacly-validate and exacly-refresh are the first two under their names before 0.2.0, kept for one release
@@ -17,6 +18,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from collections import Counter
 from collections.abc import Callable, Iterable
 from fnmatch import fnmatchcase
@@ -26,7 +28,7 @@ from typing import Any
 
 import yaml
 
-from exacly import manual_qa, mcp, policy, query, views
+from exacly import manual_qa, mcp, planning, policy, query, views
 from exacly.applicability import Target
 from exacly.core import binding_words, bindings, identity, is_state, validate_documents
 from exacly.refresh import RefreshError, Run, read_junit, refresh, unattributed
@@ -527,6 +529,44 @@ def view_main(args: argparse.Namespace) -> int:
     return 0
 
 
+def write_plan(out: Path, paths: list[Path], inputs: Iterable[Path], text: str) -> None:
+    """Save a derived artifact outside its inputs and model folders, replacing it atomically.
+
+    A glob's static prefix is treated as a model folder too: a later recursive model read must not
+    accidentally load a saved plan. Resolving paths also protects inputs accessed through symlink aliases.
+    """
+    try:
+        destination = out.resolve()
+        # Atomic replacement replaces the final path entry, including a dangling symlink, rather than
+        # following it. Guard that location as well as the symlink's resolved target.
+        location = out.parent.resolve() / out.name
+    except RuntimeError as error:
+        raise ValueError(f"--out cannot be resolved: {error}") from error
+    destinations = (destination, location)
+    if destination in {p.resolve() for p in inputs}:
+        raise ValueError("--out cannot overwrite a model, state, policy or target input")
+    for path in paths:
+        folder = static_part(path).resolve() if is_pattern(path) else path.resolve() if path.is_dir() else None
+        if folder is not None and any(p.is_relative_to(folder) for p in destinations):
+            raise ValueError("--out must be outside model folders and model glob prefixes")
+    # A glob can traverse a symlink beyond its static prefix. Guard the real parent of each selected file.
+    for path in paths:
+        if is_pattern(path):
+            for name in glob.glob(str(path)):
+                if Path(name).is_file() and any(p.is_relative_to(Path(name).resolve().parent) for p in destinations):
+                    raise ValueError("--out must be outside model folders and model glob prefixes")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=out.parent, delete=False) as file:
+            temporary = Path(file.name)
+            file.write(text)
+        os.replace(temporary, out)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
 def exacly_main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv and argv[0] in ("validate", "refresh"):
@@ -561,6 +601,11 @@ def exacly_main(argv: list[str] | None = None) -> int:
     gate.add_argument("--policy", required=True, type=Path, help="policy YAML/JSON outside the model folder")
     gate.add_argument("--target", required=True, type=Path, help="explicit implementation target YAML/JSON")
     gate.add_argument("--date", type=dt.date.fromisoformat, default=dt.date.today())
+    plan = commands.add_parser("plan", parents=[common], help="propose read-only verification work for a target")
+    plan.add_argument("--policy", required=True, type=Path, help="verification-only readiness policy YAML/JSON")
+    plan.add_argument("--target", required=True, type=Path, help="explicit implementation target YAML/JSON")
+    plan.add_argument("--date", required=True, type=dt.date.fromisoformat, help="explicit evaluation date YYYY-MM-DD")
+    plan.add_argument("--out", type=Path, help="save JSON outside model folders, without changing input files")
     show = commands.add_parser("show", parents=[common], help="one record: relationships, state and findings")
     show.add_argument("record")
     trace = commands.add_parser("trace", parents=[common], help="why a record exists, and how it is realized")
@@ -577,6 +622,19 @@ def exacly_main(argv: list[str] | None = None) -> int:
     view.add_argument("--base", metavar="REV", help="plan: the Git revision the change is against (default: main)")
     view.add_argument("--out", type=Path, metavar="DIR", help="site: the folder to write (default: reports/site)")
     args = parser.parse_args(argv)
+    if args.command == "plan":
+        try:
+            paths = args.model or [DEFAULT_MODEL]
+            documents = load(paths)
+            answer = planning.create(documents, read(args.policy), Target(read(args.target)), args.date)
+            saved = json.dumps(answer, indent=2, sort_keys=True, default=str) + "\n"
+            if args.out is not None:
+                write_plan(args.out, paths, [*(Path(name) for name in documents), args.policy, args.target], saved)
+        except (query.QueryError, ValueError, OSError) as error:
+            print(f"exacly plan: {error}", file=sys.stderr)
+            return 2
+        print(saved if args.json else planning.as_text(answer), end="" if args.json else "\n")
+        return 0
     if args.command == "gate":
         try:
             target = Target(read(args.target))

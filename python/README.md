@@ -7,6 +7,7 @@ The `exacly` command and Python package work with an Exacly model, either a 0.1 
 - [`exacly show`, `trace`, `impact` and `gaps`](#questions) answer questions about the model, and [`exacly view`](#views) renders them for people.
 - [`exacly assess`](#assess-an-implementation-target) projects observations onto an explicit implementation and scope.
 - [`exacly gate`](#evaluate-readiness-policy) evaluates a named readiness policy against that target, separately from conformance.
+- [`exacly plan`](#plan-verification-work) proposes work for verification prerequisites against that target, with an explicit evaluation date.
 - [`exacly mcp`](#mcp-server) answers show, trace, impact and gaps questions for coding agents.
 
 ```sh
@@ -279,3 +280,48 @@ Each check names a Requirement and requires `verification` (passed) or `delivery
 Exit status is 0 only for `satisfied`; 1 for `not_satisfied` or `unknown`; 2 for invalid policy, target, or unreadable/schema-invalid input. Unknown readiness can therefore block CI without pretending a test failed. Expired negative evidence is retained historically but cannot establish a current failure. A recorded negative assessment without evidence can still express a failure by its required reason, as allowed by the specification.
 
 Reports identify policy name/version, selected target, as-of date, individual checks, evidence, excluded assessments, and missing bindings. Delivery environment defaults to target context when omitted; verification without environment establishes only the selected source-level result. An environment-specific gate requires environment-specific verification evidence. A source check plus publication gate does not establish production behavior. The command evaluates only the explicit policy; it is not a general proof of release safety, artifact provenance, or complete acceptance-criteria coverage.
+
+## Plan verification work
+
+`exacly plan` proposes the next observation, investigation or configuration decision for each verification prerequisite in a named policy. It uses the same target applicability and readiness evaluation as `assess` and `gate`. A passing result in another revision or environment cannot satisfy the selected goal.
+
+Use a verification-only policy and an explicit evaluation date:
+
+```yaml
+# policies/verification.yaml
+name: verification-work
+version: '1'
+requirements:
+  - record: REQ-001
+    dimensions: [verification]
+```
+
+```sh
+exacly plan -m spec/exacly --policy policies/verification.yaml \
+  --target targets/main.yaml --date 2026-10-28
+exacly plan -m spec/exacly --policy policies/verification.yaml \
+  --target targets/main.yaml --date 2026-10-28 --json --out reports/plan.json
+```
+
+`--date` is required so that evidence expiry has an explicit evaluation time. Policies containing delivery checks are rejected in this first version. `exacly view plan --base main` remains the PR model-change view; the top-level `plan` command evaluates verification prerequisites for a selected implementation.
+
+Each check retains its readiness result, evidence, exclusions and missing bindings. The proposed next step follows this order:
+
+| Finding | Proposal |
+| --- | --- |
+| Applicable evidence satisfies the prerequisite | No action. |
+| An applicable verification result failed | `investigate_failure`, retaining the failure reason even if other results are missing. |
+| Verification remains unknown and the Requirement has no verification binding | `blocked_configuration`, requesting an observation configuration decision. |
+| Other unknown verification, including absent, skipped, mismatched or expired results | `collect_evidence`, explaining the observations still needed. |
+
+A schema-valid model that does not conform produces a `blocked` plan with validation findings and no action proposals. A valid plan with proposals has status `work_proposed`; one whose prerequisites are all satisfied has status `satisfied`. Missing evidence never becomes an implementation task automatically.
+
+The saved JSON has `schema_version: "0.1.0"` and carries tool and model identity, the target, policy identity and digest, evaluation date, config and state fingerprints, state lineage and serials, checks, actions and a plan digest. Each action identifies its Requirement, dimension, reason, criteria and binding fingerprints, and observable completion condition. Identical inputs and evaluation date produce the same plan; authored array order remains significant. Action IDs exclude the evaluation date, state serial and mutable diagnostic reasons, so those changes preserve identity for the same unresolved goal and proposal kind. A changed policy, target, criteria, binding or proposal kind changes the relevant action identity.
+
+The default human-readable view and `--json` render the same plan. `--out` saves that plan as JSON; keep it outside model directories, including the static folder prefix of a model glob such as `spec/exacly/*.yaml`. Output paths that resolve to model, state, policy or target inputs are refused, including symlink aliases. Planning leaves those inputs untouched.
+
+Exit status is 0 when a plan is produced, including a blocked plan or one with unresolved prerequisites, and 2 for invalid inputs or an output error. Use `gate` when CI needs a readiness exit status.
+
+Plans are advisory. The command does not create tasks, dispatch agents, change observations or close pending work. Its fingerprints identify supplied content; they do not authenticate an evidence producer or authorize execution. Automatic completion still needs the observer identities and trusted evidence admission described in the [plan and apply research](../docs/automated-plan-apply-research.md).
+
+In Python, `exacly.planning.create(documents, policy_doc, target, date)` produces the same plan from named documents, a policy, an `exacly.applicability.Target` and a date. `exacly.planning.as_text(plan)` renders it for people, and `exacly.planning.SCHEMA` defines the JSON artifact contract.
