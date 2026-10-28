@@ -73,6 +73,7 @@ Exacly borrows the plan and apply loop from infrastructure as code, and the spec
 | **Ask** | Show a record, trace why it exists and what realizes it, list what a change affects and what the model is missing. | [`exacly`](python/README.md#questions) show, trace, impact and gaps; [views](python/README.md#views) as a pull request plan and a site; an [MCP server and skill](#with-coding-agents) for agents |
 | **Plan** | Propose the next observation or investigation for each verification prerequisite in a policy, against an explicit implementation target. | [`exacly plan`](python/README.md#plan-verification-work), read-only verification proposals; delivery planning remains planned |
 | **Apply** | Turn the plan into tasks for people or agents. The next refresh closes them. | Planned |
+| **Reconcile** | Check whether a selected plan action's verification goal is satisfied by fresh admitted evidence for an output implementation. | [`exacly reconcile github-actions --dry-run`](python/README.md#preview-verification-reconciliation), read-only preview; task closure remains planned |
 
 ## Where it comes from
 
