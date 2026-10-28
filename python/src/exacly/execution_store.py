@@ -13,6 +13,7 @@ import os
 import re
 import sqlite3
 import stat
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -26,6 +27,12 @@ except ImportError:  # pragma: no cover - the filesystem boundary requires POSIX
 Doc = dict[str, Any]
 APPLICATION_ID = 0x4558434C  # EXCL
 USER_VERSION = 1
+DEFAULT_LOCK_TIMEOUT = 30.0
+MAX_LOCK_TIMEOUT = (2**31 - 1) / 1000
+LOCK_RETRY_INTERVAL = 0.01
+LOCK_TIMEOUT_MESSAGE = (
+    "local execution store lock timed out; retry after other store operations finish or increase --lock-timeout"
+)
 RECORD_LIMIT = 8 * 1024 * 1024
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 KEYS = {
@@ -57,6 +64,46 @@ SCHEMA = {
 
 class StoreError(ValueError):
     """The local store or proposed registration does not meet the storage contract."""
+
+
+class LockTimeoutError(StoreError):
+    """The shared wait budget expired; the caller can retry without repairing the store."""
+
+
+class Deadline:
+    """One monotonic lock-wait budget shared by directory and SQLite operations.
+
+    A zero timeout permits an immediate lock attempt. Call check only after a failed attempt or when
+    an operation explicitly needs time left; remaining can always configure a nonblocking SQLite wait.
+    """
+
+    def __init__(self, lock_timeout: float = DEFAULT_LOCK_TIMEOUT) -> None:
+        require(type(lock_timeout) in (int, float), "lock timeout must be a finite nonnegative number of seconds")
+        try:
+            duration = float(lock_timeout)
+        except (ValueError, OverflowError):
+            raise StoreError("lock timeout exceeds the supported SQLite wait") from None
+        require(math.isfinite(duration) and duration >= 0, "lock timeout must be finite and nonnegative")
+        require(duration <= MAX_LOCK_TIMEOUT, "lock timeout exceeds the supported SQLite wait")
+        self._expires = time.monotonic() + duration
+
+    def remaining(self) -> float:
+        return max(0.0, self._expires - time.monotonic())
+
+    def check(self) -> None:
+        if self.remaining() <= 0:
+            raise LockTimeoutError(LOCK_TIMEOUT_MESSAGE)
+
+
+def busy_timeout(connection: sqlite3.Connection, deadline: Deadline) -> None:
+    """Refresh SQLite's millisecond wait from the same remaining directory-lock budget."""
+    milliseconds = min(2**31 - 1, int(deadline.remaining() * 1000))
+    connection.execute(f"PRAGMA busy_timeout={milliseconds}")
+
+
+def sqlite_lock_error(error: sqlite3.Error) -> bool:
+    code = getattr(error, "sqlite_errorcode", None)
+    return isinstance(code, int) and code & 0xFF in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED)
 
 
 def require(condition: Any, message: str) -> None:
@@ -185,13 +232,28 @@ def location(path: Path) -> Path:
 
 
 @contextmanager
-def locked(path: Path, *, write: bool) -> Iterator[tuple[Path, int]]:
+def locked(
+    path: Path,
+    *,
+    write: bool,
+    lock_timeout: float = DEFAULT_LOCK_TIMEOUT,
+    deadline: Deadline | None = None,
+) -> Iterator[tuple[Path, int]]:
+    budget = deadline if deadline is not None else Deadline(lock_timeout)
     absolute = location(path)
     directory_fd = os.open(absolute.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
         # Lock before creation so a concurrent caller cannot see a half-initialized database.
         require(fcntl is not None, "local execution storage requires POSIX locks")
-        fcntl.flock(directory_fd, fcntl.LOCK_EX if write else fcntl.LOCK_SH)
+        mode = (fcntl.LOCK_EX if write else fcntl.LOCK_SH) | fcntl.LOCK_NB
+        while True:
+            try:
+                fcntl.flock(directory_fd, mode)
+                break
+            except (BlockingIOError, InterruptedError):
+                budget.check()
+                time.sleep(min(LOCK_RETRY_INTERVAL, budget.remaining()))
+                budget.check()
         require(location(path) == absolute, "execution store path changed")
         yield absolute, directory_fd
     finally:
@@ -231,7 +293,10 @@ def header(fd: int) -> None:
 
 
 @contextmanager
-def database(path: Path, *, create: bool) -> Iterator[tuple[sqlite3.Connection, bool]]:
+def database(
+    path: Path, *, create: bool, deadline: Deadline | None = None
+) -> Iterator[tuple[sqlite3.Connection, bool]]:
+    budget = deadline if deadline is not None else Deadline()
     auxiliary_files(path)
     if os.path.lexists(path):
         check_file_info(path.lstat())
@@ -251,7 +316,10 @@ def database(path: Path, *, create: bool) -> Iterator[tuple[sqlite3.Connection, 
         if not created:
             header(fd)
         connection = sqlite3.connect(
-            path.as_uri() + ("?mode=rw" if create else "?mode=ro"), uri=True, timeout=30, isolation_level=None
+            path.as_uri() + ("?mode=rw" if create else "?mode=ro"),
+            uri=True,
+            timeout=budget.remaining(),
+            isolation_level=None,
         )
         current = path.lstat()
         require((current.st_dev, current.st_ino) == (identity.st_dev, identity.st_ino), "execution store file changed")
@@ -271,40 +339,44 @@ def database(path: Path, *, create: bool) -> Iterator[tuple[sqlite3.Connection, 
             os.close(fd)
 
 
-def validate(connection: sqlite3.Connection) -> tuple[dict[str, Doc], dict[str, str], dict[str, Doc]]:
+def validate(
+    connection: sqlite3.Connection, *, deadline: Deadline | None = None
+) -> tuple[dict[str, Doc], dict[str, str], dict[str, Doc]]:
+    def execute(statement: str) -> sqlite3.Cursor:
+        # busy_timeout is connection-local. It does not write or migrate the inspected database.
+        if deadline is not None:
+            busy_timeout(connection, deadline)
+        return connection.execute(statement)
+
     require(
-        connection.execute("PRAGMA application_id").fetchone() == (APPLICATION_ID,),
+        execute("PRAGMA application_id").fetchone() == (APPLICATION_ID,),
         "unrecognized execution store application",
     )
     require(
-        connection.execute("PRAGMA user_version").fetchone() == (USER_VERSION,),
+        execute("PRAGMA user_version").fetchone() == (USER_VERSION,),
         "unsupported execution store schema version",
     )
     require(
-        connection.execute("PRAGMA journal_mode").fetchone() == ("delete",),
+        execute("PRAGMA journal_mode").fetchone() == ("delete",),
         "execution store requires DELETE journaling",
     )
-    objects = connection.execute(
-        "SELECT type, name, tbl_name, sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'"
-    ).fetchall()
+    objects = execute("SELECT type, name, tbl_name, sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'").fetchall()
     expected = sorted(("table", name, name, sql) for name, sql in SCHEMA.items())
     require(sorted(objects) == expected, "unrecognized execution store schema")
-    require(connection.execute("PRAGMA quick_check").fetchall() == [("ok",)], "execution store integrity check failed")
-    require(not connection.execute("PRAGMA foreign_key_check").fetchall(), "execution store relationships are invalid")
+    require(execute("PRAGMA quick_check").fetchall() == [("ok",)], "execution store integrity check failed")
+    require(not execute("PRAGMA foreign_key_check").fetchall(), "execution store relationships are invalid")
     records: dict[str, Doc] = {}
-    for identity, pending, supersedes, text in connection.execute(
-        "SELECT id, pending_key, supersedes, record_json FROM bindings"
-    ):
+    for identity, pending, supersedes, text in execute("SELECT id, pending_key, supersedes, record_json FROM bindings"):
         value = decoded(text)
         require(
             (value["id"], value["pending_key"], value["supersedes"]) == (identity, pending, supersedes),
             "stored binding identity is inconsistent",
         )
         records[identity] = value
-    active = dict(connection.execute("SELECT pending_key, binding_id FROM active"))
+    active = dict(execute("SELECT pending_key, binding_id FROM active"))
     watermarks = {
         pending: {"serial": serial, "digest": digest}
-        for pending, serial, digest in connection.execute("SELECT pending_key, serial, digest FROM watermarks")
+        for pending, serial, digest in execute("SELECT pending_key, serial, digest FROM watermarks")
     }
     pending_keys = {value["pending_key"] for value in records.values()}
     require(set(active) == set(watermarks) == pending_keys, "execution store active bindings are incomplete")
@@ -339,22 +411,25 @@ def validate(connection: sqlite3.Connection) -> tuple[dict[str, Doc], dict[str, 
     return records, active, watermarks
 
 
-def configure(connection: sqlite3.Connection) -> None:
-    connection.execute("PRAGMA journal_mode=DELETE")
-    connection.execute("PRAGMA synchronous=FULL")
-    connection.execute("PRAGMA foreign_keys=ON")
+def configure(connection: sqlite3.Connection, *, deadline: Deadline | None = None) -> None:
+    for statement in ("PRAGMA journal_mode=DELETE", "PRAGMA synchronous=FULL", "PRAGMA foreign_keys=ON"):
+        if deadline is not None:
+            busy_timeout(connection, deadline)
+        connection.execute(statement)
 
 
-def put(path: Path, value: Doc) -> Doc:
+def put(path: Path, value: Doc, *, lock_timeout: float = DEFAULT_LOCK_TIMEOUT) -> Doc:
     """Atomically append a binding, explicitly supersede the active binding, or retry its identity."""
+    deadline = Deadline(lock_timeout)
     proposed = record(value)
     try:
         with (
-            locked(path, write=True) as (absolute, directory_fd),
-            database(absolute, create=True) as (connection, created),
+            locked(path, write=True, deadline=deadline) as (absolute, directory_fd),
+            database(absolute, create=True, deadline=deadline) as (connection, created),
         ):
             if created:
-                configure(connection)
+                configure(connection, deadline=deadline)
+                busy_timeout(connection, deadline)
                 connection.execute("BEGIN IMMEDIATE")
                 connection.execute(f"PRAGMA application_id={APPLICATION_ID}")
                 connection.execute(f"PRAGMA user_version={USER_VERSION}")
@@ -364,8 +439,10 @@ def put(path: Path, value: Doc) -> Doc:
                 active: dict[str, str] = {}
                 watermarks: dict[str, Doc] = {}
             else:
-                records, active, watermarks = validate(connection)
-                configure(connection)
+                records, active, watermarks = validate(connection, deadline=deadline)
+                busy_timeout(connection, deadline)
+                configure(connection, deadline=deadline)
+                busy_timeout(connection, deadline)
                 connection.execute("BEGIN IMMEDIATE")
             identity, pending = proposed["id"], proposed["pending_key"]
             current = active.get(pending)
@@ -406,23 +483,33 @@ def put(path: Path, value: Doc) -> Doc:
                 "ON CONFLICT(pending_key) DO UPDATE SET serial=excluded.serial, digest=excluded.digest",
                 (pending, capture["serial"], capture["digest"]),
             )
+            busy_timeout(connection, deadline)
             connection.commit()
             if created:
                 os.fsync(directory_fd)
             return existing if existing is not None else proposed
     except StoreError:
         raise
-    except (sqlite3.Error, OSError, UnicodeError, OverflowError, RecursionError):
+    except sqlite3.Error as error:
+        if sqlite_lock_error(error):
+            raise LockTimeoutError(LOCK_TIMEOUT_MESSAGE) from None
+        raise StoreError("local execution store registration failed") from None
+    except (OSError, UnicodeError, OverflowError, RecursionError):
         raise StoreError("local execution store registration failed") from None
 
 
-def get(path: Path, identity: str) -> Doc:
+def get(path: Path, identity: str, *, lock_timeout: float = DEFAULT_LOCK_TIMEOUT) -> Doc:
     """Read an existing binding and its current status without creating or recovering any file."""
+    deadline = Deadline(lock_timeout)
     require(isinstance(identity, str) and DIGEST.fullmatch(identity), "invalid execution binding identity")
     try:
-        with locked(path, write=False) as (absolute, _), database(absolute, create=False) as (connection, _created):
+        with (
+            locked(path, write=False, deadline=deadline) as (absolute, _),
+            database(absolute, create=False, deadline=deadline) as (connection, _created),
+        ):
+            busy_timeout(connection, deadline)
             connection.execute("BEGIN")
-            records, active, watermarks = validate(connection)
+            records, active, watermarks = validate(connection, deadline=deadline)
             require(identity in records, "execution binding does not exist")
             binding = records[identity]
             pending = binding["pending_key"]
@@ -435,5 +522,9 @@ def get(path: Path, identity: str) -> Doc:
             }
     except StoreError:
         raise
-    except (sqlite3.Error, OSError, UnicodeError, OverflowError, RecursionError):
+    except sqlite3.Error as error:
+        if sqlite_lock_error(error):
+            raise LockTimeoutError(LOCK_TIMEOUT_MESSAGE) from None
+        raise StoreError("local execution store read failed") from None
+    except (OSError, UnicodeError, OverflowError, RecursionError):
         raise StoreError("local execution store read failed") from None

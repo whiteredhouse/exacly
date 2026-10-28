@@ -228,7 +228,7 @@ def validate_record(record: Any) -> Doc:
     return dict(normalized)
 
 
-def register(ledger: Path, request: Registration) -> Doc:
+def register(ledger: Path, request: Registration, *, lock_timeout: float = execution_store.DEFAULT_LOCK_TIMEOUT) -> Doc:
     """Record an explicit operator association, without observing evidence or changing pending work."""
     plan, action, target, chosen, state = contract_inputs(request)
     location(ledger, chosen)
@@ -258,12 +258,12 @@ def register(ledger: Path, request: Registration) -> Doc:
     }
     record["id"] = record_identity(record)
     validate_record(record)
-    return validate_record(execution_store.put(ledger, record))
+    return validate_record(execution_store.put(ledger, record, lock_timeout=lock_timeout))
 
 
-def get(ledger: Path, binding_id: str) -> Doc:
+def get(ledger: Path, binding_id: str, *, lock_timeout: float = execution_store.DEFAULT_LOCK_TIMEOUT) -> Doc:
     """Inspect an existing protected ledger; exported records cannot substitute for this read."""
-    envelope = execution_store.get(ledger, binding_id)
+    envelope = execution_store.get(ledger, binding_id, lock_timeout=lock_timeout)
     envelope["binding"] = validate_record(envelope["binding"])
     return envelope
 
@@ -279,9 +279,10 @@ def match(
     trust_policy: Any,
     output_target: Target,
     date: dt.date,
+    lock_timeout: float = execution_store.DEFAULT_LOCK_TIMEOUT,
 ) -> tuple[bool, str, Doc]:
     """Check a registered association against a current pending item without modifying the ledger."""
-    envelope = get(ledger, binding_id)
+    envelope = get(ledger, binding_id, lock_timeout=lock_timeout)
     binding = envelope["binding"]
     contract = binding["contract"]
     pending = contract["pending"]

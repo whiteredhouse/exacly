@@ -10,6 +10,7 @@ The `exacly` command and Python package work with an Exacly model, either a 0.1 
 - [`exacly gate`](#evaluate-readiness-policy) evaluates a named readiness policy against that target, separately from conformance.
 - [`exacly plan`](#plan-verification-work) proposes work for verification prerequisites against that target, with an explicit evaluation date.
 - [`exacly executions register` and `show`](#register-execution-bindings) record and inspect operator-controlled bindings between existing pending work and reviewed verification contracts.
+- [`exacly executions inspect`, `backup` and `recover`](#maintain-an-execution-ledger) diagnose, back up and recover an explicitly selected ledger without changing its source files.
 - [`exacly reconcile github-actions --dry-run`](#preview-verification-reconciliation) previews whether fresh admitted evidence satisfies a selected plan action's verification goal.
 - [`exacly mcp`](#mcp-server) answers show, trace, impact and gaps questions for coding agents.
 
@@ -182,6 +183,7 @@ candidate = propose_policy(
         "spec/exacly/admission.yaml",
         "spec/exacly/reconciliation.yaml",
         "spec/exacly/executions.yaml",
+        "spec/exacly/execution-maintenance.yaml",
     ],
     producer=proposal["producer"],
     observer_paths=proposal["observer_paths"],
@@ -463,13 +465,53 @@ The store keeps the latest registered state serial and digest for each pending i
 
 The watermark guards registered history for that pending item. It does not authenticate global state freshness or prove that the supplied file is the latest filesystem snapshot; a future state-changing closure operation still needs an exact-state concurrency check.
 
-Inspect a binding without changing the database:
+Read a binding without changing the database:
 
 ```sh
 exacly executions show --ledger "$EXACLY_LEDGER_FILE" --binding "$EXACLY_BINDING_ID" --json
 ```
 
-Inspection requires an existing valid ledger; unknown schemas and existing journal or WAL sidecars are refused. Read-only operations do not initialize, migrate or recover the store. In Python, `exacly.executions.Registration` describes the explicit registration inputs; `register(ledger_path, request)` writes the binding, `get(ledger_path, binding_id)` reads it, and `as_text(record)` renders the result. `exacly.executions.SCHEMA` defines each immutable registration record's `0.1.0` format; inspection returns that record together with its current active status and watermark.
+Show and bound-preview reads require an existing valid ledger; unknown schemas and existing journal or WAL sidecars are refused. They do not initialize, migrate or recover the store. Use the explicit maintenance commands below to diagnose a refused ledger.
+
+All ledger commands accept `--lock-timeout SECONDS`, with a default of 30 seconds. The value must be finite and nonnegative; `0` makes an immediate lock attempt and can succeed when the ledger is free. Each ledger operation uses one monotonic budget for its directory and SQLite lock waits rather than giving each wait a new allowance. A timeout returns an actionable error without changing ledger data. This is a lock-wait budget, not an HTTP timeout or a limit on the whole operation's copying or computation.
+
+In Python, `exacly.executions.Registration` describes the explicit registration inputs; `register(ledger_path, request, lock_timeout=30)` writes the binding, `get(ledger_path, binding_id, lock_timeout=30)` reads it, and `as_text(record)` renders the result. `exacly.executions.SCHEMA` defines each immutable registration record's `0.1.0` format; show returns that record together with its current active status and watermark.
+
+## Maintain an execution ledger
+
+Maintenance is explicit and offline. Start with a read-only diagnosis:
+
+```sh
+exacly executions inspect --ledger "$EXACLY_LEDGER_FILE" --lock-timeout 5 --json
+```
+
+Inspection checks the source without opening SQLite when residue or an unknown format makes that unsafe. A clean supported ledger exits 0. A ledger requiring recovery, an unsupported format or corruption exits 1; invalid inputs and operational errors exit 2. Normal registration, show and bound previews continue to refuse sidecars and never recover implicitly.
+
+Back up a clean, valid ledger into a new directory:
+
+```sh
+exacly executions backup --ledger "$EXACLY_LEDGER_FILE" \
+  --out "$EXACLY_LEDGER_BACKUP_DIR" --json
+```
+
+Backup uses SQLite's consistent backup operation and validates the copied store. It writes `ledger.sqlite3` and a manifest in the destination, leaving the source database unchanged. The copy retains the same binding identities, history, watermarks and approval limits; a backup does not grant new authority.
+
+For a supported interrupted SQLite DELETE-journal transaction, recover into a separate new directory:
+
+```sh
+exacly executions recover --ledger "$EXACLY_LEDGER_FILE" \
+  --out "$EXACLY_LEDGER_RECOVERY_DIR" --json
+```
+
+Recovery first preserves raw copies of the source database and rollback journal under `raw/`. It recovers a working copy under `recovered/ledger.sqlite3`, then validates the complete schema, binding records, supersession chains and watermarks and writes a manifest with relative copy paths. Only a valid result is published atomically. Source database and journal files remain untouched. Unknown schemas, WAL/SHM, super-journals and partial initialization are diagnosed but not recovered: recovery exits 2 without publishing an output bundle. Failed copy validation also publishes no partial bundle; the original files remain available for diagnosis.
+
+If final directory synchronization fails after publication, the complete copy is retained and the error asks you to inspect it before retrying. Reports distinguish the supported `store` format from the actual `observed_store` header, including unsupported headers.
+
+Backup and recovery succeed with exit 0; errors exit 2. Their destination must be a new directory outside Git working trees, model folders and protected inputs, with no source overlap or overwrite. Created directories use POSIX mode `0700` and files `0600`. These operations retain the same operator-controlled runtime and same-user limitations as registration.
+
+After reviewing a recovered copy, explicitly select its ledger path and cut over to one canonical ledger. Do not use the old and recovered copies as parallel active authorities. Manifests describe the operation and retained content; they do not authenticate global freshness or prove that a copy is the latest ledger.
+
+In Python, `exacly.execution_maintenance.inspect(ledger_path)`, `backup(ledger_path, output_directory)` and `recover(ledger_path, output_directory)` return maintenance reports; each accepts the optional `lock_timeout` keyword. `as_text(report)` renders the same report, and `SCHEMA` defines its `0.1.0` format. Maintenance does not modify model or state files, dispatch work or close tasks.
 
 ## Preview verification reconciliation
 
@@ -514,13 +556,15 @@ exacly reconcile github-actions --dry-run --plan reports/plan.json \
 
 The options are all-or-none. Bound previews open an existing ledger read-only and check that the binding is active, still identifies the exact pending entry, and matches the selected plan, goal, policies and output target. The supplied current state must match the registered model revision, context and lineage, must not regress below the store's registered state watermark, and must preserve the complete pending entry. A higher state serial is allowed when those conditions still hold. Mismatches produce `stale`; invalid inputs or ledger errors return 2. These checks do not replace fresh live evidence admission.
 
+Bound previews also accept `--lock-timeout SECONDS`, defaulting to 30 seconds; the option requires the binding inputs. Each ledger read uses its own deadline shared by that read's directory and SQLite waits. The reads before and after live admission are separate operations. This does not bound the whole preview or its HTTP requests or permit implicit store recovery.
+
 A successfully checked bound preview records `claims.registered_binding_verified: true`. An unbound preview remains supported and records that claim as false, without implying that any pending-task binding was registered or checked. Neither mode removes pending work or changes the ledger or its watermark.
 
 Bound previews check the binding before fetching evidence and again immediately before reporting `ready`. The binding's `checked_at` records the last read. These are read snapshots; a future completion writer must still check its state and authorization preconditions atomically when committing a change.
 
 The report is advisory and unsigned. It does not prove that an executor produced the selected output revision, authorize task closure, dispatch work or maintain the execution ledger. Evidence origin, applicability and the admission limits on test honesty and acceptance coverage remain visible; an executor completion claim alone cannot make an action ready.
 
-In Python, `exacly.reconciliation.preview(source, plan_doc, action_id, readiness_policy, trust_policy, output_target, run_id, attempt, date)` returns the same read-only preview using a live GitHub source and an `exacly.applicability.Target`. Optional keyword arguments `ledger`, `binding_id` and `state_doc` request the bound check and must be supplied together.
+In Python, `exacly.reconciliation.preview(source, plan_doc, action_id, readiness_policy, trust_policy, output_target, run_id, attempt, date)` returns the same read-only preview using a live GitHub source and an `exacly.applicability.Target`. Optional keyword arguments `ledger`, `binding_id` and `state_doc` request the bound check and must be supplied together; `lock_timeout` controls its ledger lock waits.
 
 `exacly.reconciliation.SCHEMA` defines the `0.2.0` JSON report. Existing unbound command and Python calls remain supported, but JSON consumers of report version `0.1.0` must handle the new version and required fields: `binding` is null or an object, and `claims.registered_binding_verified` is a boolean. Saved preview reports remain advisory artifacts rather than ledger registrations.
 

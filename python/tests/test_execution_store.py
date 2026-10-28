@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import fcntl
 import hashlib
 import json
 import multiprocessing
@@ -8,7 +9,12 @@ import os
 import sqlite3
 import stat
 import threading
+import time
+from collections.abc import Iterator
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from contextlib import contextmanager, suppress
+from itertools import pairwise
+from multiprocessing.connection import Connection
 from pathlib import Path
 from typing import Any
 
@@ -477,3 +483,204 @@ def test_invalid_registration_is_rejected_before_any_file_creation(path: Path, c
     with pytest.raises(store.StoreError):
         store.put(path, value)
     assert files(path.parent) == {}
+
+
+def hold_process_lock(path: Path, kind: str, control: Connection, release_after: float | None) -> None:
+    directory_fd: int | None = None
+    connection: sqlite3.Connection | None = None
+    try:
+        if kind in {"sqlite_write", "sqlite_exclusive", "sqlite_reader", "combined"}:
+            connection = sqlite3.connect(path, isolation_level=None)
+            if kind == "sqlite_reader":
+                connection.execute("BEGIN")
+                connection.execute("SELECT * FROM bindings").fetchall()
+            else:
+                connection.execute("BEGIN EXCLUSIVE" if kind == "sqlite_exclusive" else "BEGIN IMMEDIATE")
+        if kind in {"directory", "combined"}:
+            directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+            fcntl.flock(directory_fd, fcntl.LOCK_EX)
+        control.send("locked")
+        if release_after is not None:
+            time.sleep(release_after)
+            if directory_fd is not None:
+                os.close(directory_fd)
+                directory_fd = None
+            elif connection is not None:
+                connection.rollback()
+            control.send("released")
+        control.recv()
+    finally:
+        if directory_fd is not None:
+            os.close(directory_fd)
+        if connection is not None:
+            connection.close()
+        control.close()
+
+
+@contextmanager
+def process_lock(path: Path, kind: str, *, release_after: float | None = None) -> Iterator[Connection]:
+    context = multiprocessing.get_context("fork")
+    parent, child = context.Pipe()
+    process = context.Process(target=hold_process_lock, args=(path, kind, child, release_after))
+    process.start()
+    child.close()
+    try:
+        assert parent.poll(10), "lock holder failed to start"
+        assert parent.recv() == "locked"
+        yield parent
+    finally:
+        with suppress(BrokenPipeError, EOFError):
+            parent.send("release")
+        parent.close()
+        process.join(timeout=10)
+        if process.is_alive():
+            process.kill()
+            process.join(timeout=10)
+        assert process.exitcode == 0
+
+
+@pytest.mark.parametrize("write", [False, True])
+@pytest.mark.parametrize("timeout", [0.0, 0.12])
+def test_directory_lock_wait_is_bounded_and_does_not_touch_store(path: Path, write: bool, timeout: float) -> None:
+    store.put(path, binding())
+    before = files(path.parent)
+    with process_lock(path, "directory"):
+        started = time.monotonic()
+        with pytest.raises(store.StoreError, match=r"lock timed out.*--lock-timeout"):
+            if write:
+                store.put(path, binding(), lock_timeout=timeout)
+            else:
+                store.get(path, digest("first"), lock_timeout=timeout)
+        elapsed = time.monotonic() - started
+        assert elapsed < timeout + 0.4
+        assert files(path.parent) == before
+    assert store.get(path, digest("first"), lock_timeout=0.0)["active"] is True
+    assert files(path.parent) == before
+
+
+def test_waiting_to_create_a_store_times_out_without_creating_any_files(path: Path) -> None:
+    with process_lock(path, "directory"):
+        with pytest.raises(store.StoreError, match="lock timed out"):
+            store.put(path, binding(), lock_timeout=0.05)
+        assert files(path.parent) == {}
+
+
+@pytest.mark.parametrize("write", [False, True])
+def test_released_directory_lock_allows_operation_within_budget(path: Path, write: bool) -> None:
+    store.put(path, binding())
+    with process_lock(path, "directory", release_after=0.05):
+        if write:
+            assert store.put(path, binding(), lock_timeout=1.0) == binding()
+        else:
+            assert store.get(path, digest("first"), lock_timeout=1.0)["active"] is True
+
+
+@pytest.mark.parametrize("write", [False, True])
+@pytest.mark.parametrize("timeout", [0.0, 0.12])
+def test_sqlite_lock_wait_is_bounded_and_does_not_touch_store(path: Path, write: bool, timeout: float) -> None:
+    store.put(path, binding())
+    before = files(path.parent)
+    kind = "sqlite_write" if write else "sqlite_exclusive"
+    with process_lock(path, kind):
+        started = time.monotonic()
+        with pytest.raises(store.StoreError, match=r"lock timed out.*--lock-timeout"):
+            if write:
+                store.put(path, binding(), lock_timeout=timeout)
+            else:
+                store.get(path, digest("first"), lock_timeout=timeout)
+        elapsed = time.monotonic() - started
+        assert elapsed < timeout + 0.4
+        assert files(path.parent) == before
+    assert files(path.parent) == before
+
+
+def test_directory_wait_and_sqlite_wait_share_one_budget(path: Path) -> None:
+    store.put(path, binding())
+    before = files(path.parent)
+    with process_lock(path, "combined", release_after=0.3):
+        started = time.monotonic()
+        with pytest.raises(store.StoreError, match="lock timed out"):
+            store.put(path, binding(), lock_timeout=0.5)
+        elapsed = time.monotonic() - started
+        # A reset at SQLite connection/BEGIN would take about 0.8 seconds, not 0.5 seconds.
+        assert 0.45 <= elapsed < 0.7
+        assert files(path.parent) == before
+
+
+def test_commit_wait_times_out_and_rolls_back_the_entire_registration(path: Path) -> None:
+    first = binding()
+    store.put(path, first)
+    before = files(path.parent)
+    second = binding("second", serial=2, state="state2", supersedes=first["id"])
+    with process_lock(path, "sqlite_reader"):
+        started = time.monotonic()
+        with pytest.raises(store.StoreError, match="lock timed out"):
+            store.put(path, second, lock_timeout=0.12)
+        assert time.monotonic() - started < 0.5
+        assert files(path.parent) == before
+    assert store.get(path, first["id"])["active"] is True
+    with pytest.raises(store.StoreError, match="does not exist"):
+        store.get(path, second["id"])
+    assert files(path.parent) == before
+
+
+def test_zero_timeout_allows_uncontended_creation_registration_and_reads(path: Path) -> None:
+    assert store.put(path, binding(), lock_timeout=0.0) == binding()
+    before = files(path.parent)
+    assert store.put(path, binding(), lock_timeout=0.0) == binding()
+    assert store.get(path, digest("first"), lock_timeout=0.0)["active"] is True
+    assert files(path.parent) == before
+
+
+@pytest.mark.parametrize(
+    "timeout", [None, True, False, "1", -0.01, float("nan"), float("inf"), -float("inf"), 2**31, 10**1000]
+)
+def test_invalid_lock_timeouts_fail_before_read_or_creation(path: Path, timeout: Any) -> None:
+    for operation in (
+        lambda: store.Deadline(timeout),
+        lambda: store.put(path, binding(), lock_timeout=timeout),
+        lambda: store.get(path, digest("first"), lock_timeout=timeout),
+    ):
+        with pytest.raises(store.StoreError, match="lock timeout"):
+            operation()
+    assert files(path.parent) == {}
+
+
+def test_deadline_uses_monotonic_time_and_never_returns_negative(monkeypatch: pytest.MonkeyPatch) -> None:
+    now = [100.0]
+    monkeypatch.setattr(time, "monotonic", lambda: now[0])
+    deadline = store.Deadline(0.5)
+    assert deadline.remaining() == 0.5
+    now[0] = 100.25
+    assert deadline.remaining() == 0.25
+    deadline.check()
+    now[0] = 100.5
+    assert deadline.remaining() == 0.0
+    with pytest.raises(store.StoreError, match="lock timed out"):
+        deadline.check()
+    now[0] = 101.0
+    assert deadline.remaining() == 0.0
+
+
+def test_busy_timeout_is_reduced_before_every_validation_query(path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    store.put(path, binding())
+    original_connect = sqlite3.connect
+    values: list[int] = []
+    now = [100.0]
+
+    class AdvancingValidation(sqlite3.Connection):
+        def execute(self, sql: str, parameters: Any = (), /) -> sqlite3.Cursor:
+            if sql.startswith("PRAGMA busy_timeout="):
+                values.append(int(sql.split("=", 1)[1]))
+            else:
+                now[0] += 0.02
+            return super().execute(sql, parameters)
+
+    monkeypatch.setattr(time, "monotonic", lambda: now[0])
+    deadline = store.Deadline(0.5)
+    with original_connect(path, factory=AdvancingValidation) as connection:
+        store.validate(connection, deadline=deadline)
+    assert len(values) >= 8
+    assert all(left > right for left, right in pairwise(values))
+    assert values[0] == 500
+    assert values[-1] < 400
