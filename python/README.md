@@ -9,6 +9,7 @@ The `exacly` command and Python package work with an Exacly model, either a 0.1 
 - [`exacly assess`](#assess-an-implementation-target) projects observations onto an explicit implementation and scope.
 - [`exacly gate`](#evaluate-readiness-policy) evaluates a named readiness policy against that target, separately from conformance.
 - [`exacly plan`](#plan-verification-work) proposes work for verification prerequisites against that target, with an explicit evaluation date.
+- [`exacly executions register` and `show`](#register-execution-bindings) record and inspect operator-controlled bindings between existing pending work and reviewed verification contracts.
 - [`exacly reconcile github-actions --dry-run`](#preview-verification-reconciliation) previews whether fresh admitted evidence satisfies a selected plan action's verification goal.
 - [`exacly mcp`](#mcp-server) answers show, trace, impact and gaps questions for coding agents.
 
@@ -180,6 +181,7 @@ candidate = propose_policy(
         "spec/exacly/planning.yaml",
         "spec/exacly/admission.yaml",
         "spec/exacly/reconciliation.yaml",
+        "spec/exacly/executions.yaml",
     ],
     producer=proposal["producer"],
     observer_paths=proposal["observer_paths"],
@@ -433,6 +435,42 @@ Plans are advisory. The command does not create tasks, dispatch agents, change o
 
 In Python, `exacly.planning.create(documents, policy_doc, target, date)` produces the same plan from named documents, a policy, an `exacly.applicability.Target` and a date. `exacly.planning.as_text(plan)` renders it for people, and `exacly.planning.SCHEMA` defines the JSON artifact contract.
 
+## Register execution bindings
+
+`exacly executions register` records an operator's explicit binding between one existing pending verification task and a reviewed plan action, readiness policy, producer trust policy and output target. Registration is offline: it requires no GitHub token and makes no live producer or verification claim. It writes only the selected execution ledger, leaving the task, state and input documents unchanged.
+
+Select the pending entry by the action's Requirement, task identifier and opening time. `--state` supplies the state containing that entry; `--target` supplies the planned output implementation to evaluate later. Set `EXACLY_LEDGER_FILE` to a ledger path in a pre-existing, operator-owned directory with POSIX mode `0700`, outside Git working trees, model folders and input paths:
+
+```sh
+exacly executions register --ledger "$EXACLY_LEDGER_FILE" --plan reports/plan.json \
+  --action "$EXACLY_ACTION_ID" --state observations/current.json \
+  --task "$EXACLY_TASK_ID" --opened-at 2026-10-28T12:00:00Z \
+  --policy policies/verification.yaml --trust-policy trusted/github-verification.json \
+  --target targets/output.json --date 2026-10-28 --json
+```
+
+Pending work with `dimension: verification` can be registered directly. If its dimension is absent, registration requires `--adopt-verification` as an explicit operator choice; this does not add the dimension to the source state. Other dimensions are rejected.
+
+The evaluation date cannot precede the plan or the source state's UTC writing date, and the selected pending task cannot have opened after that state was written. Opening timestamps are compared in UTC.
+
+The versioned binding captures namespace, context and lineage; canonical Requirement ID, task identifier and UTC opening time; the complete pending-entry digest and adopted dimension; the selected plan/action, criteria, bindings, policies and output target; and the historical state serial, config revision and digest, registration timestamp and explicit evaluation date. The plan's content digest alone is not approval: registration must run in the operator's controlled context with reviewed inputs.
+
+The ledger is an explicitly selected private SQLite database using POSIX ownership, permissions and file locks, with file mode `0600`. It is not discovered from a repository and does not import JSON binding files. Directory ownership and permissions protect its storage boundary, but they do not isolate candidate code running as the same operating-system user. Run registration separately from code that is not authorized to change these bindings.
+
+Repeating a registration for the same pending entry and contract is idempotent and returns the original record, including its first `as_of`, `registered_at` and historical state snapshot. A different contract for an already active pending key conflicts unless `--supersedes` names its exact current binding ID. Explicit supersession atomically appends a replacement and leaves the original immutable record visible as inactive. A concurrent change to the active binding makes that replacement fail rather than silently overwrite history.
+
+The store keeps the latest registered state serial and digest for each pending identity. Registration rejects an older state or different content at the same serial for that identity. Registering the same contract against a newer state advances this watermark without rewriting the original binding. A later refresh with the same pending entry can still be evaluated; read-only previews never advance the watermark.
+
+The watermark guards registered history for that pending item. It does not authenticate global state freshness or prove that the supplied file is the latest filesystem snapshot; a future state-changing closure operation still needs an exact-state concurrency check.
+
+Inspect a binding without changing the database:
+
+```sh
+exacly executions show --ledger "$EXACLY_LEDGER_FILE" --binding "$EXACLY_BINDING_ID" --json
+```
+
+Inspection requires an existing valid ledger; unknown schemas and existing journal or WAL sidecars are refused. Read-only operations do not initialize, migrate or recover the store. In Python, `exacly.executions.Registration` describes the explicit registration inputs; `register(ledger_path, request)` writes the binding, `get(ledger_path, binding_id)` reads it, and `as_text(record)` renders the result. `exacly.executions.SCHEMA` defines each immutable registration record's `0.1.0` format; inspection returns that record together with its current active status and watermark.
+
 ## Preview verification reconciliation
 
 `exacly reconcile github-actions --dry-run` checks whether fresh admitted evidence satisfies the verification goal of one existing action in a saved plan. For evidence evaluation it revalidates the live producer and report through [GitHub Actions admission](#admit-github-actions-evidence), fetches the approved model through that path, and evaluates only freshly derived state. It accepts no saved receipt, executor-authored state or local model files as a substitute for those live reads.
@@ -463,8 +501,27 @@ A selected action can be `ready` while other requirements in the readiness polic
 
 Each evaluation of evidence performs live admission for the exact run attempt and explicit date; a stale policy or scope can be reported before those reads. Repeating a preview leaves input documents, observations and pending work untouched; the result can change when the live source or applicable evidence changes. The default text view and `--json` render the same report. `--out` optionally saves that report outside input files and model folders, with input aliases protected.
 
-The report is advisory and unsigned. It does not prove that an executor produced the selected output revision, authorize task closure, dispatch work or maintain an execution ledger. Evidence origin, applicability and the admission limits on test honesty and acceptance coverage remain visible; an executor completion claim alone cannot make an action ready.
+To check the registered pending-task binding as well, add all three of `--ledger`, `--binding` and `--state`:
 
-In Python, `exacly.reconciliation.preview(source, plan_doc, action_id, readiness_policy, trust_policy, output_target, run_id, attempt, date)` returns the same read-only preview using a live GitHub source and an `exacly.applicability.Target`. `exacly.reconciliation.SCHEMA` defines its versioned JSON artifact contract.
+```sh
+exacly reconcile github-actions --dry-run --plan reports/plan.json \
+  --action "$EXACLY_ACTION_ID" --policy policies/verification.yaml \
+  --trust-policy trusted/github-verification.json --target targets/output.json \
+  --run "$EXACLY_RUN_ID" --attempt "$EXACLY_RUN_ATTEMPT" --date 2026-10-28 \
+  --ledger "$EXACLY_LEDGER_FILE" --binding "$EXACLY_BINDING_ID" \
+  --state observations/current.json --json
+```
+
+The options are all-or-none. Bound previews open an existing ledger read-only and check that the binding is active, still identifies the exact pending entry, and matches the selected plan, goal, policies and output target. The supplied current state must match the registered model revision, context and lineage, must not regress below the store's registered state watermark, and must preserve the complete pending entry. A higher state serial is allowed when those conditions still hold. Mismatches produce `stale`; invalid inputs or ledger errors return 2. These checks do not replace fresh live evidence admission.
+
+A successfully checked bound preview records `claims.registered_binding_verified: true`. An unbound preview remains supported and records that claim as false, without implying that any pending-task binding was registered or checked. Neither mode removes pending work or changes the ledger or its watermark.
+
+Bound previews check the binding before fetching evidence and again immediately before reporting `ready`. The binding's `checked_at` records the last read. These are read snapshots; a future completion writer must still check its state and authorization preconditions atomically when committing a change.
+
+The report is advisory and unsigned. It does not prove that an executor produced the selected output revision, authorize task closure, dispatch work or maintain the execution ledger. Evidence origin, applicability and the admission limits on test honesty and acceptance coverage remain visible; an executor completion claim alone cannot make an action ready.
+
+In Python, `exacly.reconciliation.preview(source, plan_doc, action_id, readiness_policy, trust_policy, output_target, run_id, attempt, date)` returns the same read-only preview using a live GitHub source and an `exacly.applicability.Target`. Optional keyword arguments `ledger`, `binding_id` and `state_doc` request the bound check and must be supplied together.
+
+`exacly.reconciliation.SCHEMA` defines the `0.2.0` JSON report. Existing unbound command and Python calls remain supported, but JSON consumers of report version `0.1.0` must handle the new version and required fields: `binding` is null or an object, and `claims.registered_binding_verified` is a boolean. Saved preview reports remain advisory artifacts rather than ledger registrations.
 
 The [live rehearsal report](../docs/verification-reconciliation-rehearsal.md) records an actual producer artifact, admission and reconciliation preview, including the transport coverage and environment limitation.

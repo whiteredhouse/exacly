@@ -1,6 +1,6 @@
 # Pre-publication verification only. Keep this outside spec/exacly.
 name: exacly-ci-verification
-version: '4'
+version: '5'
 requirements:
 - record: REQ-001
   dimensions:
@@ -60,5 +60,8 @@ requirements:
   dimensions:
   - verification
 - record: REQ-020
+  dimensions:
+  - verification
+- record: REQ-021
   dimensions:
   - verification

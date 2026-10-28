@@ -10,6 +10,7 @@ import copy
 import datetime as dt
 import re
 from importlib import metadata
+from pathlib import Path
 from typing import Any
 
 import jsonschema
@@ -19,9 +20,10 @@ from exacly.applicability import TARGET_SCHEMA, TEXT, Target
 from exacly.github_evidence import GitHubError
 
 Doc = dict[str, Any]
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 POLICY_ID = planning.fields({"name": TEXT, "version": TEXT, "digest": planning.DIGEST})
 CLAIMS = {
+    "registered_binding_verified": False,
     "task_completion_authorized": False,
     "executor_output_link_verified": False,
     "self_authenticating": False,
@@ -30,7 +32,7 @@ CLAIMS = {
 }
 SCHEMA: Doc = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "title": "Exacly advisory completion preview 0.1.0",
+    "title": "Exacly advisory completion preview 0.2.0",
     **planning.fields(
         {
             "schema_version": {"const": VERSION},
@@ -52,7 +54,12 @@ SCHEMA: Doc = {
             ),
             "policy": POLICY_ID,
             "trust_policy": POLICY_ID,
-            "claims": planning.fields({key: {"const": value} for key, value in CLAIMS.items()}),
+            "claims": planning.fields(
+                {
+                    key: ({"type": "boolean"} if key == "registered_binding_verified" else {"const": value})
+                    for key, value in CLAIMS.items()
+                }
+            ),
             "checks": {
                 "type": "array",
                 "items": planning.fields(
@@ -60,6 +67,7 @@ SCHEMA: Doc = {
                 ),
             },
             "admission": {"type": ["object", "null"]},
+            "binding": {"type": ["object", "null"]},
             "readiness": {"type": ["object", "null"]},
             "digest": planning.DIGEST,
         }
@@ -151,6 +159,10 @@ def preview(
     run_id: int,
     attempt: int,
     date: dt.date,
+    *,
+    ledger: Path | None = None,
+    binding_id: str | None = None,
+    state_doc: Any = None,
 ) -> Doc:
     """Re-evaluate one advisory action from live evidence, leaving plans, state and pending work unchanged.
 
@@ -161,6 +173,10 @@ def preview(
         raise ValueError("an explicit evaluation date and positive run and attempt are required")
     if not isinstance(output_target, Target):
         raise ValueError("an explicit output target is required")
+    if any(value is not None for value in (ledger, binding_id, state_doc)) and not all(
+        value is not None for value in (ledger, binding_id, state_doc)
+    ):
+        raise ValueError("ledger, binding ID and current state must be supplied together")
     target = source_target(output_target)
     chosen = admission.validate_policy(trust_policy)
     plan, action = saved_action(plan_doc, action_id, date)
@@ -191,6 +207,7 @@ def preview(
         "claims": copy.deepcopy(CLAIMS),
         "checks": [],
         "admission": None,
+        "binding": None,
         "readiness": None,
     }
 
@@ -209,6 +226,43 @@ def preview(
     report["checks"].append(
         {"code": "plan", "passed": True, "reason": "Saved action integrity, policy and scope matched."}
     )
+
+    def check_binding(stage: str) -> str | None:
+        if ledger is None or binding_id is None:
+            return None
+        from exacly import executions
+
+        matched, reason, envelope = executions.match(
+            ledger,
+            binding_id,
+            plan_doc=plan,
+            action_id=action_id,
+            state_doc=state_doc,
+            readiness_policy=readiness_policy,
+            trust_policy=chosen,
+            output_target=Target(target),
+            date=date,
+        )
+        binding = envelope["binding"]
+        report["binding"] = {
+            "id": binding["id"],
+            "pending": binding["contract"]["pending"],
+            "registered_at": binding["registered_at"],
+            "state_snapshot": binding["state_snapshot"],
+            "state_watermark": envelope["state_watermark"],
+            "active": envelope["active"],
+            "superseded_by": envelope["superseded_by"],
+            "checked_at": dt.datetime.now(dt.UTC).isoformat(),
+        }
+        report["claims"]["registered_binding_verified"] = matched
+        if not matched:
+            return reason
+        report["checks"].append({"code": stage, "passed": True, "reason": reason})
+        return None
+
+    binding_failure = check_binding("binding")
+    if binding_failure is not None:
+        return finish("stale", "binding", binding_failure)
     admitted = admission.admit(source, chosen, Target(target), run_id, attempt, date)
     report["admission"] = admitted.receipt
     if admitted.receipt["status"] != "admitted" or admitted.state is None:
@@ -253,6 +307,9 @@ def preview(
         raise ValueError("the selected action is not a unique prerequisite of the readiness policy")
     if selected[0]["result"] != "satisfied":
         return finish("pending", "completion", selected[0]["reason"])
+    binding_failure = check_binding("binding_recheck")
+    if binding_failure is not None:
+        return finish("stale", "binding_recheck", binding_failure)
     return finish(
         "ready", "completion", "Fresh evidence satisfies this action's completion condition; no task was changed."
     )
@@ -268,6 +325,8 @@ def as_text(report: Doc) -> str:
         f"As of: {report['as_of']}",
     ]
     lines += [f"  {check['code']}: {check['reason']}" for check in report["checks"]]
+    if report["binding"] is not None:
+        lines.append(f"Registered binding: {report['binding']['id']}")
     if report["readiness"] is not None:
         lines.append(f"Whole-policy readiness: {report['readiness']['result']}")
     lines.append("Advisory dry run: no task changes or completion authority; executor-to-output linkage is unverified.")

@@ -5,6 +5,8 @@ exacly refresh PATH... --context CONTEXT --state FILE [--junit FILE...] [--distr
 exacly observe manual-qa PATH... --target FILE --state FILE [--revision REV] [--root DIR]
 exacly admit github-actions --trust-policy FILE --target FILE --run ID --attempt N --date YYYY-MM-DD --out DIR
 exacly reconcile github-actions --dry-run --plan FILE --action ID --policy FILE --trust-policy FILE --target FILE ...
+exacly executions register --ledger FILE --plan FILE --action ID --state FILE --task TASK --opened-at ISO ...
+exacly executions show --ledger FILE --binding ID [--json]
 exacly plan [-m PATH]... --policy FILE --target FILE --date YYYY-MM-DD [--json] [--out FILE]
 exacly show|trace|impact|gaps [-m PATH]... [--json] ...; exacly mcp [-m PATH]...
 exacly view plan [--base REV] | site [--out DIR]
@@ -648,6 +650,9 @@ def write_reconciliation(
     this command evaluates the remote model selected by the trust policy.
     """
     try:
+        inputs = list(inputs)
+        if out.exists() and any(path.exists() and out.samefile(path) for path in inputs):
+            raise ValueError("--out cannot overwrite an input or its file alias")
         destinations = (out.resolve(), out.parent.resolve() / out.name)
         folders = [Path(name).parent.resolve() for name in trust_policy["model"]["files"]]
         if any(path.is_relative_to(folder) for path in destinations for folder in folders):
@@ -655,6 +660,37 @@ def write_reconciliation(
         write_plan(out, [], inputs, json.dumps(report, indent=2, sort_keys=True, default=str) + "\n")
     except RuntimeError as error:
         raise ValueError(f"--out or its protected input paths cannot be resolved: {error}") from error
+
+
+def execution_ledger_paths(ledger: Path) -> list[Path]:
+    """The database and SQLite auxiliary paths that must remain outside input and model locations."""
+    return [ledger, *(ledger.with_name(ledger.name + suffix) for suffix in ("-journal", "-wal", "-shm"))]
+
+
+def protect_execution_ledger(ledger: Path, inputs: Iterable[Path], trust_policy: dict[str, Any]) -> None:
+    """Reject unsafe registration destinations before the store can create or change any file."""
+    try:
+        names = trust_policy["model"]["files"]
+    except (KeyError, TypeError):
+        raise ValueError("trust policy must declare model files before ledger registration") from None
+    if not isinstance(names, list) or not names or not all(isinstance(name, str) for name in names):
+        raise ValueError("trust policy must declare model files before ledger registration")
+    try:
+        inputs = list(inputs)
+        protected = {location for path in inputs for location in (path.resolve(), path.parent.resolve() / path.name)}
+        folders = [Path(name).parent.resolve() for name in names]
+        for path in execution_ledger_paths(ledger):
+            locations = (path.resolve(), path.parent.resolve() / path.name)
+            if any(location in protected for location in locations) or (
+                path.exists() and any(source.exists() and path.samefile(source) for source in inputs)
+            ):
+                raise ValueError(
+                    "the execution ledger and its auxiliary files cannot overwrite inputs or their aliases"
+                )
+            if any(location.is_relative_to(folder) for location in locations for folder in folders):
+                raise ValueError("the execution ledger must be outside the trust policy's declared model folders")
+    except RuntimeError as error:
+        raise ValueError(f"execution ledger or protected input paths cannot be resolved: {error}") from error
 
 
 def exacly_main(argv: list[str] | None = None) -> int:
@@ -681,6 +717,40 @@ def exacly_main(argv: list[str] | None = None) -> int:
     commands.add_parser("validate", help="validate the model and print the section 11 report")
     commands.add_parser("refresh", help="write state for one context from what the bindings observe")
     commands.add_parser("observe", help="write state from an extension source, such as manual-qa observations")
+    execution_parser = commands.add_parser(
+        "executions", help="register and inspect explicit task/action/output bindings"
+    )
+    execution_commands = execution_parser.add_subparsers(dest="execution_command", required=True)
+    register = execution_commands.add_parser("register", help="explicitly register an operator-approved binding")
+    register.add_argument(
+        "--ledger", required=True, type=Path, help="private local execution ledger outside model folders"
+    )
+    register.add_argument("--plan", required=True, type=Path, help="saved verification plan YAML/JSON")
+    register.add_argument("--action", required=True, help="action ID from the saved plan")
+    register.add_argument("--state", required=True, type=Path, help="current state containing the exact pending item")
+    register.add_argument("--task", required=True, help="exact pending task identifier")
+    register.add_argument("--opened-at", required=True, help="exact pending opening timestamp with timezone")
+    register.add_argument("--policy", required=True, type=Path, help="readiness policy YAML/JSON")
+    register.add_argument(
+        "--trust-policy", required=True, type=Path, help="approved producer and model policy YAML/JSON"
+    )
+    register.add_argument("--target", required=True, type=Path, help="operator-approved output implementation target")
+    register.add_argument(
+        "--date", required=True, type=dt.date.fromisoformat, help="explicit evaluation date YYYY-MM-DD"
+    )
+    register.add_argument(
+        "--adopt-verification",
+        action="store_true",
+        help="explicitly adopt an unscoped legacy item as verification work",
+    )
+    register.add_argument("--supersedes", help="exact active binding ID to supersede with retained history")
+    register.add_argument("--json", action="store_true", help="print the registered binding as JSON")
+    execution_show = execution_commands.add_parser(
+        "show", help="inspect an existing binding without changing the ledger"
+    )
+    execution_show.add_argument("--ledger", required=True, type=Path, help="existing private execution ledger")
+    execution_show.add_argument("--binding", required=True, help="registered binding ID")
+    execution_show.add_argument("--json", action="store_true", help="print the binding and current status as JSON")
     admit = commands.add_parser("admit", help="admit verification evidence from an authorized live source")
     admit.add_argument("source", choices=["github-actions"])
     admit.add_argument("--trust-policy", required=True, type=Path, help="trusted producer and model policy YAML/JSON")
@@ -709,6 +779,9 @@ def exacly_main(argv: list[str] | None = None) -> int:
     )
     reconcile.add_argument("--json", action="store_true", help="print the reconciliation preview as JSON")
     reconcile.add_argument("--out", type=Path, help="save JSON outside declared model folders, preserving input files")
+    reconcile.add_argument("--ledger", type=Path, help="existing private ledger for a registered binding")
+    reconcile.add_argument("--binding", help="registered binding ID; requires --ledger and --state")
+    reconcile.add_argument("--state", type=Path, help="current state to check against the registered pending item")
     assess = commands.add_parser(
         "assess", parents=[common], help="assess a record for an explicit implementation target"
     )
@@ -740,9 +813,46 @@ def exacly_main(argv: list[str] | None = None) -> int:
     view.add_argument("--base", metavar="REV", help="plan: the Git revision the change is against (default: main)")
     view.add_argument("--out", type=Path, metavar="DIR", help="site: the folder to write (default: reports/site)")
     args = parser.parse_args(argv)
+    if args.command == "executions":
+        import exacly.executions as executions
+
+        try:
+            if args.execution_command == "show":
+                answer = executions.get(args.ledger, args.binding)
+            else:
+                plan_doc, state_doc = read(args.plan), read(args.state)
+                readiness_policy, trust_policy = read(args.policy), read(args.trust_policy)
+                target = Target(read(args.target))
+                protect_execution_ledger(
+                    args.ledger, [args.plan, args.state, args.policy, args.trust_policy, args.target], trust_policy
+                )
+                request = executions.Registration(
+                    plan=plan_doc,
+                    action_id=args.action,
+                    state=state_doc,
+                    task=args.task,
+                    opened_at=args.opened_at,
+                    readiness_policy=readiness_policy,
+                    trust_policy=trust_policy,
+                    target=target,
+                    date=args.date,
+                    adopt_verification=args.adopt_verification,
+                    supersedes=args.supersedes,
+                )
+                answer = executions.register(args.ledger, request)
+        except (query.QueryError, ValueError, OSError) as error:
+            print(f"exacly executions: {error}", file=sys.stderr)
+            return 2
+        print(json.dumps(answer, indent=2, sort_keys=True, default=str) if args.json else executions.as_text(answer))
+        return 0
     if args.command == "reconcile":
         from exacly import github_evidence, reconciliation
 
+        binding_options = (args.ledger, args.binding, args.state)
+        if any(value is not None for value in binding_options) and not all(
+            value is not None for value in binding_options
+        ):
+            parser.error("--ledger, --binding and --state must be supplied together")
         token = os.environ.get("GH_TOKEN")
         if not token or not token.strip():
             token = os.environ.get("GITHUB_TOKEN")
@@ -756,15 +866,30 @@ def exacly_main(argv: list[str] | None = None) -> int:
                 source = github_evidence.GitHubClient(token)
             except github_evidence.GitHubError:
                 raise ValueError("GitHub credentials are invalid") from None
-            report = reconciliation.preview(
-                source, plan_doc, args.action, readiness_policy, trust_policy, target, args.run, args.attempt, args.date
+            preview_args = (
+                source,
+                plan_doc,
+                args.action,
+                readiness_policy,
+                trust_policy,
+                target,
+                args.run,
+                args.attempt,
+                args.date,
             )
+            if args.ledger is None:
+                report = reconciliation.preview(*preview_args)
+            else:
+                report = reconciliation.preview(
+                    *preview_args, ledger=args.ledger, binding_id=args.binding, state_doc=read(args.state)
+                )
             if report.get("status") not in {"ready", "pending", "stale"}:
                 raise ValueError("reconciliation preview has an invalid status")
             if args.out is not None:
-                write_reconciliation(
-                    args.out, [args.plan, args.policy, args.trust_policy, args.target], trust_policy, report
-                )
+                protected_inputs = [args.plan, args.policy, args.trust_policy, args.target]
+                if args.ledger is not None:
+                    protected_inputs.extend([args.state, *execution_ledger_paths(args.ledger)])
+                write_reconciliation(args.out, protected_inputs, trust_policy, report)
         except (query.QueryError, ValueError, OSError) as error:
             message = str(error).replace(token, "[redacted]") if token and token.strip() else str(error)
             print(f"exacly reconcile: {message}", file=sys.stderr)

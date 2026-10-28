@@ -27,13 +27,20 @@ records:
       - Reports identify the plan, selected action, original and output targets, provenance checks, verification result and reasons for ready, pending or stale.
       - The CLI requires dry-run mode and an evaluation date that does not precede the plan; ready exits 0, pending or stale exits 1, and invalid inputs or output errors exit 2.
       - Text and JSON render the same preview; optional report output cannot overwrite inputs or enter protected model folders, including input aliases.
-      - Repeated previews leave inputs, observations and pending work unchanged; reports remain advisory and unsigned and neither prove an executor-output link, dispatch work, keep an execution ledger nor close tasks.
+      - Ledger, binding ID and current state are optional all-or-none inputs; bound previews read an existing valid ledger without initialization, migration, recovery or writes.
+      - A bound preview requires the active registered binding, exact pending entry and goal, policies and output scope to match; current state must match model revision, context and lineage, preserve the complete pending entry, and respect the latest registered serial and digest watermark.
+      - Higher refreshed state serials with the same pending entry are allowed; binding or watermark mismatches produce stale and ledger errors are invalid input, while fresh live admission remains required for evidence evaluation.
+      - Registered binding verification is reported only when bound checks succeed; unbound previews imply no registered task binding.
+      - A bound preview rechecks the active binding and watermark after evidence evaluation before reporting ready, records the last check time, and reports stale if registration changed during the evaluation.
+      - Repeated previews leave inputs, observations, pending work and ledger watermarks unchanged; reports remain advisory and unsigned and neither prove an executor-output link, dispatch work, maintain the execution ledger nor close tasks.
     verification_method: Reconciliation core and command acceptance tests in CI.
     observe:
       tests:
         cases:
           - "python/tests/test_reconciliation.py::*"
           - "python/tests/test_reconciliation_cli.py::*"
+          - "python/tests/test_executions.py::*"
+          - "python/tests/test_executions_cli.py::*"
 
   - id: APP-009
     type: Application
@@ -43,7 +50,7 @@ records:
     lifecycle: active
     evidence: []
     last_reviewed_at: "2026-10-28"
-    responsibility: Preview a saved verification goal against freshly admitted evidence while preserving observations and pending work.
+    responsibility: Preview a saved verification goal and optional registered task binding against fresh admitted evidence while preserving observations and pending work.
     interfaces: [exacly reconcile github-actions --dry-run command, exacly.reconciliation Python API]
     implementation_ref: { locator: python/src/exacly/reconciliation.py }
 
@@ -53,6 +60,8 @@ relationships:
   - { source: PROC-002, type: uses, target: APP-009 }
   - { source: APP-009, type: reads, target: INFO-001 }
   - { source: APP-009, type: reads, target: INFO-002 }
+  - { source: APP-009, type: reads, target: INFO-003 }
   - { source: APP-009, type: depends_on, target: APP-007, conditions: "Checks the saved plan and selected action contract." }
   - { source: APP-009, type: depends_on, target: APP-008, conditions: "Obtains fresh live admission and the approved model before evaluating verification." }
   - { source: APP-009, type: depends_on, target: APP-006, conditions: "Keeps selected-action verification separate from whole-policy readiness." }
+  - { source: APP-009, type: depends_on, target: APP-010, conditions: "Checks registered pending-task bindings through read-only ledger access when explicitly requested." }
