@@ -30,6 +30,7 @@ records:
       - The store remembers the latest registered state serial and digest by pending identity, rejects rollback and same-serial divergence, and permits later refreshed state preserving the same pending entry; a newer registration can advance the watermark without rewriting the immutable record.
       - Watermarks guard registered history for the bound pending item without authenticating global state freshness or proving the supplied file is the latest filesystem snapshot.
       - Show and bound-preview reads require an existing valid store, refuse unknown schemas and existing journal or WAL sidecars, and neither initialize, migrate, recover nor modify its schema, records or watermarks.
+      - Validation reuse is confined to one unchanged protected database view; a new operation or a changed view requires full schema, binding and retained-proof validation, including unrelated and aborted completion history, before further reuse.
       - Registration and show accept a finite nonnegative lock timeout defaulting to 30 seconds; one monotonic budget bounds directory and SQLite waits, with zero allowing an immediate attempt and actionable nonmutating errors on timeout.
       - The lock-wait budget does not limit the whole operation's computation or external HTTP requests, and expiration never permits implicit recovery or bypassing storage checks.
       - Registration changes only the ledger; it never changes input files, observations, pending work or external tasks and never dispatches agents or claims an executor-output link or task closure.
@@ -40,6 +41,8 @@ records:
           - "python/tests/test_executions.py::*"
           - "python/tests/test_execution_store.py::*"
           - "python/tests/test_executions_cli.py::*"
+          - "python/tests/test_completion_validation.py::*"
+          - "python/tests/test_completion_journal.py::*"
 
   - id: APP-010
     type: Application

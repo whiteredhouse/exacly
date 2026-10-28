@@ -514,6 +514,8 @@ Backup uses SQLite's consistent backup operation and validates the copied store.
 
 Inspection, backup and recovery support ledger schemas 1 and 2 without changing their version. Version-2 validation also covers retained completion intents, receipts, proof digests, state identities and cross-references. It re-derives admitted observations from the retained JUnit report and approved model, and checks the exact recorded state transition.
 
+Completion operations reuse full history validation only for repeated reads of the same unchanged protected database view. A new operation or a ledger mutation requires fresh validation; unexpected changes stop the operation. Validation results do not persist across commands or connections. Every fresh validation still checks all retained history, including unrelated and aborted intents, so its cost grows with that history.
+
 For a supported interrupted SQLite DELETE-journal transaction, recover into a separate new directory:
 
 ```sh

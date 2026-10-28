@@ -407,12 +407,12 @@ def test_completion_removes_the_pending_field_when_no_other_work_remains(scenari
 def test_receipt_finalization_failure_retains_after_state_for_explicit_recovery(
     scenario: CompletionScenario, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    original = completion_store.finalize
+    original = completion_store.Journal.finalize
 
     def failed(*args: Any, **kwargs: Any) -> Doc:
         raise store.StoreError("simulated receipt transaction failure")
 
-    monkeypatch.setattr(completion_store, "finalize", failed)
+    monkeypatch.setattr(completion_store.Journal, "finalize", failed)
     with pytest.raises(completion.CompletionInterruptedError, match="explicit recovery"):
         scenario.complete()
     assert scenario.state["pending"][0]["task"] == OTHER_TASK
@@ -421,7 +421,7 @@ def test_receipt_finalization_failure_retains_after_state_for_explicit_recovery(
     assert retained is not None
     identifier = retained["intent"]["id"]
     before_recovery = scenario.state_path.read_bytes()
-    monkeypatch.setattr(completion_store, "finalize", original)
+    monkeypatch.setattr(completion_store.Journal, "finalize", original)
     recovered = completion.recover(scenario.ledger, identifier, state_path=scenario.state_path)
     assert recovered["status"] == "completed"
     assert scenario.state_path.read_bytes() == before_recovery
@@ -431,7 +431,7 @@ def test_receipt_finalization_failure_retains_after_state_for_explicit_recovery(
 def test_prepare_commit_followed_by_error_reports_the_retained_intent_id(
     scenario: CompletionScenario, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    original = completion_store.prepare
+    original = completion_store.Journal.prepare
     identities: list[str] = []
     before = scenario.state_path.read_bytes()
 
@@ -441,7 +441,7 @@ def test_prepare_commit_followed_by_error_reports_the_retained_intent_id(
         raise OSError("simulated failure reading the already committed intent")
 
     with monkeypatch.context() as patched:
-        patched.setattr(completion_store, "prepare", committed_then_failed)
+        patched.setattr(completion_store.Journal, "prepare", committed_then_failed)
         with pytest.raises(completion.CompletionInterruptedError, match="may contain a committed intent") as error:
             scenario.complete()
     assert len(identities) == 1 and identities[0] in str(error.value)
