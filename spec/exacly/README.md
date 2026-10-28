@@ -1,6 +1,6 @@
 # Exacly's own model
 
-Exacly models itself, following the layout in section 13 of the specification. It is the first model whose state will come from real observations.
+Exacly models itself, following the layout in section 13 of the specification. CI records observations as state alongside the authored config.
 
 | | |
 | --- | --- |
@@ -12,9 +12,27 @@ Exacly models itself, following the layout in section 13 of the specification. I
 
 ## Config
 
-- [`validation.yaml`](validation.yaml) covers checking a model. The validator, CI and the repository exist today, so these records are active.
-- [`observation.yaml`](observation.yaml) covers observing a model's reality: `exacly refresh` and the CI job that runs it on main are active, and the measure they feed is proposed.
+- [`validation.yaml`](validation.yaml) covers document, relationship and traceability checks.
+- [`observation.yaml`](observation.yaml) covers state observation, publication and the measurement definition it supports.
 - [`understanding.yaml`](understanding.yaml) covers answering questions about a model: the `exacly` command's show, trace, impact and gaps.
+- [`planning.yaml`](planning.yaml) covers target-specific verification plans.
+- [`admission.yaml`](admission.yaml) covers live GitHub evidence admission under an approved producer policy.
+- [`reconciliation.yaml`](reconciliation.yaml) covers read-only completion previews.
+- [`executions.yaml`](executions.yaml) covers operator registrations and the private execution ledger.
+- [`execution-maintenance.yaml`](execution-maintenance.yaml) covers bounded access, diagnosis, backup and copy-only ledger recovery.
+- [`automation.yaml`](automation.yaml) covers verification completion, candidate isolation, dispatch and executor control.
+
+## Automation roadmap
+
+The YAML records define requirements, implementers, dependencies and lifecycle. Their observation bindings connect them to verification evidence in state. Consult the records for current definitions and lifecycle, and observed state for what has been verified or released.
+
+- Browse the [published model and observations](https://whiteredhouse.github.io/exacly/project/) for the checked baseline on main. Branch proposals appear there after merge and successful CI publication.
+- Read [`automation.yaml`](automation.yaml) for the automation contracts, process steps and isolation preconditions, informed by the dated [plan/apply research](../../docs/automated-plan-apply-research.md).
+- Run `exacly show RECORD`, `exacly trace RECORD` or `exacly gaps` from the repository root to inspect the local checkout. Preview a branch's model with `exacly view site --out reports/model-site`.
+
+Implementation and runtime references can be marked `planned`; observation bindings have no special planned mode. A binding with case patterns that select no executed tests produces `not_checked` and establishes no successful verification claim.
+
+When implementing a proposal, update its lifecycle and planned references, review the acceptance tests and observation bindings, and update the [verification policy](../../ci/verification.yaml) in the same change. CI checks that this policy covers every active Requirement; successful verification still requires matching observations.
 
 ## State
 
