@@ -4,10 +4,9 @@ Keep a product model true to what ships, across the software development lifecyc
 
 ```mermaid
 flowchart LR
-    config["Config<br/>what you intend"] --> plan["Plan<br/>next work to close gaps"]
-    state["State<br/>what is observed"] --> plan
-    plan --> apply["Apply<br/>dispatch work"]
-    apply -- "people, agents<br/>and workflows" --> product["Product<br/>code, tests, deployments"]
+    config["Config<br/>what you intend"] -- "plan" --> work["Work plan<br/>next work to close gaps"]
+    state["State<br/>what is observed"] -- "plan" --> work
+    work -- "apply:<br/>people, agents and workflows" --> product["Product<br/>code, tests, deployments"]
     product -- "refresh:<br/>observe and cite evidence" --> state
 ```
 
