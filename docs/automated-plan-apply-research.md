@@ -105,7 +105,7 @@ Changed acceptance criteria or observation bindings require review and replannin
 
 Current `gate` evaluates supplied state and evidence metadata. Applicability checks match the selected subject and bindings; `core.supported` checks evidence kind, applicability and expiry. These checks do not authenticate the report producer, fetch the referenced CI result or verify its digest or signature. Refresh consumes supplied JUnit and caller-provided run metadata. Matching identities alone therefore cannot prevent fabricated completion evidence. [Assessment](https://github.com/whiteredhouse/exacly/blob/ce63d80e30d8c8abd7ebbcd7a9ff83b6f09ca4c0/python/src/exacly/query.py#L505), [evidence checks](https://github.com/whiteredhouse/exacly/blob/ce63d80e30d8c8abd7ebbcd7a9ff83b6f09ca4c0/python/src/exacly/core.py#L518), [report input](https://github.com/whiteredhouse/exacly/blob/ce63d80e30d8c8abd7ebbcd7a9ff83b6f09ca4c0/python/src/exacly/cli.py#L236).
 
-Automatic closure needs a trusted observation and admission path around this evaluator. Protect the authoritative workflow, criteria, bindings and policy; establish which producer ran the checks against which implementation; retain identified reports; and reject executor-authored state as completion evidence. A trusted runner can still execute weakened tests, so retain and review changes to test meaning and coverage. Evidence origin, target applicability and acceptance coverage are separate checks. This is a proposed automation prerequisite, not behavior already provided by `gate`.
+Automatic closure needs a trusted observation and admission path around this evaluator. Protect the authoritative workflow, criteria, bindings and policy; establish which producer ran the checks against which implementation; retain identified reports; and accept completion state only through a trusted observation path. A trusted runner can still execute weakened tests, so retain and review changes to test meaning and coverage. Evidence origin, target applicability and acceptance coverage are separate checks. This is a proposed automation prerequisite, not behavior already provided by `gate`.
 
 ## Existing approaches and integration choices
 
@@ -142,7 +142,7 @@ The first pilot should demonstrate these cases:
 - Wrong-build, wrong-environment, expired or incomplete results cannot close work.
 - New output revisions can satisfy the approved completion condition.
 - Observations identify the approved model revision and produced implementation independently, without relabeling historical evidence.
-- Fabricated reports or executor-authored state cannot close work even when their supplied identity metadata matches the target.
+- Fabricated reports or untrusted executor self-reports cannot close work even when their supplied identity metadata matches the target.
 - Weakened tests or removed checks cannot establish completion without review of their acceptance coverage.
 - Partial failure preserves successful receipts and retries remaining work.
 - Refreshing one source preserves unrelated assessments; a requirement bound to tests and manual QA remains unverified until both required sources pass.
