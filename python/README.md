@@ -82,6 +82,18 @@ The identity flags label the supplied model and report; they do not check out ei
 
 In Python, `exacly.refresh.Run(revision=implementation_revision, context=..., observed_at=..., model_revision=model_revision)` supplies the same split. `model_revision` is optional, and `Run.config_revision` gives its effective value, defaulting to `revision`.
 
+### Conditional state publication
+
+`refresh` and `observe manual-qa` capture the existing state before computing observations. Both publish through the same local POSIX writer: under a parent-directory lock, the writer checks the captured exact file content and its namespace, context, lineage and serial before replacing it. Initial creation also checks that the destination is still absent. Existing state keeps its lineage and advances its serial by exactly one.
+
+If another observer writes first, the command exits 1 without overwriting its result. Run the observation again to read and retain that newer state; a stale computed output is never automatically retried. Both commands accept a finite nonnegative `--lock-timeout`, defaulting to 30 seconds; zero makes one immediate lock attempt. This controls lock waiting rather than the total observation time. Invalid state, unsupported destinations and write errors also exit 1 without a success message.
+
+The writer synchronizes a hidden staging file, atomically replaces the destination, then synchronizes its directory before reporting success. Failure before replacement leaves the old state unchanged. If directory synchronization fails after replacement, the command reports that publication may already have happened and durability is uncertain; inspect the state before retrying. A killed process may leave its hidden staging file, which is not loaded as a model document and does not block later writes.
+
+These guarantees require cooperating writers on a supported local POSIX filesystem. Arbitrary file editors do not honor the shared lock, and network filesystem behavior is not guaranteed. The writer requires 0.2 state documents and refuses duplicate JSON keys, nonfinite values, and symbolic-link, hard-linked or nonregular destinations. Existing permission bits are preserved; new state files use mode `0600`. Pure `refresh()` and `manual_qa.observe()` calls still compute documents without writing files; this publication protocol does not make state and an execution ledger one transaction or close pending tasks.
+
+For a Python caller that writes local state, `exacly.state_writer.read(path)` returns a snapshot whose `document` property provides an independent parsed copy, or `None` when absent. Compute the next document from that copy, then call `exacly.state_writer.publish(snapshot, next_state, lock_timeout=30)`. Keep the snapshot unchanged as the expected input to publication; a conflict needs a new snapshot and computation.
+
 ### Manual verification
 
 Some requirements are verified by a person running the product, such as a check on a real phone against the deployed backend. The `manual-qa` extension writes those results into state from files people commit, never by hand. Declare it in the model (`extensions: [manual-qa]`) and bind the record to its observations:

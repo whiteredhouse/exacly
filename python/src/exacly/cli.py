@@ -26,6 +26,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
 from collections import Counter
 from collections.abc import Callable, Iterable
 from fnmatch import fnmatchcase
@@ -35,7 +36,7 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
-from exacly import manual_qa, mcp, planning, policy, query, views
+from exacly import manual_qa, mcp, planning, policy, query, state_writer, views
 from exacly.applicability import Target
 from exacly.core import binding_words, bindings, identity, is_state, validate_documents
 from exacly.refresh import RefreshError, Run, check_distribution_identity, read_junit, refresh, unattributed
@@ -221,6 +222,12 @@ def refresh_main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--state", required=True, type=Path, help="state document to write; an earlier one is read first"
     )
+    parser.add_argument(
+        "--lock-timeout",
+        type=nonnegative_seconds,
+        default=state_writer.DEFAULT_LOCK_TIMEOUT,
+        help="maximum state publication lock wait in seconds (default: 30)",
+    )
     parser.add_argument("--junit", nargs="*", default=[], type=Path, help="JUnit XML test reports from the run")
     parser.add_argument(
         "--distribution",
@@ -264,14 +271,13 @@ def refresh_main(argv: list[str] | None = None) -> int:
     except (query.QueryError, RefreshError) as error:
         print(f"exacly refresh: {error}", file=sys.stderr)
         return 1
-    previous = json.loads(args.state.read_text()) if args.state.exists() else None
     try:
-        state = refresh(documents, read_junit(args.junit), run, previous, args.distribution, args.root)
-    except RefreshError as error:
+        snapshot = state_writer.read(args.state)
+        state = refresh(documents, read_junit(args.junit), run, snapshot.document, args.distribution, args.root)
+        state_writer.publish(snapshot, state, lock_timeout=args.lock_timeout)
+    except (RefreshError, state_writer.StateWriteError, OSError, ET.ParseError) as error:
         print(f"exacly refresh: {error}", file=sys.stderr)
         return 1
-    args.state.parent.mkdir(parents=True, exist_ok=True)
-    args.state.write_text(json.dumps(state, indent=2) + "\n")
     counts = Counter(f"{a['dimension']} {a['state']}" for r in state["records"].values() for a in r["assessments"])
     summary = ", ".join(f"{n} {k}" for k, n in sorted(counts.items())) or "no assessments"
     observed = run.revision
@@ -320,6 +326,12 @@ def observe_main(argv: list[str]) -> int:
         "--state", required=True, type=Path, help="state document to write; an earlier one is read first"
     )
     parser.add_argument(
+        "--lock-timeout",
+        type=nonnegative_seconds,
+        default=state_writer.DEFAULT_LOCK_TIMEOUT,
+        help="maximum state publication lock wait in seconds (default: 30)",
+    )
+    parser.add_argument(
         "--revision", default=defaults["revision"], help="config revision observed, such as a Git commit"
     )
     parser.add_argument("--root", type=Path, default=Path(), help="repository root that observation paths start at")
@@ -332,17 +344,16 @@ def observe_main(argv: list[str]) -> int:
     except (query.QueryError, OSError, ValueError, yaml.YAMLError) as error:
         print(f"exacly observe: {error}", file=sys.stderr)
         return 1
-    previous = json.loads(args.state.read_text()) if args.state.exists() else None
     written_at = dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     try:
+        snapshot = state_writer.read(args.state)
         state, notes = manual_qa.observe(
-            documents, target, args.revision, written_at, previous, args.root, criteria_at(args.paths)
+            documents, target, args.revision, written_at, snapshot.document, args.root, criteria_at(args.paths)
         )
-    except RefreshError as error:
+        state_writer.publish(snapshot, state, lock_timeout=args.lock_timeout)
+    except (RefreshError, state_writer.StateWriteError, OSError) as error:
         print(f"exacly observe: {error}", file=sys.stderr)
         return 1
-    args.state.parent.mkdir(parents=True, exist_ok=True)
-    args.state.write_text(json.dumps(state, indent=2) + "\n")
     counts = Counter(
         a["state"]
         for r in state["records"].values()
