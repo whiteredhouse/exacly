@@ -8,7 +8,7 @@ Exacly should own the loop from product intent to observable completion, with co
 
 Scope: automated planning, work dispatch and completion reconciliation for [Exacly](https://github.com/whiteredhouse/exacly) and the [Exacly Action](https://github.com/whiteredhouse/exacly-action). The implementation baseline is Exacly commit [`ce63d80`](https://github.com/whiteredhouse/exacly/commit/ce63d80e30d8c8abd7ebbcd7a9ff83b6f09ca4c0), package 0.5.0, and Action commit [`6db530d`](https://github.com/whiteredhouse/exacly-action/commit/6db530d041d51c030b89a64eaea8bc88cbfd87a8), whose package metadata is 0.6.0 and pins `exacly==0.5.0`.
 
-For current implementation status and the roadmap, see [Exacly's model](../spec/exacly/README.md#implemented-automation-foundations).
+For current implementation status and the roadmap, see [Exacly's model](../spec/exacly/README.md#automation-roadmap).
 
 ## Current implementation
 

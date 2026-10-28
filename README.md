@@ -75,10 +75,10 @@ Exacly borrows the plan and apply loop from infrastructure as code, and the spec
 | **Ask** | Show a record, trace why it exists and what realizes it, list what a change affects and what the model is missing. | [`exacly`](python/README.md#questions) show, trace, impact and gaps; [views](python/README.md#views) as a pull request plan and a site; an [MCP server and skill](#with-coding-agents) for agents |
 | **Plan** | Propose the next observation or investigation for each verification prerequisite in a policy, against an explicit implementation target. | [`exacly plan`](python/README.md#plan-verification-work), read-only verification proposals; delivery planning remains planned |
 | **Register work** | Bind an existing pending task to a reviewed verification plan and output target in an operator-controlled ledger. | [`exacly executions register`](python/README.md#register-execution-bindings), with explicit [ledger diagnosis, backup and recovery](python/README.md#maintain-an-execution-ledger); task dispatch remains planned |
-| **Apply** | Dispatch an authorized plan action as traceable work for a person, agent or workflow. | [Proposed automation](spec/exacly/README.md#proposed-automation) |
+| **Apply** | Dispatch an authorized plan action as traceable work for a person, agent or workflow. | [Proposed automation](spec/exacly/README.md#automation-roadmap) |
 | **Reconcile** | Check whether a selected plan action's verification goal is satisfied by fresh admitted evidence, optionally checking its registered pending-task binding. | [`exacly reconcile github-actions --dry-run`](python/README.md#preview-verification-reconciliation), read-only preview; task closure remains planned |
 
-See [Exacly's model](spec/exacly/README.md) for implemented foundations and the proposed roadmap.
+See [Exacly's model](spec/exacly/README.md) for record lifecycles, traceability and observed verification and delivery.
 
 ## Where it comes from
 
