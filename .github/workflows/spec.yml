@@ -30,6 +30,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes bubblewrap libseccomp2
+      - name: Check the Linux isolation test runtime
+        run: /usr/bin/python3 ci/check_isolation_runtime.py
       - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
       - name: Test, lint, type-check, validate the examples, and refresh and validate Exacly's own state
         run: mise run check
@@ -97,6 +99,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes bubblewrap libseccomp2
+      - name: Check the Linux isolation test runtime
+        run: /usr/bin/python3 ci/check_isolation_runtime.py
       - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
       - name: Refresh Exacly's own state
         run: mise run model

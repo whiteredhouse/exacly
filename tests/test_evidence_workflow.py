@@ -72,7 +72,9 @@ def test_workflow_checks_out_the_run_revision_without_persisting_credentials() -
     assert install["run"] == "uv sync --locked"
     runtime = next(step for step in steps if step.get("name") == "Install the Linux isolation test runtime")
     assert "sudo apt-get install --yes bubblewrap libseccomp2" in runtime["run"]
-    assert steps.index(checkout) < steps.index(runtime) < steps.index(install)
+    boundary = next(step for step in steps if step.get("name") == "Check the Linux isolation test runtime")
+    assert boundary["run"] == "/usr/bin/python3 ci/check_isolation_runtime.py"
+    assert steps.index(checkout) < steps.index(runtime) < steps.index(boundary) < steps.index(install)
     check = next(step for step in steps if step.get("name") == "Run verification")
     assert check["id"] == "verification"
     assert check["env"] == {"PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1"}
