@@ -236,6 +236,7 @@ records:
     acceptance_criteria:
       - The check job runs `mise run check` on pull requests and pushes to main.
       - The job fails when any test, lint rule, type check or validation fails.
+      - Post-publication installation retries refresh package metadata within a two-minute budget; the smoke test runs once after installation and fails immediately if it fails.
     verification_method: The result of the full checks in the Spec or Release workflow.
     observe:
       # No case filter: take the full check job result in either workflow.

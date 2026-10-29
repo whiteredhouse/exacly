@@ -77,22 +77,24 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
-      - name: Install the published version and exercise verification and gates
+      - name: Install the published version, allowing for index propagation
         env:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          version="${TAG#python-v}"
+          installer="$PWD/ci/install_publication.py"
+          cd "$RUNNER_TEMP"
+          python "$installer" --version "${TAG#python-v}" --environment "$RUNNER_TEMP/exacly-publication"
+      - name: Exercise the published package
+        run: |
+          set -euo pipefail
           example="$PWD/spec/examples/0.2/invoice-reminders"
           smoke="$PWD/ci/smoke.py"
           evidence_smoke="$PWD/ci/smoke_evidence.py"
           policy_smoke="$PWD/ci/smoke_policy.py"
           cd "$RUNNER_TEMP"
-          uv run --isolated --no-project --default-index https://pypi.org/simple \
-            --with "exacly==$version" python "$smoke" --example "$example"
-          uv run --isolated --no-project --default-index https://pypi.org/simple \
-            --with "exacly==$version" python "$evidence_smoke" --archive published-evidence-compatibility.zip
+          "$RUNNER_TEMP/exacly-publication/bin/python" "$smoke" --example "$example"
+          "$RUNNER_TEMP/exacly-publication/bin/python" "$evidence_smoke" --archive published-evidence-compatibility.zip
           uv run --isolated --no-project --default-index https://pypi.org/simple \
             --with 'exacly==0.6.0rc2' python "$evidence_smoke" --consume published-evidence-compatibility.zip
-          uv run --isolated --no-project --default-index https://pypi.org/simple \
-            --with "exacly==$version" python "$policy_smoke"
+          "$RUNNER_TEMP/exacly-publication/bin/python" "$policy_smoke"

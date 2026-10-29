@@ -131,37 +131,62 @@ def test_release_runs_policy_cli_from_installed_wheel_or_exact_published_version
         f"#!{sys.executable}\n"
         "import json, os, sys\n"
         "with open(os.environ['SMOKE_RECORD'], 'a') as output:\n"
-        "    output.write(json.dumps({'cwd': os.getcwd(), 'argv': sys.argv[1:]}) + '\\n')\n"
+        "    output.write(json.dumps({'cwd': os.getcwd(), 'executable': sys.argv[0], 'argv': sys.argv[1:]}) + '\\n')\n"
     )
-    for name in ("uv", "uvx"):
+    for name in ("uv", "uvx", "python"):
         executable = binaries / name
         executable.write_text(program)
         executable.chmod(0o755)
-    name = "Run the built wheel" if job == "build" else "Install the published version"
-    step = next(step for step in RELEASE["jobs"][job]["steps"] if name in step.get("name", ""))
-    subprocess.run(
-        ["bash", "-e", "-o", "pipefail", "-c", step["run"]],
-        cwd=workspace,
-        env={
-            **os.environ,
-            "PATH": str(binaries) + os.pathsep + os.environ.get("PATH", ""),
-            "RUNNER_TEMP": str(outside),
-            "TAG": "python-v0.7.0rc1",
-            "SMOKE_RECORD": str(recorder),
-        },
-        text=True,
-        capture_output=True,
-        check=True,
+    published_python = outside / "exacly-publication/bin/python"
+    published_python.parent.mkdir(parents=True)
+    published_python.write_text(program)
+    published_python.chmod(0o755)
+    names = (
+        ("Run the built wheel",)
+        if job == "build"
+        else ("Install the published version", "Exercise the published package")
     )
+    scripts = [
+        step["run"] for step in RELEASE["jobs"][job]["steps"] if any(name in step.get("name", "") for name in names)
+    ]
+    for script in scripts:
+        subprocess.run(
+            ["bash", "-e", "-o", "pipefail", "-c", script],
+            cwd=workspace,
+            env={
+                **os.environ,
+                "PATH": str(binaries) + os.pathsep + os.environ.get("PATH", ""),
+                "RUNNER_TEMP": str(outside),
+                "TAG": "python-v0.7.0",
+                "SMOKE_RECORD": str(recorder),
+            },
+            text=True,
+            capture_output=True,
+            check=True,
+        )
     invocations = [json.loads(line) for line in recorder.read_text().splitlines()]
+    if job == "verify-publication":
+        installer = str(workspace / "ci/install_publication.py")
+        setup = [item for item in invocations if installer in item["argv"]]
+        assert len(setup) == 1
+        assert setup[0]["cwd"] == str(outside)
+        assert setup[0]["argv"] == [
+            installer,
+            "--version",
+            "0.7.0",
+            "--environment",
+            str(published_python.parent.parent),
+        ]
     smoke = str(workspace / "ci/smoke_policy.py")
     policy = [item for item in invocations if smoke in item["argv"]]
     assert len(policy) == 1
     invocation = policy[0]
     assert invocation["cwd"] == str(outside)
     args = invocation["argv"]
-    assert "--isolated" in args and "--no-project" in args
-    assert args[args.index("--with") + 1] == (str(wheel) if job == "build" else "exacly==0.7.0rc1")
-    assert args[-2:] == ["python", smoke]
-    if job == "verify-publication":
-        assert args[args.index("--default-index") + 1] == "https://pypi.org/simple"
+    if job == "build":
+        assert "--isolated" in args and "--no-project" in args
+        assert args[args.index("--with") + 1] == str(wheel)
+        assert args[-2:] == ["python", smoke]
+    else:
+        assert invocation["executable"] == str(published_python)
+        assert args == [smoke]
