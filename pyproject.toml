@@ -1,6 +1,6 @@
 [project]
 name = "exacly"
-version = "0.6.0rc1"
+version = "0.6.0rc2"
 description = "Validate, refresh and ask Exacly models (0.1 product maps, 0.2 config and state), for people and coding agents"
 # The README comes from python/README.md, with its links into the repository made absolute for PyPI.
 dynamic = ["readme"]
