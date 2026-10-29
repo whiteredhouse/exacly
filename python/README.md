@@ -959,12 +959,27 @@ The text and JSON reports describe the same result. `completed` exits 0; `pendin
 
 Repeat the exact completed request, including its original evaluation date, run and attempt, to obtain the original durable receipt without HTTP, another task removal or a serial increment. A different request cannot reuse that completed binding or pending identity. A replayed receipt records historical completion; it does not assert that the current state file remains unchanged or that evidence is still current.
 
-Inspect a retained completion offline:
+The original `--state` destination is also part of that request. Replay requires
+the same normalized absolute destination: Exacly resolves the parent directory
+and retains the filename. Relative and absolute spellings can identify the same
+destination, but moving or copying the state file to another destination changes
+the request even when its bytes are identical. Keep the original destination
+when replaying a completion. Ledger backup, upgrade and activation preserve the
+recorded state destination; they do not rebind it to another location.
+
+Historical replay validates retained ledger proof without reading or rewriting
+the current state contents. The state file can have changed or been removed;
+the replay request must still name the original destination. To inspect a
+retained completion offline without supplying a state path, use:
 
 ```sh
 exacly completions show --ledger "$EXACLY_LEDGER_FILE" \
   --completion "$EXACLY_COMPLETION_ID" --json
 ```
+
+The report includes the retained destination in `intent.request.state_path`
+and, for a completed operation, `receipt.state.path`. Use that absolute path
+for replay if your working directory has changed.
 
 To resolve a prepared completion after interruption, use the same state destination:
 

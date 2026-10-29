@@ -133,6 +133,14 @@ Failed statements, commits or rollback attempts must not leave partial usable en
 
 Version 4 is obtained through explicit copy-only activation into a new private destination after full source validation. Source files and exact historical proof remain unchanged, including binding/request identities, before/after bytes and original receipts. Unsupported inputs and unresolved prepared intents block initial conversion from version 2 or 3. Existing version-4 refresh can preserve prepared work under the explicit validation and recovery sequence above.
 
+Retained request identity includes the original normalized absolute state
+destination. Copying or activating a ledger preserves that destination; moving
+the state file to another path does not create an equivalent completion request,
+even when the file contents match. Exact completed replay must name the original
+destination, while `exacly completions show` inspects retained history without a
+state path. See the [completion reference](../python/README.md#complete-registered-verification-work)
+for path normalization and historical replay behavior.
+
 Validate the complete output, synchronize its files and directory, then atomically publish the new copy without overwrite. The operator explicitly selects one canonical version-4 ledger; old and copied files must not be parallel active authorities. A version-3 audit-only copy is ineligible for this operational cutover. Ordinary commands never migrate, activate or recover implicitly. Version-4 backup and copy-only recovery retain complete proof and index and freshly audit all semantics; copying a successful cache record alone cannot establish a valid ledger.
 
 ## Audit, retention and claims
