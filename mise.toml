@@ -14,6 +14,20 @@ depends = ["sync"]
 # Each test case's result goes to reports/junit.xml, which the model task reads.
 run = "uv run --locked pytest spec/tests python/tests tests --junitxml=reports/junit.xml"
 
+[tasks.test-core]
+description = "Run the development test subset without the Linux isolation backend"
+depends = ["sync"]
+# Keep this subset separate from the full report consumed by model and verification.
+run = [
+    "echo 'Development subset only: isolation backend tests excluded; no model refresh or verification evidence.'",
+    """uv run --locked pytest spec/tests python/tests tests \
+      --ignore=python/tests/test_execution_isolation.py \
+      --ignore=python/tests/test_isolation_syscalls.py \
+      --ignore=python/tests/test_isolation_contract.py \
+      --ignore=python/tests/test_isolation_cli.py \
+      --junitxml=reports/core-junit.xml""",
+]
+
 [tasks.lint]
 description = "Check style and formatting with Ruff"
 depends = ["sync"]
@@ -61,3 +75,8 @@ exit "$gate_status"
 [tasks.check]
 description = "Everything CI runs"
 depends = ["verification"]
+
+[tasks.check-core]
+description = "Development checks without isolation backend verification or model refresh"
+depends = ["test-core", "lint", "typecheck", "examples"]
+run = "echo 'Core development checks passed; isolation backend and full verification remain unchecked.'"

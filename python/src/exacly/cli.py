@@ -910,7 +910,7 @@ def exacly_main(argv: list[str] | None = None) -> int:
     commands.add_parser("validate", help="validate the model and print the section 11 report")
     commands.add_parser("refresh", help="write state for one context from what the bindings observe")
     commands.add_parser("observe", help="write state from an extension source, such as manual-qa observations")
-    isolation_parser = commands.add_parser("isolation", help="inspect an explicitly selected runtime root filesystem")
+    isolation_parser = commands.add_parser("isolation", help="inspect an optional local backend's runtime filesystem")
     isolation_commands = isolation_parser.add_subparsers(dest="isolation_command", required=True)
     isolation_inspect = isolation_commands.add_parser(
         "inspect",
@@ -923,9 +923,9 @@ def exacly_main(argv: list[str] | None = None) -> int:
     isolation_inspect.add_argument("--json", action="store_true", help="print the content identity as JSON")
     isolate = commands.add_parser(
         "isolate",
-        help="explicitly run one command within the approved isolation boundary",
+        help="run one command through the optional local Linux Bubblewrap backend",
         description=(
-            "Run one command using an explicitly approved Linux runtime policy and immutable input snapshots. "
+            "Run one command through linux-bubblewrap-v1 using an approved runtime policy and immutable inputs. "
             "Candidate logs and artifacts are retained as untrusted output in a new directory. "
             "Isolation setup failure prevents candidate execution."
         ),

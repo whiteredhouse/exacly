@@ -1,6 +1,20 @@
 # Candidate command isolation
 
-Exacly runs an explicitly authorized candidate command through one supported backend: Linux Bubblewrap with a reviewed root filesystem. The launcher verifies the actual namespace before releasing the command. Its acceptance contract is [REQ-025](../spec/exacly/automation.yaml); the command launcher is separate from durable dispatch and bounded executor attempts.
+Exacly's execution trust contract is [REQ-025](../spec/exacly/automation.yaml): candidate code must be separated from the authority that approves work, admits evidence and completes tasks. The contract describes the required protection independently of the tool that enforces it.
+
+`exacly isolate` and the `exacly.isolation` API provide one optional local backend, `linux-bubblewrap-v1`, using Linux Bubblewrap and a reviewed root filesystem. They are loaded only when explicitly invoked. Model validation, planning, evidence admission and local completion do not require this runtime.
+
+## Responsibility boundary
+
+Exacly retains the approved criteria, input and target identities, permitted effects, evidence policy and completion decisions. An execution backend enforces its reviewed isolation policy and retains identifiable run outcomes and output references. Candidate exit status, logs, artifacts and claims about isolation remain untrusted; execution success cannot approve evidence or complete work.
+
+The local backend accepts an explicitly selected runtime policy, one argument vector, immutable input snapshots, a finite timeout and a new output destination. It returns a bundle containing runtime and input identities, facts checked by the trusted launcher, candidate outcomes and collected artifacts. It receives no execution-ledger, authoritative-state or completion handles. Its policy is closed to `linux-bubblewrap-v1`; this command does not implement arbitrary provider loading or remote execution.
+
+A future external executor can satisfy the same trust contract through a separately reviewed integration. Its actual enforcement and producer/run identity must be established through that integration's trusted controls and real conformance tests. A provider's or candidate's `verified: true` field alone is not proof of isolation. Selecting an execution backend never grants that backend evidence-admission or completion authority. Durable dispatch and bounded executor supervision remain separate contracts.
+
+## Linux Bubblewrap v1 backend contract
+
+The following protections are mandatory for `linux-bubblewrap-v1`. Keeping the product requirement runtime-neutral does not make any of these local backend protections optional.
 
 The supported boundary protects operator files, environment, processes and control interfaces from candidate processes and their descendants. It relies on a trusted host kernel, Bubblewrap and libseccomp installations, runtime root filesystem and operator. It uses Linux namespaces, not a virtual machine, and does not claim protection from a hostile operator, kernel or runtime exploits, or general resource exhaustion.
 
@@ -125,6 +139,14 @@ report = run(
 `parse_policy(document)` validates the same strict policy used by the CLI. `IsolationError` describes invalid inputs, unsupported setup, integrity errors and unsafe outputs. A candidate nonzero exit is a reported outcome. The API receives snapshot bytes and no operator ledger, state or completion handles.
 
 ## Verify the supported platform
+
+For development work that does not exercise the local backend, run:
+
+```sh
+mise run check-core
+```
+
+This development subset runs schema and core tests, lint, type checks and examples without the four isolation test modules. It writes `reports/core-junit.xml`, never the full suite's `reports/junit.xml`, and performs no state refresh or verification gate. A passing subset does not verify REQ-025 or replace the full CI check. Do not copy its report into the full verification path.
 
 The repository's real integration suites are [`test_execution_isolation.py`](../python/tests/test_execution_isolation.py) and [`test_isolation_syscalls.py`](../python/tests/test_isolation_syscalls.py). CI applies the reviewed Ubuntu 24.04 [host setup](../ci/setup_isolation_runtime.sh) and requires the [runtime preflight](../ci/check_isolation_runtime.py) to pass before running the ordinary test and model checks. These cases fail when the required runtime is unavailable; skipped or mocked namespace checks cannot establish successful verification of REQ-025.
 

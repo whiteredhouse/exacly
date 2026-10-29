@@ -1,4 +1,4 @@
-# Automation contracts. Local completion and isolated command execution are active; dispatch and bounded executor attempts remain proposed.
+# Automation contracts. Local completion and opt-in Linux Bubblewrap commands are active; dispatch and bounded executor attempts remain proposed.
 # Proposed records retain future test selectors and explicitly planned implementation references.
 exacly: "0.2.0"
 
@@ -92,7 +92,7 @@ records:
   - id: REQ-025
     type: Requirement
     name: Isolate candidate execution from operator authority
-    description: Candidate code runs through a verified Linux namespace boundary without access to the authority used to approve, dispatch or complete its work.
+    description: Candidate code cannot reach the authority used to approve, dispatch or complete its work through the selected runtime boundary.
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
@@ -102,22 +102,20 @@ records:
       the operator's ledger, authoritative state and policy originals, privileged credentials and
       control interfaces, while providing only explicitly permitted inputs and capabilities.
     acceptance_criteria:
-      - An explicit isolate invocation authorizes only the selected argument vector, reviewed runtime policy, immutable input snapshots and new output destination; it grants no dispatch, verification, completion, release or deployment authority.
-      - Candidate processes and their descendants cannot read or modify the operator's execution ledger, completion journal, authoritative state, policy originals or privileged credentials through filesystem, environment, process, kernel keyring or control interfaces.
-      - The supported backend is Linux Bubblewrap with strict user, mount, PID, network, IPC and UTS namespace separation, an empty capability set, no-new-privileges and disabled nested user namespaces; a separate checkout, same-user directory permissions or a successful version probe alone does not establish isolation.
-      - Apply one mandatory fixed syscall filter compiled with the installed libseccomp for the supported native syscall ABI; deny keyctl, add_key, request_key and io_uring setup, enter and register, restrict socket creation to Unix, IPv4 or IPv6 and socket pairs to Unix, and terminate compatibility or unsupported ABI calls. Mask the procfs keyring listings with empty read-only files as well. Callers cannot disable or replace this filter.
-      - Use an explicitly supplied trusted root filesystem and guest Python interpreter under an exact reviewed content digest; create a private detached copy, reject unsupported file types and content changes, and never bind host runtime directories, workspaces, homes or control sockets into the candidate namespace.
-      - Approved criteria and permitted source inputs are supplied as explicit path-to-bytes snapshots under a read-only input mount; input paths cannot escape that mount, and no implicit repository traversal or environment inheritance supplies additional inputs.
-      - Before releasing the candidate argument vector, a trusted bootstrap in the actual launched namespace verifies namespace identities, zero capabilities, no-new-privileges, the active syscall filter and expected denial probes, private process visibility and the required mount protections; the supervisor verifies and pins the actual namespace init process with a kernel PID file descriptor, and invalid or unavailable setup stops without starting candidate code or falling back to the operator runtime.
-      - Filesystem, network and subprocess capabilities are explicit for this backend; use a read-only runtime and input mount, private process and device views and bounded private temporary filesystems for temporary, working and output data, with no candidate-writable host mounts, no host network access and descendant processes confined to the same boundary.
-      - The launcher clears inherited environment variables and closes unrelated file descriptors; candidate stdin is detached from the supervisor's control channel before execution, and host process, credential and runtime-management interfaces remain inaccessible.
-      - Timeout or a captured-log limit signals the verified namespace init through its pinned kernel PID file descriptor, and the supervisor waits for actual namespace termination before collecting artifacts from the private output directory descriptor pinned before candidate release, including after normal candidate exit; supervisor termination kills the namespace and descendants through parent-death protection, while an uncatchable kill may leave private staging for manual inspection after processes have exited. A finite per-run timeout and bounded snapshots, logs and artifacts are cleanup limits rather than durable retry or concurrency budgets.
-      - Publish a new private output bundle only after the namespace has exited and output traversal safely accepts regular files without following symbolic links or accepting hard links, devices, sockets or FIFOs; invalid setup or unsafe artifacts publish no successful bundle and never overwrite an existing destination.
-      - Reports identify the reviewed runtime, supplied snapshots, compiled syscall filter digest and verified launch boundary separately from untrusted candidate exit status, logs and artifacts; runtime content digests and successful execution do not authenticate evidence, prove output provenance or authorize completion.
-      - Real integration tests attempt forbidden reads, writes, inherited-descriptor access, host process access, kernel keyring access and host network or Unix socket access from candidate processes and descendants; they also verify immutable permitted inputs, safe output exchange, failed setup and descendant cleanup without substituting mocked or skipped runtime checks.
-      - The operator, reviewed root filesystem, Bubblewrap and libseccomp installations and host kernel remain trusted; the boundary does not defend against a hostile operator or kernel/runtime exploits and does not claim virtual-machine isolation.
+      - Explicit candidate execution authorizes only the selected argument vector, reviewed backend and runtime policy, immutable input snapshots and new output destination; it grants no dispatch, verification, completion, release or deployment authority.
+      - Candidate processes and their descendants cannot read or modify the operator's execution ledger, completion journal, authoritative state, policy originals or privileged credentials through filesystem, environment, process, kernel credential facilities or control interfaces.
+      - Enforce separation through an independently enforced runtime boundary with a reviewed contract; same-user directory permissions, path checks, a separate checkout or a successful version probe alone do not establish isolation.
+      - Verify the selected runtime's identity and permitted inputs against reviewed policy before execution; candidate-controlled configuration cannot add capabilities, replace required protections or expose operator runtime files and interfaces.
+      - Approved criteria and permitted source inputs are supplied as explicit immutable path-to-bytes snapshots; input paths cannot escape that snapshot, and no implicit repository traversal or environment inheritance supplies additional inputs.
+      - Verify the actual execution boundary before candidate code starts; a backend name or candidate self-report alone is insufficient, and an unavailable or failed boundary stops execution without falling back to the operator runtime.
+      - Filesystem, network and subprocess capabilities are explicitly constrained by the selected backend's reviewed contract; inherited environment, unrelated descriptors, privileged mounts and runtime-management interfaces cannot bypass the boundary, and descendant processes remain confined.
+      - Completion, timeout, output limits and supervisor termination stop candidate processes and descendants according to the backend contract; actual termination is verified before artifact collection, including after normal candidate exit. Per-run cleanup limits do not establish durable retry or concurrency budgets.
+      - Collect bounded logs and artifacts without following candidate-controlled paths into operator resources or accepting unsafe file types; invalid setup or unsafe artifacts publish no successful bundle, and publishing a new private bundle never overwrites an existing destination.
+      - Reports identify the selected backend, reviewed runtime and supplied snapshot identities and verified boundary facts separately from untrusted candidate exit status, logs and artifacts; content identity and successful execution do not authenticate evidence, prove output provenance or authorize completion.
+      - Real integration tests for each supported backend attempt forbidden reads, writes, inherited-descriptor access, host process access, kernel credential access and host network or socket access from candidate processes and descendants; they also verify immutable permitted inputs, safe output exchange, failed setup and descendant cleanup without substituting mocked or skipped runtime checks.
+      - Each supported backend declares its required protections, trusted components and exclusions in a reviewed contract. The current local linux-bubblewrap-v1 backend must satisfy docs/candidate-isolation.md#linux-bubblewrap-v1-backend-contract in full; another backend needs its own reviewed contract and real verification before support can be claimed.
       - Trusted local completion of existing work does not require launching candidate code; this isolation requirement becomes mandatory before an executor runs candidate-controlled code, while durable dispatch and executor attempt supervision retain their own requirements.
-    verification_method: Real Linux Bubblewrap integration tests for namespace and kernel-interface denials, descendants, input immutability, safe artifacts, failed setup and termination, plus policy, snapshot, publication and CLI contract tests.
+    verification_method: Real integration tests of the currently supported local Linux Bubblewrap backend for namespace and kernel-interface denials, descendants, input immutability, safe artifacts, failed setup and termination, plus policy, snapshot, publication and CLI contract tests; these establish no support for another backend.
     observe:
       tests:
         cases:
@@ -211,24 +209,24 @@ records:
   - id: APP-014
     type: Application
     name: Executor supervisor
-    description: Proposed bounded executor adapter that uses the verified isolated command launcher.
+    description: Proposed bounded executor adapter using a selected runtime that satisfies the isolation contract.
     owner: exacly-maintainers
     lifecycle: proposed
     evidence: []
     last_reviewed_at: "2026-10-29"
-    responsibility: Use the isolated command launcher, enforce durable execution limits, retain attempt history and return produced implementation identities without granting completion authority.
+    responsibility: Require verified isolation from the selected execution backend, enforce durable execution limits, retain attempt history and return produced implementation identities without granting completion authority.
     interfaces: [Planned executor adapter API, Planned durable attempt supervision interface]
     implementation_ref: { locator: python/src/exacly/executor.py, planned: true }
 
   - id: APP-016
     type: Application
-    name: Isolated command launcher
-    description: Explicit Linux Bubblewrap execution with a verified namespace gate and untrusted output collection.
+    name: Local Bubblewrap command launcher
+    description: Optional local command backend delegating enforcement to Linux Bubblewrap with a verified namespace gate and untrusted output collection.
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
     last_reviewed_at: "2026-10-29"
-    responsibility: Verify one reviewed runtime and immutable input snapshot, establish the actual isolation boundary before candidate code starts, and retain bounded untrusted results without operator authority.
+    responsibility: For explicitly requested local execution, launch through installed Bubblewrap, verify the reviewed runtime, immutable inputs and actual boundary, and retain bounded untrusted results without operator authority.
     interfaces: [exacly isolate command, exacly isolation inspect command, exacly.isolation Python API]
     implementation_ref: { locator: python/src/exacly/isolation.py }
 
@@ -270,14 +268,14 @@ records:
 
   - id: INF-004
     type: Infrastructure
-    name: Isolated execution runtime
-    description: Linux Bubblewrap namespaces with a detached reviewed root filesystem, private staging and output storage.
+    name: Local Bubblewrap execution runtime
+    description: The optional local linux-bubblewrap-v1 backend with a detached reviewed root filesystem, private staging and output storage.
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
     last_reviewed_at: "2026-10-29"
     kind: Linux namespace execution boundary and private run storage
-    purpose: Run candidate-controlled code with explicit immutable inputs, no host network or operator interfaces and a verified boundary before execution, then retain safely collected untrusted results.
+    purpose: When the local Bubblewrap backend is explicitly selected, run candidate-controlled code with immutable inputs, no host network or operator interfaces and a verified boundary, then retain safely collected untrusted results.
     operational_ref: { locator: docs/candidate-isolation.md }
 
 relationships:
@@ -318,8 +316,8 @@ relationships:
   - { source: APP-013, type: reads, target: INFO-003 }
   - { source: APP-013, type: reads, target: INFO-005 }
   - { source: APP-013, type: writes, target: INFO-005 }
-  - { source: APP-014, type: depends_on, target: APP-016, conditions: The bounded executor must use the verified isolated command launcher before candidate code starts. }
-  - { source: APP-014, type: depends_on, target: INF-004, conditions: A verified isolation boundary is mandatory before candidate code starts. }
+  - { source: APP-014, type: depends_on, target: APP-016, conditions: When the local linux-bubblewrap-v1 backend is selected the bounded executor uses this verified launcher before candidate code starts; no other backend is currently supported. }
+  - { source: APP-014, type: depends_on, target: INF-004, conditions: Required when the local linux-bubblewrap-v1 backend is selected; every executor must independently satisfy REQ-025 before candidate code starts. }
   - { source: APP-016, type: depends_on, target: INF-004, conditions: Every candidate command requires the supported Linux boundary with no host-execution fallback. }
   - { source: APP-016, type: reads, target: INFO-007 }
   - { source: APP-016, type: writes, target: INFO-007 }

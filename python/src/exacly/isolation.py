@@ -1,8 +1,10 @@
-"""One explicitly authorized Linux Bubblewrap launch, separated from operator authority.
+"""Optional local linux-bubblewrap-v1 backend for explicitly authorized candidate commands.
 
 The installed kernel, Bubblewrap executable and reviewed root filesystem are trusted. Candidate
 code receives only a private copy of that root and explicit byte snapshots. This module supplies no
 dispatch, evidence admission, completion authority, persistent attempts or automatic retries.
+Its closed runtime policy implements one backend; it is not a generic executor/provider registry.
+Core model, evidence and completion operations do not require this module or its runtime.
 """
 
 from __future__ import annotations
