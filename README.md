@@ -113,18 +113,18 @@ uv tool install exacly
 exacly validate spec/examples/0.2/invoice-reminders
 ```
 
-The `0.6.0rc4` release candidate creates completion-ready new ledgers and private
-admission files, alongside installed evidence packaging, producer-policy
-drafting, verification planning and local completion. Select it explicitly for
-a one-off run:
+Version `0.6.0` adds verification planning, installed evidence packaging and
+producer-policy drafting, live evidence admission and recoverable local
+completion. New ledgers are completion-ready, and admission files are private.
+Select the version explicitly for a one-off run:
 
 ```sh
-uvx --from 'exacly==0.6.0rc4' exacly validate spec/examples/0.2/invoice-reminders
+uvx --from 'exacly==0.6.0' exacly validate spec/examples/0.2/invoice-reminders
 ```
 
 An unpinned install selects the latest stable release. See the
-[candidate release notes and upgrade paths](CHANGELOG.md) before using existing
-ledger files or consuming JSON reports with the candidate.
+[release notes and upgrade paths](CHANGELOG.md) before using existing ledger
+files or consuming JSON reports with this version.
 
 In your own project, keep config in `spec/exacly/` and pass the commit it was validated at with `--revision "$(git rev-parse HEAD)"`.
 
@@ -180,7 +180,4 @@ Each part of Exacly has its own version, tagged as `<part>-vX.Y.Z`, as release-p
 | 0.3.0: assessment sources, combined results, lists of bindings, the manual-qa extension | 0.1, 0.2 |
 | 0.4.0: independent verification, explicit assessment targets and readiness policies | 0.1, 0.2 |
 | 0.5.0: incomplete execution of case-bound tests gives inconclusive verification | 0.1, 0.2 |
-| 0.6.0rc1 (preview): verification plans, live evidence admission, registered work, recoverable local completion and ledger maintenance | 0.1, 0.2 |
-| 0.6.0rc2 (preview): explicit producer branch-protection choice and admission receipt 0.2 | 0.1, 0.2 |
-| 0.6.0rc3 (preview): installed evidence packaging and producer-policy drafting, with compatible manifest and admission formats | 0.1, 0.2 |
-| 0.6.0rc4 (preview): completion-ready new ledgers and private admission files | 0.1, 0.2 |
+| 0.6.0: operator-controlled verification work, installed producer tools and recoverable local completion | 0.1, 0.2 |
