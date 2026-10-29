@@ -9,12 +9,11 @@ from typing import Any
 
 import pytest
 import yaml
-from exacly import admission
+from exacly import admission, evidence_packaging
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = ".github/workflows/verification-evidence.yml"
 WORKFLOW: dict[Any, Any] = yaml.safe_load((ROOT / WORKFLOW_PATH).read_text())
-PRODUCER = runpy.run_path(str(ROOT / "ci/package_verification_evidence.py"))
 SHA = "a" * 40
 PASSING = b'<testsuites><testsuite><testcase file="tests/test_example.py" name="example"/></testsuite></testsuites>'
 
@@ -39,7 +38,7 @@ def package(tmp_path: Path, report: bytes = PASSING, **overrides: str) -> tuple[
     source = tmp_path / "junit.xml"
     source.write_bytes(report)
     out = tmp_path / "evidence"
-    manifest = PRODUCER["package"](source, out, environ=environment(**overrides), checkout=lambda: SHA)
+    manifest = evidence_packaging.package(source, out, environ=environment(**overrides), checkout=lambda: SHA)
     return manifest, out
 
 
@@ -47,6 +46,30 @@ def test_configured_example_matches_the_actual_producer_workflow() -> None:
     profile = yaml.safe_load((ROOT / "ci/evidence-producer.yaml").read_text())
     producer = admission.validate_producer(profile["producer"])
     admission.workflow_contract((ROOT / producer["workflow"]["path"]).read_bytes(), producer)
+
+
+@pytest.mark.parametrize("path", ["cli.py", "evidence_packaging.py", "__init__.py", "future_packaging_input.py"])
+def test_proposal_pins_cli_packager_and_future_package_inputs(path: str) -> None:
+    profile = yaml.safe_load((ROOT / "ci/evidence-producer.yaml").read_text())
+    entries = [
+        {
+            "path": file.relative_to(ROOT).as_posix(),
+            "mode": "100644",
+            "type": "blob",
+            "sha": hashlib.sha1(b"blob " + str(file.stat().st_size).encode() + b"\0" + file.read_bytes()).hexdigest(),
+        }
+        for file in sorted((ROOT / "python/src/exacly").rglob("*.py"))
+    ]
+    approved = admission.observer_digest(entries, profile["observer_paths"])
+    changed = [dict(entry) for entry in entries]
+    selected = f"python/src/exacly/{path}"
+    for entry in changed:
+        if entry["path"] == selected:
+            entry["sha"] = "b" * 40
+            break
+    else:
+        changed.append({"path": selected, "mode": "100644", "type": "blob", "sha": "b" * 40})
+    assert admission.observer_digest(changed, profile["observer_paths"]) != approved
 
 
 def test_workflow_is_one_read_only_push_main_job_without_dynamic_job_expansion() -> None:
@@ -88,7 +111,7 @@ def test_completed_failures_are_packaged_and_each_attempt_has_one_artifact_name(
     )
     assert package_step["env"] == {"EXACLY_TEST_OUTCOME": "${{ steps.verification.outcome }}"}
     assert package_step["run"] == (
-        "uv run --locked python ci/package_verification_evidence.py --report reports/junit.xml --out reports/evidence"
+        "uv run --locked exacly package github-actions --report reports/junit.xml --out reports/evidence"
     )
     uploads = [step for step in steps if step.get("uses", "").startswith("actions/upload-artifact@")]
     assert len(uploads) == 1
@@ -122,6 +145,23 @@ def test_bundle_preserves_report_and_records_only_producer_identity_and_integrit
         "check_outcome": "success",
     }
     assert json.loads((out / "manifest.json").read_text()) == manifest
+
+
+def test_legacy_script_entrypoint_still_packages_the_same_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    legacy = runpy.run_path(str(ROOT / "ci/package_verification_evidence.py"))
+    for key, value in environment().items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setattr(evidence_packaging, "checkout_revision", lambda: SHA)
+    source, out = tmp_path / "junit.xml", tmp_path / "evidence"
+    source.write_bytes(PASSING)
+    assert legacy["main"](["--report", str(source), "--out", str(out)]) == 0
+    manifest = json.loads((out / "manifest.json").read_text())
+    assert (out / "junit.xml").read_bytes() == PASSING
+    assert manifest["schema_version"] == "0.1.0"
+    assert manifest["report_digest"] == "sha256:" + hashlib.sha256(PASSING).hexdigest()
+    assert "Prepared verification evidence" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(
@@ -186,8 +226,8 @@ def test_unsupported_producer_metadata_creates_no_output(tmp_path: Path, overrid
     report = tmp_path / "junit.xml"
     report.write_bytes(PASSING)
     out = tmp_path / "not-created" / "evidence"
-    with pytest.raises(PRODUCER["EvidenceError"]):
-        PRODUCER["package"](report, out, environ=environment(**overrides), checkout=lambda: SHA)
+    with pytest.raises(evidence_packaging.EvidenceError):
+        evidence_packaging.package(report, out, environ=environment(**overrides), checkout=lambda: SHA)
     assert not out.parent.exists()
     assert report.read_bytes() == PASSING
 
@@ -211,8 +251,8 @@ def test_invalid_branch_reference_is_rejected_even_when_workflow_reference_match
     report = tmp_path / "junit.xml"
     report.write_bytes(PASSING)
     out = tmp_path / "evidence"
-    with pytest.raises(PRODUCER["EvidenceError"], match="branch reference"):
-        PRODUCER["package"](
+    with pytest.raises(evidence_packaging.EvidenceError, match="branch reference"):
+        evidence_packaging.package(
             report,
             out,
             environ=environment(GITHUB_REF=ref, GITHUB_WORKFLOW_REF=f"acme/example/{WORKFLOW_PATH}@{ref}"),
@@ -225,8 +265,8 @@ def test_wrong_actual_checkout_creates_no_output(tmp_path: Path) -> None:
     report = tmp_path / "junit.xml"
     report.write_bytes(PASSING)
     out = tmp_path / "evidence"
-    with pytest.raises(PRODUCER["EvidenceError"], match="checkout"):
-        PRODUCER["package"](report, out, environ=environment(), checkout=lambda: "b" * 40)
+    with pytest.raises(evidence_packaging.EvidenceError, match="checkout"):
+        evidence_packaging.package(report, out, environ=environment(), checkout=lambda: "b" * 40)
     assert not out.exists()
 
 
@@ -250,8 +290,8 @@ def test_incomplete_unsafe_or_contradictory_reports_create_no_bundle(tmp_path: P
     source = tmp_path / "junit.xml"
     source.write_bytes(report)
     out = tmp_path / "evidence"
-    with pytest.raises(PRODUCER["EvidenceError"]):
-        PRODUCER["package"](source, out, environ=environment(), checkout=lambda: SHA)
+    with pytest.raises(evidence_packaging.EvidenceError):
+        evidence_packaging.package(source, out, environ=environment(), checkout=lambda: SHA)
     assert not out.exists()
 
 
@@ -262,16 +302,16 @@ def test_existing_output_directory_is_not_overwritten(tmp_path: Path) -> None:
     out.mkdir()
     sentinel = out / "keep"
     sentinel.write_text("existing output")
-    with pytest.raises(PRODUCER["EvidenceError"], match="already exist"):
-        PRODUCER["package"](report, out, environ=environment(), checkout=lambda: SHA)
+    with pytest.raises(evidence_packaging.EvidenceError, match="already exist"):
+        evidence_packaging.package(report, out, environ=environment(), checkout=lambda: SHA)
     assert sentinel.read_text() == "existing output"
     assert list(out.iterdir()) == [sentinel]
 
 
 def test_oversized_report_is_rejected_before_output_creation(tmp_path: Path) -> None:
     report = tmp_path / "junit.xml"
-    report.write_bytes(b"x" * (PRODUCER["MAX_REPORT_BYTES"] + 1))
+    report.write_bytes(b"x" * (evidence_packaging.MAX_REPORT_BYTES + 1))
     out = tmp_path / "evidence"
-    with pytest.raises(PRODUCER["EvidenceError"], match="size"):
-        PRODUCER["package"](report, out, environ=environment(), checkout=lambda: SHA)
+    with pytest.raises(evidence_packaging.EvidenceError, match="size"):
+        evidence_packaging.package(report, out, environ=environment(), checkout=lambda: SHA)
     assert not out.exists()

@@ -1,5 +1,24 @@
 # Package release notes
 
+## Unreleased
+
+- **Installed evidence packager.** `exacly package github-actions --report FILE
+  --out NEW_DIR` prepares the existing manifest/JUnit bundle from GitHub Actions
+  push metadata and the actual checkout. `--json` prints the manifest. The
+  reusable implementation is available as `exacly.evidence_packaging.package`;
+  consumers no longer need to copy a Python helper from Exacly's repository.
+  Packaging preserves report bytes and completed failure/skipped observations,
+  rejects invalid or contradictory inputs and existing outputs, and performs no
+  GitHub API calls or evidence admission.
+- Exacly's own producer workflow uses the installed command. Its proposal pins
+  the checkout's `python/src/exacly` subtree, including the CLI and packaging
+  implementation; changes to that source require a reviewed policy refresh.
+  The old `ci/package_verification_evidence.py` path remains a thin wrapper.
+
+The evidence manifest remains `0.1.0`, admission receipts remain `0.2.0`, and
+admission and ledger contracts are unchanged. This command is not included in
+the published `0.6.0rc2` package or tag.
+
 ## 0.6.0rc2 — 2026-10-29
 
 This candidate enables an explicit producer-policy choice for private

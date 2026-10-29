@@ -11,6 +11,7 @@ explicit ledger-copy upgrades.
 
 - [`exacly validate`](#validate) checks the model and prints the section 11 validation report.
 - [`exacly refresh`](#refresh) writes state from what the model's bindings observe.
+- [`exacly package github-actions`](#package-github-actions-evidence-unreleased) prepares a producer's manifest/JUnit evidence bundle (unreleased).
 - [`exacly admit github-actions`](#admit-github-actions-evidence) checks a live CI run against an approved producer policy before deriving verification state.
 - [`exacly show`, `trace`, `impact` and `gaps`](#questions) answer questions about the model, and [`exacly view`](#views) renders them for people.
 - [`exacly assess`](#assess-an-implementation-target) projects observations onto an explicit implementation and scope.
@@ -167,6 +168,75 @@ It writes one verification assessment per platform of each binding, with source 
 - **States.** A platform is failed when any criterion's latest result failed, inconclusive when one was inconclusive, passed when every criterion passed, and not checked when it has no usable observation, naming the release and builds. When every criterion due in the release passed but others are open, it is inconclusive and names them, with `x-release-scope: passed`, so the release can ship while the record is not yet verified. The release's scope is only its due criteria: a failure outside them fails the platform but leaves `x-release-scope: passed`.
 - **Details.** Each assessment carries `x-platform`, `x-release`, `x-builds`, `x-criteria` (each criterion's latest result) and, when the release has due criteria, `x-release-scope`. Its evidence is each observation's retained output with its digest. `exacly gaps` lists what the extension finds in them under "From extension observers": a release whose scope passed while the record is not verified, and observations that were not used.
 - **Validation.** When the model declares the extension, the validator checks each `manual-qa:observations` binding (`11.extension-binding`): `path`, and optionally `platforms`, nothing else. It also checks the `x-` fields on this source's assessments in state (`11.extension-assessment`), and `gaps` reports an assessment whose fields are not valid instead of reading them. The binding, assessment, target and observation schemas are `BINDING_SCHEMA`, `ASSESSMENT_SCHEMA`, `TARGET_SCHEMA` and `OBSERVATION_SCHEMA` in `exacly.manual_qa`. `observed_at` must be a timestamp with its offset, such as `2026-10-25T14:12:00Z`.
+
+## Package GitHub Actions evidence (unreleased)
+
+`exacly package github-actions` ships the existing producer helper as an installed
+command and the `exacly.evidence_packaging.package` Python API. This is an
+unreleased repository change; the published `0.6.0rc2` package does not include
+it. The consumer checks out its own project and runs its tests normally, without
+checking out Exacly's source or copying Exacly's Python helper.
+
+Run the command in that checked-out repository, after a verification step writes
+a JUnit report:
+
+```sh
+exacly package github-actions --report reports/junit.xml --out reports/evidence
+```
+
+GitHub supplies the repository, run, attempt, SHA, job, push ref and workflow-ref
+environment variables. Set `EXACLY_TEST_OUTCOME` to the verification step's actual
+`success` or `failure` outcome. The command requires a push context and checks
+that `git rev-parse HEAD` matches the full `GITHUB_SHA`; it reads no GitHub token
+and makes no API calls.
+
+After installing a version that includes this command, the following producer
+steps can follow an existing test step with `id: verification` that writes
+`reports/junit.xml`:
+
+```yaml
+- name: Package verification evidence
+  id: evidence
+  if: always() && (steps.verification.outcome == 'success' || steps.verification.outcome == 'failure')
+  env:
+    EXACLY_TEST_OUTCOME: ${{ steps.verification.outcome }}
+  run: exacly package github-actions --report reports/junit.xml --out reports/evidence
+- name: Upload verification evidence
+  if: always() && steps.evidence.outcome == 'success'
+  uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+  with:
+    name: example-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+    path: reports/evidence
+    if-no-files-found: error
+    retention-days: 30
+    include-hidden-files: false
+```
+
+The destination must be new. It receives exactly `manifest.json` (schema
+`0.1.0`) and `junit.xml`, preserving the report bytes. `--json` prints that same
+manifest instead of the text summary. Exit status is 0 when the bundle is
+prepared, 1 for invalid producer/report inputs or filesystem errors, and 2 for
+invalid command arguments.
+
+Completed failures and reports containing skipped cases are retained as
+observations. A successful step with failed cases is rejected as contradictory;
+cancelled or skipped verification steps cannot be packaged. Packaging neither
+derives verification state nor approves a policy or establishes evidence origin.
+Upload the bundle, then use [live admission](#admit-github-actions-evidence) to
+check it against GitHub and an independently approved policy. The installed API
+has the same behavior: `package(report, out, *, environ=None, checkout=None)`.
+
+Exacly's own [workflow](../.github/workflows/verification-evidence.yml) runs this
+command through `uv run --locked`. Its [producer proposal](../ci/evidence-producer.yaml)
+pins the checkout's `python/src/exacly` subtree, covering the CLI, packager and
+package imports. A source change changes those observer fingerprints and needs
+an independently reviewed policy refresh. Other projects using a published
+packager should pin its package version in the producer workflow and review
+their own observer inputs. Migrating a producer to this command changes its
+workflow bytes, so regenerate and independently review the candidate policy
+before admitting evidence from the changed workflow. The repository's old
+`ci/package_verification_evidence.py` path delegates to the packaged
+implementation for callers still using it.
 
 ## Admit GitHub Actions evidence
 

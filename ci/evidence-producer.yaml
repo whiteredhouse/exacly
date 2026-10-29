@@ -15,10 +15,15 @@ producer:
 
 # Literal repository-relative file or directory selectors, never glob patterns.
 # Missing selectors pin absence; adding them later changes the observer fingerprint.
+# This workflow runs the checkout's installed CLI. Pin its complete source package,
+# including entrypoint imports and future modules, rather than only the packager.
+# Source-package changes therefore require review and regeneration of this policy.
 observer_paths:
   - .github/workflows/verification-evidence.yml
   - ci/evidence-producer.yaml
+  # Verification still exercises the legacy entrypoint for compatibility.
   - ci/package_verification_evidence.py
+  - python/src/exacly
   - pyproject.toml
   - uv.lock
   - mise.toml
