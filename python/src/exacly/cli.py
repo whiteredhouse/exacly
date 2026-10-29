@@ -744,16 +744,20 @@ def write_admission(out: Path, inputs: Iterable[Path], trust_policy: dict[str, A
     out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=f".{out.name}-", dir=out.parent) as temporary:
         folder = Path(temporary)
-        folder.joinpath("receipt.json").write_text(
-            json.dumps(result.receipt, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8"
-        )
+        folder.chmod(0o700)
+
+        def write(name: str, data: bytes) -> None:
+            path = folder / name
+            with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as file:
+                path.chmod(0o600)
+                file.write(data)
+
+        write("receipt.json", (json.dumps(result.receipt, indent=2, sort_keys=True, default=str) + "\n").encode())
         if result.receipt["status"] == "admitted":
             assert result.archive is not None and result.report is not None and result.state is not None
-            folder.joinpath("archive.zip").write_bytes(result.archive)
-            folder.joinpath("junit.xml").write_bytes(result.report)
-            folder.joinpath("state.json").write_text(
-                json.dumps(result.state, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8"
-            )
+            write("archive.zip", result.archive)
+            write("junit.xml", result.report)
+            write("state.json", (json.dumps(result.state, indent=2, sort_keys=True, default=str) + "\n").encode())
         # Recheck immediately before publication so an ordinary repeat invocation never replaces a bundle.
         if os.path.lexists(out):
             raise ValueError("--out must be a new directory, not an existing path or symlink")

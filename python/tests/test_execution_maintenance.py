@@ -22,6 +22,7 @@ from exacly import completion_store, executions, operation_locks, planning
 from exacly import execution_maintenance as maintenance
 from exacly import execution_store as store
 from exacly.refresh import refresh
+from ledger_store_fixtures import initialize_legacy_ledger
 from test_admission import READINESS, Source
 from test_applicability import WHEN
 from test_executions import run
@@ -108,6 +109,8 @@ def valid_report(report: Doc, output: Path | None = None) -> None:
 
 
 def committed_history(path: Path) -> tuple[Doc, Doc]:
+    """Retain original v1 history for legacy maintenance and explicit upgrade checks."""
+    initialize_legacy_ledger(path)
     first = binding()
     second = binding("second", serial=3, state="state3", supersedes=first["id"])
     store.put(path, first)
@@ -488,7 +491,6 @@ def test_upgrade_publishes_exact_v1_backup_and_valid_private_v2_copy(ledger: Pat
 def test_inspect_and_backup_preserve_version_2(ledger: Path, output: Path) -> None:
     proposed = binding()
     store.put(ledger, proposed)
-    upgrade_fixture_in_place(ledger)
     before = snapshot(ledger.parent)
     inspected = maintenance.inspect(ledger)
     assert inspected["status"] == "clean"
@@ -654,9 +656,11 @@ def test_upgrade_rejects_unsafe_sources_without_output_or_source_changes(ledger:
         hot_journal(ledger)
     else:
         original = binding()
+        if case == "invalid_contract":
+            initialize_legacy_ledger(ledger)
         store.put(ledger, original)
         if case == "version_2":
-            upgrade_fixture_in_place(ledger)
+            assert int.from_bytes(ledger.read_bytes()[60:64], "big") == store.COMPLETION_VERSION
         else:
             tamper_target(ledger, original["id"], "c" * 40)
     before = snapshot(ledger.parent)
@@ -669,6 +673,7 @@ def test_upgrade_rejects_unsafe_sources_without_output_or_source_changes(ledger:
 def test_upgrade_failure_does_not_publish_or_modify_the_v1_source(
     ledger: Path, output: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    initialize_legacy_ledger(ledger)
     store.put(ledger, binding())
     before = snapshot(ledger.parent)
 
@@ -687,6 +692,7 @@ def test_upgrade_failure_does_not_publish_or_modify_the_v1_source(
 def test_upgrade_requires_the_copy_to_reach_version_2(
     ledger: Path, output: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    initialize_legacy_ledger(ledger)
     store.put(ledger, binding())
     before = snapshot(ledger.parent)
     monkeypatch.setattr(completion_store, "upgrade", lambda connection, *, deadline: None)

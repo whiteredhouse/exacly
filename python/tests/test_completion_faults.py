@@ -21,6 +21,7 @@ from typing import Any
 import pytest
 from exacly import admission, completion, completion_store, execution_maintenance, executions, state_writer
 from exacly.refresh import Run, refresh
+from ledger_store_fixtures import initialize_legacy_ledger
 from test_admission import ATTEMPT, READINESS, RUN_ID, Source
 from test_applicability import WHEN, A, B
 from test_executions import OPENED, TASK, run
@@ -132,6 +133,8 @@ def prepare_case(tmp_path: Path, *, two_observers: bool = False, large_receipt: 
     private = tmp_path / "original-operator"
     private.mkdir(mode=0o700)
     original_ledger = private / "ledger.sqlite3"
+    # Retain the explicit legacy-upgrade path in the crash/recovery compatibility fixtures.
+    initialize_legacy_ledger(original_ledger)
     case = FaultScenario(source, make_plan(source), state_path, original_ledger, {})
     case.binding = executions.register(original_ledger, case.registration())
     destination = tmp_path / "upgraded-operator"
