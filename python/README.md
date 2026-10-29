@@ -471,7 +471,7 @@ The versioned binding captures namespace, context and lineage; canonical Require
 
 The ledger is an explicitly selected private SQLite database using POSIX ownership, permissions and file locks, with file mode `0600`. It is not discovered from a repository and does not import JSON binding files. Directory ownership and permissions protect its storage boundary, but they do not isolate candidate code running as the same operating-system user. Run registration separately from code that is not authorized to change these bindings.
 
-Registration initializes new ledgers in schema version 1. Existing supported version-1 and version-2 ledgers retain their format; normal reads and registration never upgrade it. [Completion](#complete-registered-verification-work) requires version 2 through the explicit [copy-only upgrade](#upgrade-a-ledger-for-completion).
+Registration initializes new ledgers in schema version 1. Existing operational ledgers in versions 1, 2 and 4 retain their format; version 3 remains audit-only, and normal reads and registration never upgrade or activate a ledger. [Completion](#complete-registered-verification-work) supports version 2 through the explicit [copy-only upgrade](#upgrade-a-ledger-for-completion), or version 4 through separate [indexed activation](#activate-an-operational-indexed-ledger).
 
 Repeating a registration for the same pending entry and contract is idempotent and returns the original record, including its first `as_of`, `registered_at` and historical state snapshot. A different contract for an already active pending key conflicts unless `--supersedes` names its exact current binding ID. Explicit supersession atomically appends a replacement and leaves the original immutable record visible as inactive. A concurrent change to the active binding makes that replacement fail rather than silently overwrite history.
 
@@ -512,11 +512,11 @@ exacly executions backup --ledger "$EXACLY_LEDGER_FILE" \
 
 Backup uses SQLite's consistent backup operation and validates the copied store. It writes `ledger.sqlite3` and a manifest in the destination, leaving the source database unchanged. The copy retains the same binding identities, history, watermarks and approval limits; a backup does not grant new authority.
 
-Inspection, backup and recovery support ledger schemas 1 and 2 without changing their version. Version-2 validation also covers retained completion intents, receipts, proof digests, state identities and cross-references. It re-derives admitted observations from the retained JUnit report and approved model, and checks the exact recorded state transition.
+Inspection, backup and recovery support operational ledger schemas 1, 2 and 4 without changing their version. Version 3 remains audit-only. Version-2 validation re-derives all retained completion proof. Version-4 maintenance checks complete integrity baselines and freshly audits all retained semantics, including when a terminal verdict could be reused by an ordinary operational read. Backups and recovered copies preserve the required index coherently with proof and never refresh the retained profile implicitly.
 
-Completion operations reuse full history validation only for repeated reads of the same unchanged protected database view. A new operation or a ledger mutation requires fresh validation; unexpected changes stop the operation. Validation results do not persist across commands or connections. Every fresh validation still checks all retained history, including unrelated and aborted intents, so its cost grows with that history.
+Completion operations reuse an operation-scoped validated view only while its protected database snapshot is unchanged. Those snapshots expire with their connection and locks; unexpected changes stop the operation. Versions 1 and 2 retain full fresh semantic validation. Version 4 checks all retained bytes and fresh global invariants on each new view, then reuses only matching terminal semantics under the installed profile. Prepared intents always receive fresh semantics. Missing optional verdicts and recognized stale profiles can require fresh read-only validation without writing the index; missing or mismatched required baselines are errors. Storage and byte-checking cost still grow with history.
 
-The [ledger-history scaling design](../docs/ledger-history-scaling.md) describes the integrity, retention, replay and audit contract for future operational semantic reuse. The [conversion and audit commands](#create-and-audit-an-integrity-index-copy) establish an audit-only format; ordinary ledger commands retain the version-1/version-2 validation behavior above.
+The [ledger-history scaling design](../docs/ledger-history-scaling.md) describes the integrity, retention, replay and audit contract. The [index command](#create-and-audit-an-integrity-index-copy) retains its audit-only version-3 output. [Activation](#activate-an-operational-indexed-ledger) explicitly creates an operational version-4 copy; versions 1 and 2 keep their existing validation behavior.
 
 For a supported interrupted SQLite DELETE-journal transaction, recover into a separate new directory:
 
@@ -535,11 +535,11 @@ After reviewing a recovered copy, explicitly select its ledger path and cut over
 
 In Python, `exacly.execution_maintenance.inspect(ledger_path)`, `backup(ledger_path, output_directory)`, `recover(ledger_path, output_directory)` and `upgrade(ledger_path, output_directory)` return maintenance reports; each accepts the optional `lock_timeout` keyword. `as_text(report)` renders the same report, and `SCHEMA` defines its `0.2.0` format. Maintenance does not modify model or state files, dispatch work or close tasks.
 
-JSON consumers must handle maintenance report version `0.2.0`, which adds operation `upgrade`, status `upgraded` and ledger `store.user_version: 2` to the closed contract. Binding records and completion reports retain their separate `0.1.0` formats; the ledger's SQLite schema version is independent of these report versions.
+Version-1/version-2 maintenance retains report schema `0.2.0`. Version-4 maintenance uses `0.3.0` and reports installed and retained profiles, integrity coverage and fresh semantic audit counts. A stale recognized profile may be audited and copied without rewriting it; operational writes still require explicit activation refresh. Binding records and completion receipts retain their independent formats; the ledger's SQLite schema version is separate from report versions.
 
 ### Upgrade a ledger for completion
 
-Completion requires schema version 2. Upgrade a clean, validated version-1 ledger into a new directory:
+Completion supports schema version 2 or explicitly activated version 4. Start from a clean version-1 ledger by upgrading it into a new version-2 copy:
 
 ```sh
 exacly executions upgrade --ledger "$EXACLY_LEDGER_FILE" \
@@ -552,7 +552,7 @@ Review the bundle, then explicitly select `upgraded/ledger.sqlite3` as the canon
 
 ### Create and audit an integrity-index copy
 
-`executions index` copies a clean version-2 ledger into a new private bundle and adds required integrity baselines and recorded terminal semantic verdicts. Version 3 is **audit-only**: keep the version-2 source as the working ledger. Registration, show, reconciliation, completion and ordinary maintenance do not support the version-3 copy. This command provides no operational cutover, semantic reuse or measured speedup.
+`executions index` copies a clean version-2 ledger into a new private bundle and adds required integrity baselines and recorded terminal semantic verdicts. Version 3 remains **audit-only**. Registration, show, reconciliation, completion and ordinary maintenance do not support it. The index command performs no operational cutover or semantic reuse; use separate [activation](#activate-an-operational-indexed-ledger) when an operational version-4 copy is intended.
 
 Preview the conversion without writing an output directory:
 
@@ -581,11 +581,52 @@ exacly executions audit \
 
 Audit checks the exact retained row coverage and typed input baselines, relationships and installed validation profile, then freshly re-derives every retained semantic transition. A stored positive verdict never replaces those checks. Missing or altered baselines, changed retained bytes and inconsistent index associations fail without repair or resealing. An unsupported profile is reported as unsupported. Audit never fetches GitHub evidence, writes state, changes pending work or modifies the copy. Existing journal or WAL sidecars are diagnosed without implicit recovery; version-3 backup, recovery and operational writes remain future work.
 
-The audit-only format uses profile family `exacly-ledger-audit-v1` and transcript codec `typed-cells-v1`. The required integrity baseline covers the complete retained-row roster. Each terminal verdict separately binds its exact binding row, intent row and receipt row or explicit receipt absence, under the independently fingerprinted installed code, schemas, parser dependencies and runtime. Audit requires a matching installation; profile changes are explicit unsupported results. These dependency associations do not enable operational reuse or writers.
+The audit-only format uses profile family `exacly-ledger-audit-v1` and transcript codec `typed-cells-v1`. The required integrity baseline covers the complete retained-row roster. Each terminal verdict separately binds its exact binding row, intent row and receipt row or explicit receipt absence, under the independently fingerprinted installed code, schemas, parser dependencies and runtime. Version-3 audit requires a matching installation; unsupported profile changes remain explicit failures. Version 3 never becomes operational through an ordinary read or write.
 
-History reports use their own schema version `0.1.0`, independent of ordinary maintenance reports. Dry-run reports `ready` and conversion reports `indexed`, both with exit 0. Audit exits 0 for `passed`, 1 for `corrupt`, `unsupported` or `recovery_required`, and 2 for invalid inputs or operational errors. Both commands accept `--lock-timeout SECONDS`, default 30; the finite nonnegative value bounds lock waiting rather than copying or whole-audit computation. Reports identify the checked scope and profile and declare `eligible_operational: false` and `automatic_cutover: false`.
+Index and version-3 audit reports retain schema version `0.1.0`, independent of ordinary maintenance reports. Dry-run reports `ready` and conversion reports `indexed`, both with exit 0. Audit exits 0 for `passed`, 1 for `corrupt`, `unsupported` or `recovery_required`, and 2 for invalid inputs or operational errors. Both commands accept `--lock-timeout SECONDS`, default 30; the finite nonnegative value bounds lock waiting rather than copying or whole-audit computation. These audit-only reports identify the checked scope and profile and declare `eligible_operational: false` and `automatic_cutover: false`.
 
 In Python, `exacly.history_maintenance.convert(ledger_path, output_directory, dry_run=False, lock_timeout=30)` and `audit(ledger_path, lock_timeout=30)` return these reports; `as_text(report)` renders them, and `SCHEMA` defines their format. Digests and recorded verdicts do not authenticate who produced historical evidence, prove that a coherent copy is globally latest or protect against a same-user rewrite of proof and index. All historical bytes remain retained; this foundation adds no archival, expiry or garbage collection.
+
+### Activate an operational indexed ledger
+
+`executions activate` explicitly creates a version-4 operational copy from a clean supported version-2, version-3 or version-4 ledger. It fully validates the source before creating current-profile baselines and terminal verdicts in a new private bundle. A required integrity mismatch is a hard error; activation never reseals changed history as the original retained bytes. The source remains unchanged. Initial conversion from version 2 or 3 rejects unresolved prepared completions.
+
+Activation can refresh a well-formed stale version-3 or version-4 profile from a known family and codec after baseline checks and fresh semantics. Unknown families or codecs are unsupported. The existing version-3 audit command keeps its strict matching-profile behavior; activation does not silently relax that audit or change the source copy.
+
+Preview the copy and profile selection without writing output:
+
+```sh
+exacly executions activate --ledger "$EXACLY_LEDGER_FILE" \
+  --out "$EXACLY_OPERATIONAL_COPY_DIR" --dry-run --json
+```
+
+Create the operational copy:
+
+```sh
+exacly executions activate --ledger "$EXACLY_LEDGER_FILE" \
+  --out "$EXACLY_OPERATIONAL_COPY_DIR" --json
+```
+
+The new destination contains `raw/ledger.sqlite3`, the exact source, `operational/ledger.sqlite3`, the validated version-4 copy, and `manifest.json`. It has the same private-path, no-overwrite, source-preservation and durable atomic-publication rules as index conversion. Review the copy, then explicitly select `operational/ledger.sqlite3` as the canonical ledger for subsequent commands. Stop using the old path as a parallel active authority. Activation never changes authoritative state or performs this cutover automatically. A version-1 source must first use the existing version-2 upgrade.
+
+Version 4 supports registration, binding show, bound reconciliation, completion, offline historical replay and explicit completion recovery. Each new validated view checks complete historical byte coverage and global binding, phase, receipt and watermark invariants. Matching terminal semantics may be reused; prepared proof and new evidence evaluations remain fresh. Registration, preparation, abort and final receipt transactions maintain the required index with their actual ledger changes. Cached historical results never substitute for live evidence admission or current-state authorization.
+
+Version-4 binding show includes validation diagnostics for the installed and retained profile, checked integrity scope and fresh or reused semantic work. The immutable binding record and historical completion receipt keep their existing formats; version-1/version-2 show wrappers are unchanged. The `exacly.execution_index.check()` result also exposes these validation facts through `.facts`. An index-assisted result is distinct from a fresh full audit.
+
+Version-4 completion, show and recovery wrappers use report schema `0.2.0`, with `history_validation` identifying the named protected view at stage entry and its profile, byte coverage and fresh/reused counts. These counts describe that view rather than totals for the whole command. Version-2 wrappers and all immutable historical receipts retain `0.1.0`. Bound reconciliation includes the corresponding facts in `binding.validation`.
+
+A missing optional semantic verdict falls back to fresh validation in memory. A recognized stale version-4 profile with valid baselines also permits read-only fresh validation, but operational writes stop until a new explicit activation copy refreshes the profile. Normal commands never silently upgrade a profile or rewrite unrelated verdicts. Missing or corrupt required baselines remain errors during reads, activation, backup, recovery and audit.
+
+An existing version-4 ledger may be explicitly copy-refreshed while it contains prepared work. Activation validates all baselines and fresh semantics, preserves the exact intent, proof, state destination and receipt absence, and does not fetch evidence or publish state. After reviewing and selecting the refreshed copy as canonical, run normal completion recovery against the actual current state. Exact-before abort, exact-after finalization and third-state conflict retain their existing meanings and locks; activation itself never recovers the pending publication.
+
+Audit an operational ledger with the same explicit command:
+
+```sh
+exacly executions audit \
+  --ledger "$EXACLY_OPERATIONAL_COPY_DIR/operational/ledger.sqlite3" --json
+```
+
+Version-4 audit always freshly validates every retained semantic transition, regardless of reusable verdicts. Ordinary version-4 inspection, backup and copy-only hot-journal recovery also use a full fresh audit and preserve the profile and index coherently. Activation and version-4 audit reports use history schema `0.2.0`; activation reports `ready` for dry-run or `activated` for a published copy. Their lock-timeout and exit-status conventions match the history commands above. The checked scope distinguishes byte integrity and reused semantics from a fresh full audit. No history is archived or deleted, and whole-history byte work still grows with retained storage.
 
 ## Preview verification reconciliation
 
@@ -646,7 +687,7 @@ The [live rehearsal report](../docs/verification-reconciliation-rehearsal.md) re
 
 ## Complete registered verification work
 
-`exacly complete github-actions` explicitly authorizes completion of one registered local pending verification item. It requires a version-2 ledger, an active binding and the same reviewed plan, policies and output target used for that binding. Registration and a `ready` preview do not authorize mutation. Invoking this command with the selected inputs grants that local completion authority; it requires no additional confirmation prompt or authorization flag.
+`exacly complete github-actions` explicitly authorizes completion of one registered local pending verification item. It requires an operational version-2 or version-4 ledger, an active binding and the same reviewed plan, policies and output target used for that binding. Registration and a `ready` preview do not authorize mutation. Invoking this command with the selected inputs grants that local completion authority; it requires no additional confirmation prompt or authorization flag.
 
 ```sh
 exacly complete github-actions --plan reports/plan.json \

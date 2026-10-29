@@ -262,6 +262,12 @@ def preview(
             "superseded_by": envelope["superseded_by"],
             "checked_at": dt.datetime.now(dt.UTC).isoformat(),
         }
+        if "validation" in envelope:
+            report["binding"]["history_validation"] = {
+                "scope": "protected_view_at_stage_entry",
+                "stage": stage,
+                "facts": envelope["validation"],
+            }
         report["claims"]["registered_binding_verified"] = matched
         if not matched:
             return reason

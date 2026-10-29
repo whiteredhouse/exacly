@@ -12,6 +12,7 @@ exacly executions show --ledger FILE --binding ID [--json]
 exacly executions inspect --ledger FILE [--lock-timeout SECONDS] [--json]
 exacly executions backup|recover|upgrade --ledger FILE --out NEWDIR [--lock-timeout SECONDS] [--json]
 exacly executions index --ledger FILE --out NEWDIR [--dry-run] [--lock-timeout SECONDS] [--json]
+exacly executions activate --ledger FILE --out NEWDIR [--dry-run] [--lock-timeout SECONDS] [--json]
 exacly executions audit --ledger FILE [--lock-timeout SECONDS] [--json]
 exacly plan [-m PATH]... --policy FILE --target FILE --date YYYY-MM-DD [--json] [--out FILE]
 exacly show|trace|impact|gaps [-m PATH]... [--json] ...; exacly mcp [-m PATH]...
@@ -903,25 +904,31 @@ def exacly_main(argv: list[str] | None = None) -> int:
             "--lock-timeout", type=nonnegative_seconds, help="maximum ledger lock wait in seconds (default: 30)"
         )
         maintenance_parser.add_argument("--json", action="store_true", help="print the maintenance report as JSON")
-    for operation in ("index", "audit"):
+    for operation in ("index", "activate", "audit"):
         history_parser = execution_commands.add_parser(
             operation,
-            help=(
-                "create an audit-only indexed history copy without operational cutover"
-                if operation == "index"
-                else "fully revalidate an indexed history without changing it"
-            ),
-            description=(
-                "Create an audit-only indexed history copy. The source ledger is preserved; "
-                "the copy cannot be used by ordinary execution or completion commands, "
-                "and this command performs no operational cutover."
-                if operation == "index"
-                else "Freshly validate the complete indexed history and its retained evidence without changing it."
-            ),
+            help={
+                "index": "create an audit-only indexed history copy without operational cutover",
+                "activate": "create or refresh an operational v4 copy for explicit canonical selection",
+                "audit": "fully revalidate an indexed history without changing it",
+            }[operation],
+            description={
+                "index": (
+                    "Create an audit-only indexed history copy. The source ledger is preserved; "
+                    "the copy cannot be used by ordinary execution or completion commands, "
+                    "and this command performs no operational cutover."
+                ),
+                "activate": (
+                    "Fully validate a v2, v3 or v4 ledger and create an operational v4 copy, "
+                    "including an explicit refresh of a known stale validator profile. The source is preserved. "
+                    "Select one canonical ledger path explicitly before using the copy; no automatic cutover occurs."
+                ),
+                "audit": "Freshly validate the complete indexed history and its retained evidence without changing it.",
+            }[operation],
         )
         history_parser.add_argument("--ledger", required=True, type=Path, help="existing private execution ledger")
-        if operation == "index":
-            history_parser.add_argument("--out", required=True, type=Path, help="new private audit-copy directory")
+        if operation != "audit":
+            history_parser.add_argument("--out", required=True, type=Path, help="new private history-copy directory")
             history_parser.add_argument(
                 "--dry-run", action="store_true", help="validate the source and destination without creating a copy"
             )
@@ -975,7 +982,7 @@ def exacly_main(argv: list[str] | None = None) -> int:
     complete.add_argument("--run", required=True, type=positive_integer, help="GitHub Actions run ID")
     complete.add_argument("--attempt", required=True, type=positive_integer, help="exact run attempt")
     complete.add_argument("--date", required=True, type=dt.date.fromisoformat, help="evaluation date YYYY-MM-DD")
-    complete.add_argument("--ledger", required=True, type=Path, help="existing private version 2 execution ledger")
+    complete.add_argument("--ledger", required=True, type=Path, help="existing private version 2 or 4 execution ledger")
     complete.add_argument("--binding", required=True, help="registered binding ID")
     complete.add_argument(
         "--state", required=True, type=Path, help="local state whose selected pending item to complete"
@@ -1032,7 +1039,7 @@ def exacly_main(argv: list[str] | None = None) -> int:
     view.add_argument("--out", type=Path, metavar="DIR", help="site: the folder to write (default: reports/site)")
     args = parser.parse_args(argv)
     if args.command == "executions":
-        if args.execution_command in {"index", "audit"}:
+        if args.execution_command in {"index", "activate", "audit"}:
             from exacly import history_maintenance
 
             try:
@@ -1041,6 +1048,10 @@ def exacly_main(argv: list[str] | None = None) -> int:
                     protect_execution_copy(args.ledger, args.out)
                     answer = history_maintenance.convert(args.ledger, args.out, dry_run=args.dry_run, **options)
                     expected_statuses = {"ready" if args.dry_run else "indexed"}
+                elif args.execution_command == "activate":
+                    protect_execution_copy(args.ledger, args.out)
+                    answer = history_maintenance.activate(args.ledger, args.out, dry_run=args.dry_run, **options)
+                    expected_statuses = {"ready" if args.dry_run else "activated"}
                 else:
                     answer = history_maintenance.audit(args.ledger, **options)
                     expected_statuses = {"passed", "corrupt", "unsupported", "recovery_required"}
@@ -1059,7 +1070,7 @@ def exacly_main(argv: list[str] | None = None) -> int:
                 print(f"exacly executions: {error}", file=sys.stderr)
                 return 2
             print(rendered)
-            return 0 if answer["status"] in {"ready", "indexed", "passed"} else 1
+            return 0 if answer["status"] in {"ready", "indexed", "activated", "passed"} else 1
         if args.execution_command in {"inspect", "backup", "recover", "upgrade"}:
             import exacly.execution_maintenance as execution_maintenance
 
@@ -1078,6 +1089,13 @@ def exacly_main(argv: list[str] | None = None) -> int:
                     ]
                     if answer.get("status") != expected_status:
                         raise ValueError(f"execution {args.execution_command} returned an invalid status")
+                v4_report = answer.get("schema_version") == "0.3.0" or (
+                    isinstance(answer.get("store"), dict) and answer["store"].get("user_version") == 4
+                )
+                if v4_report and not jsonschema.Draft202012Validator(
+                    execution_maintenance.SCHEMA_V4, format_checker=state_writer.FORMATS
+                ).is_valid(answer):
+                    raise ValueError("version 4 execution maintenance returned an invalid report")
             except (query.QueryError, ValueError, OSError) as error:
                 print(f"exacly executions: {error}", file=sys.stderr)
                 return 2

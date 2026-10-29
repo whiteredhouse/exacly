@@ -10,7 +10,7 @@ records:
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-28"
+    last_reviewed_at: "2026-10-29"
     statement: >-
       Given a reviewed plan action, existing pending task and state, readiness and producer trust policies,
       output target and registration date, register an immutable binding in an explicitly selected private
@@ -23,14 +23,16 @@ records:
       - Verification pending work can be registered directly; a missing dimension requires explicit adopt-verification consent without modifying state, and other dimensions are rejected.
       - The ledger is an explicitly selected SQLite file outside Git working trees, model folders and input paths, in a pre-existing operator-owned POSIX 0700 directory with file mode 0600; no repository discovery or JSON binding import grants authority.
       - The operator's controlled runtime and directory provide the storage authority boundary; permissions do not isolate candidate code running as the same operating-system user.
-      - Newly initialized registration stores use schema version 1; existing supported version-1 and version-2 stores retain their format, and registration never performs an implicit schema upgrade.
+      - Newly initialized registration stores use schema version 1; existing supported version-1, version-2 and version-4 stores retain their format, version 3 remains audit-only, and registration never performs an implicit schema upgrade or activation.
       - Before completion, repeating the same pending identity and contract is idempotent and retains the original record's evaluation date, registration timestamp and historical snapshot; a different active contract conflicts unless supersedes names the exact current binding for that pending key.
       - Explicit supersession atomically appends an immutable replacement, preserves the prior record as inactive history and rejects a concurrent change to the active binding.
       - An unresolved prepared completion intent blocks registration and supersession for that pending identity, and a completed pending identity cannot be registered or reused; aborted completion intents remain historical records and permit a fresh attempt.
       - The store remembers the latest registered state serial and digest by pending identity, rejects rollback and same-serial divergence, and permits later refreshed state preserving the same pending entry; a newer registration can advance the watermark without rewriting the immutable record.
       - Watermarks guard registered history for the bound pending item without authenticating global state freshness or proving the supplied file is the latest filesystem snapshot.
       - Show and bound-preview reads require an existing valid store, refuse unknown schemas and existing journal or WAL sidecars, and neither initialize, migrate, recover nor modify its schema, records or watermarks.
-      - Validation reuse is confined to one unchanged protected database view; a new operation or a changed view requires full schema, binding and retained-proof validation, including unrelated and aborted completion history, before further reuse.
+      - Version-4 show wraps the unchanged immutable binding record with validation diagnostics identifying profile and fresh or reused semantic work; version-1/version-2 show wrappers and binding record format 0.1.0 remain unchanged.
+      - Operation-scoped validation reuse is confined to one unchanged protected database view; each fresh view checks complete schema, binding and retained-proof integrity including unrelated and aborted history, with fresh semantics in versions 1 and 2 and only matching terminal semantic reuse under the version-4 index contract.
+      - Version-4 registration maintains required integrity baselines and affected semantic associations atomically with bindings, active entries and watermarks; recognized stale profiles permit read-only fresh validation but block registration until explicit copy-only activation refreshes the profile.
       - Registration and show accept a finite nonnegative lock timeout defaulting to 30 seconds; one monotonic budget bounds directory and SQLite waits, with zero allowing an immediate attempt and actionable nonmutating errors on timeout.
       - The lock-wait budget does not limit the whole operation's computation or external HTTP requests, and expiration never permits implicit recovery or bypassing storage checks.
       - Registration changes only the ledger; it never changes input files, observations, pending work or external tasks and never dispatches agents or claims an executor-output link or task closure.
@@ -43,6 +45,8 @@ records:
           - "python/tests/test_executions_cli.py::*"
           - "python/tests/test_completion_validation.py::*"
           - "python/tests/test_completion_journal.py::*"
+          - "python/tests/test_execution_history_reuse.py::*"
+          - "python/tests/test_execution_history_reuse_cli.py::*"
 
   - id: APP-010
     type: Application
@@ -51,7 +55,7 @@ records:
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-28"
+    last_reviewed_at: "2026-10-29"
     responsibility: Register reviewed pending-task contracts and preserve their immutable history and state watermarks.
     interfaces: [exacly executions register command, exacly executions show command, exacly.executions Python API]
     implementation_ref: { locator: python/src/exacly/executions.py }
@@ -71,13 +75,13 @@ records:
   - id: INF-003
     type: Infrastructure
     name: Private execution ledger
-    description: An operator-selected SQLite database in a protected directory outside Git working trees and model folders, with explicit schema selection for completion storage.
+    description: An operator-selected protected SQLite ledger with explicit operational or audit-only schema selection and opt-in semantic indexing.
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-28"
+    last_reviewed_at: "2026-10-29"
     kind: Local SQLite storage
-    purpose: Retain immutable execution bindings, supersession history and registered-state watermarks, plus admitted completion proof, intents and receipts in explicitly upgraded version-2 stores, under operator control.
+    purpose: Retain immutable bindings, supersession history and watermarks; preserve admitted completion history in operational versions 2 and 4, indexed integrity in explicitly activated version 4 and separate audit-only version-3 copies under operator control.
     operational_ref: { locator: "Operator-selected protected SQLite file supplied through --ledger." }
 
 relationships:

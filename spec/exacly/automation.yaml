@@ -51,7 +51,7 @@ records:
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-28"
+    last_reviewed_at: "2026-10-29"
     statement: >-
       Given explicit operator completion authorization, one active execution binding and fresh admitted
       evidence for its output target, complete only the registered pending verification item when the
@@ -69,7 +69,8 @@ records:
       - SQLite ledger updates and JSON state publication form a recoverable protocol rather than one atomic transaction; failures after replacement preserve the complete published state and prepared intent and report the unfinished operation.
       - Repeating the exact completed request, including binding, state destination, plan and action, policies, target, run, attempt and evaluation date, returns its original durable receipt without HTTP, removing another task or increasing the serial again; a different request cannot reuse a completed binding or pending identity.
       - Explicit offline recovery aborts an intent when the exact before-state remains and requires fresh admission for another attempt; when the exact after-state is present it verifies the retained proof and binding, synchronizes the state and directory and finalizes once without HTTP; any third state conflicts without overwrite or replay of a stale candidate.
-      - Completion requires ledger schema version 2, obtained through explicit copy-only upgrade of a clean version-1 ledger into a new validated bundle with the source preserved; ordinary reads, registration and completion never silently migrate or recover a ledger.
+      - Completion supports operational ledger schema version 2 or explicitly activated version 4; version 1 requires explicit copy-only upgrade and version 3 remains audit-only, while ordinary reads, registration and completion never silently migrate, activate or recover a ledger.
+      - Version-4 completion and abort transactions maintain integrity baselines and affected terminal verdicts atomically with the actual phase, receipt and watermark changes; prepared proof always receives fresh semantics, and recognized stale profiles block new completion writes until explicit activation refreshes the profile.
       - Show reads the retained completion phase without exposing raw proof bytes; completion reports distinguish completed, pending, stale and conflict, and preserve unfinished intent after an operational error. Receipts describe historical completion rather than authenticating the latest state, test honesty, acceptance coverage or executor-to-output provenance.
       - Complete exits 0 only for completed and 1 for an unmet, stale or conflicting result; show exits 0 for a valid retained phase, offline recovery exits 0 for completed or aborted and 1 for an unresolved result, and invalid inputs or operational errors exit 2. Optional report-output failure does not undo an already recorded completion.
       - Local completion records observation-confirmed verification without closing an external ticket, dispatching an agent, granting release authority or claiming a machine-verified executor-to-output link.
@@ -84,6 +85,9 @@ records:
           - "python/tests/test_completion_locks.py::*"
           - "python/tests/test_completion_validation.py::*"
           - "python/tests/test_completion_journal.py::*"
+          - "python/tests/test_execution_history_reuse.py::*"
+          - "python/tests/test_execution_history_reuse_faults.py::*"
+          - "python/tests/test_execution_history_reuse_crashes.py::*"
 
   - id: REQ-025
     type: Requirement
@@ -212,8 +216,8 @@ records:
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-28"
-    definition: Versioned completion request and authorization, prepared intent, retained admission proof, exact before-state identity and candidate after-state bytes and digest, recovery outcome and finalized immutable receipt in a version-2 ledger.
+    last_reviewed_at: "2026-10-29"
+    definition: Versioned completion request and authorization, prepared intent, retained admission proof, exact before-state identity and candidate after-state bytes and digest, recovery outcome and finalized immutable receipt in operational version-2 or version-4 ledgers, with unchanged history also retained by audit-only version-3 copies.
     identifiers: [completion ID, binding ID, pending identity, plan and action IDs, target identity, evidence digests, state lineage and serial]
     steward: exacly-maintainers
 
@@ -283,5 +287,5 @@ relationships:
   - { source: APP-014, type: depends_on, target: INF-003, conditions: The trusted supervisor retains attempts through an explicit ledger extension without exposing the ledger to candidate code. }
   - { source: APP-014, type: reads, target: INFO-005 }
   - { source: APP-014, type: writes, target: INFO-005 }
-  - { source: INF-003, type: stores, target: INFO-004, role: system_of_record, conditions: Completion history in ledger schema version 2 selected through explicit copy-only upgrade; absent from version 1. }
+  - { source: INF-003, type: stores, target: INFO-004, role: system_of_record, conditions: Operational completion history in explicitly selected schema version 2 or 4; audit-only version 3 retains a copy and version 1 has no completion history. }
   - { source: INF-003, type: stores, target: INFO-005, role: system_of_record, conditions: Proposed dispatch and attempt history after an explicit ledger schema upgrade; absent from the current ledger format. }

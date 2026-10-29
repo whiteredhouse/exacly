@@ -13,7 +13,7 @@ import re
 import sqlite3
 import uuid
 import xml.etree.ElementTree as ET
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -474,6 +474,44 @@ def _load(connection: sqlite3.Connection, identity: str, deadline: store.Deadlin
     }
 
 
+def semantic_facts(envelope: Doc, binding: Doc) -> Doc:
+    """Freshly derive the immutable payload facts that an exact-bound v4 verdict may retain."""
+    metadata = envelope["intent"]
+    request, before, after = _payload(envelope, binding)
+    expected = _metadata(metadata["id"], request, metadata["prepared_at"], binding, envelope, before, after)
+    store.require(metadata == expected, "completion intent identity or retained bytes changed")
+    if envelope["receipt"] is not None:
+        _receipt(envelope["receipt"], metadata, binding)
+    return {
+        "schema_version": VERSION,
+        "intent_id": metadata["id"],
+        "binding_id": metadata["binding_id"],
+        "pending_key": metadata["pending_key"],
+        "request_digest": metadata["request_digest"],
+        "phase": envelope["phase"],
+        "state": metadata["state"],
+        "evidence": metadata["evidence"],
+        "receipt_digest": planning.digest(envelope["receipt"]) if envelope["receipt"] is not None else None,
+        "before_snapshot": {"serial": before["serial"], "digest": planning.digest(before)},
+        "after_snapshot": {"serial": after["serial"], "digest": planning.digest(after)},
+        "valid": True,
+    }
+
+
+def _summary(connection: sqlite3.Connection, identity: str, deadline: store.Deadline | None) -> Doc:
+    row = _execute(
+        connection,
+        "SELECT intent_json,phase FROM completion_intents WHERE id=?",
+        (identity,),
+        deadline,
+    ).fetchone()
+    store.require(row is not None, "completion intent does not exist")
+    receipt = _execute(
+        connection, "SELECT receipt_json FROM completion_receipts WHERE intent_id=?", (identity,), deadline
+    ).fetchone()
+    return {"intent": _json(row[0]), "phase": row[1], "receipt": _json(receipt[0]) if receipt else None}
+
+
 def _validate(
     connection: sqlite3.Connection,
     records: dict[str, Doc],
@@ -481,6 +519,7 @@ def _validate(
     watermarks: dict[str, Doc],
     *,
     deadline: store.Deadline | None = None,
+    terminal_facts: Mapping[str, Doc] | None = None,
 ) -> None:
     """Validate every retained intent and receipt after the exact base/v2 schema has been checked."""
     rows = _execute(
@@ -488,6 +527,11 @@ def _validate(
         "SELECT id, binding_id, pending_key, request_digest, phase FROM completion_intents",
         deadline=deadline,
     ).fetchall()
+    if terminal_facts is not None:
+        store.require(
+            set(terminal_facts) == {row[0] for row in rows if row[4] in ("committed", "aborted")},
+            "completion terminal semantic coverage is incomplete",
+        )
     committed: dict[str, tuple[str, str]] = {}
     prepared = 0
     for identity, binding_id, pending, request_digest, phase in rows:
@@ -496,16 +540,28 @@ def _validate(
             "invalid completion binding or phase",
         )
         binding = records[binding_id]
-        envelope = _load(connection, identity, deadline)
+        cached = terminal_facts is not None and phase != "prepared"
+        envelope = _summary(connection, identity, deadline) if cached else _load(connection, identity, deadline)
         metadata = envelope["intent"]
-        request, before, after = _payload(envelope, binding)
-        expected = _metadata(identity, request, metadata["prepared_at"], binding, envelope, before, after)
+        facts = terminal_facts[identity] if cached and terminal_facts is not None else semantic_facts(envelope, binding)
+        _digest_document(metadata)
         store.require(
-            metadata == expected
-            and (binding_id, pending, request_digest)
+            (binding_id, pending, request_digest)
             == (metadata["binding_id"], metadata["pending_key"], metadata["request_digest"]),
             "completion intent identity or retained bytes changed",
         )
+        store.require(
+            facts["schema_version"] == VERSION
+            and facts["valid"] is True
+            and (facts["intent_id"], facts["binding_id"], facts["pending_key"], facts["request_digest"], facts["phase"])
+            == (identity, binding_id, pending, request_digest, phase)
+            and facts["state"] == metadata["state"]
+            and facts["evidence"] == metadata["evidence"]
+            and facts["receipt_digest"]
+            == (planning.digest(envelope["receipt"]) if envelope["receipt"] is not None else None),
+            "completion semantic facts differ from the current journal associations",
+        )
+        before, after = facts["before_snapshot"], facts["after_snapshot"]
         if phase != "aborted":
             store.require(active.get(pending) == binding_id, "completion binding is no longer active")
         if phase == "prepared":
@@ -514,7 +570,7 @@ def _validate(
             watermark = watermarks[pending]
             store.require(
                 before["serial"] >= watermark["serial"]
-                and (before["serial"] != watermark["serial"] or planning.digest(before) == watermark["digest"]),
+                and (before["serial"] != watermark["serial"] or before["digest"] == watermark["digest"]),
                 "prepared completion violates the registered state watermark",
             )
         elif phase == "committed":
@@ -525,7 +581,7 @@ def _validate(
             _receipt(envelope["receipt"], metadata, binding)
             committed[binding_id] = (identity, request_digest)
             store.require(
-                watermarks[pending] == {"serial": after["serial"], "digest": planning.digest(after)},
+                watermarks[pending] == after,
                 "completed state watermark differs from its receipt",
             )
         else:
@@ -540,6 +596,23 @@ def _validate(
     )
 
 
+def _validate_indexed(
+    connection: sqlite3.Connection,
+    records: dict[str, Doc],
+    active: dict[str, str],
+    watermarks: dict[str, Doc],
+    terminal_facts: Mapping[str, Doc] | None,
+    *,
+    deadline: store.Deadline | None = None,
+) -> None:
+    try:
+        _validate(connection, records, active, watermarks, deadline=deadline, terminal_facts=terminal_facts)
+    except store.StoreError:
+        raise
+    except (admission.Rejected, query.QueryError, ValueError, KeyError, TypeError, AttributeError, RecursionError):
+        raise store.StoreError("invalid retained completion intent or receipt") from None
+
+
 def validate(
     connection: sqlite3.Connection,
     records: dict[str, Doc],
@@ -548,12 +621,8 @@ def validate(
     *,
     deadline: store.Deadline | None = None,
 ) -> None:
-    try:
-        _validate(connection, records, active, watermarks, deadline=deadline)
-    except store.StoreError:
-        raise
-    except (admission.Rejected, query.QueryError, ValueError, KeyError, TypeError, AttributeError, RecursionError):
-        raise store.StoreError("invalid retained completion intent or receipt") from None
+    """Freshly validate every retained payload; callers cannot supply a positive semantic verdict."""
+    _validate_indexed(connection, records, active, watermarks, None, deadline=deadline)
 
 
 STAMP_PRAGMAS = (
@@ -617,17 +686,20 @@ class Journal:
         self._closed = False
         self._poisoned = False
         self._snapshot: tuple[dict[str, Doc], dict[str, str], dict[str, Doc]] | None = None
+        self._validation: Doc | None = None
         self._generation: _Stamp | None = None
         self._reload()
 
     def close(self) -> None:
         self._closed = True
         self._snapshot = None
+        self._validation = None
         self._generation = None
 
     def _poison(self) -> None:
         self._poisoned = True
         self._snapshot = None
+        self._validation = None
         self._generation = None
 
     def _open(self) -> None:
@@ -640,8 +712,8 @@ class Journal:
             before = _stamp(self._connection, self._deadline)
             store.require(expected is None or before == expected, "completion journal changed before full revalidation")
             store.require(
-                dict(before.pragmas)["user_version"] == store.COMPLETION_VERSION,
-                "completion requires an explicitly upgraded v2 ledger",
+                dict(before.pragmas)["user_version"] in (store.COMPLETION_VERSION, store.INDEX_VERSION),
+                "completion requires an explicitly upgraded v2 or activated v4 ledger",
             )
             store.require(
                 all(row[1] in ("main", "temp") for row in before.databases)
@@ -651,10 +723,25 @@ class Journal:
                 is None,
                 "completion journal requires a connection without attached or temporary objects",
             )
-            snapshot = store.validate(self._connection, deadline=self._deadline)
+            validation = None
+            if dict(before.pragmas)["user_version"] == store.INDEX_VERSION:
+                from exacly import execution_index
+
+                owned = not self._connection.in_transaction
+                if owned:
+                    _execute(self._connection, "BEGIN", deadline=self._deadline)
+                try:
+                    checked = execution_index.check(self._connection, deadline=self._deadline)
+                    snapshot, validation = checked.snapshot, checked.facts
+                finally:
+                    if owned and self._connection.in_transaction:
+                        self._connection.rollback()
+            else:
+                snapshot = store.validate(self._connection, deadline=self._deadline)
             after = _stamp(self._connection, self._deadline)
             store.require(before == after, "completion journal changed during full validation")
             self._snapshot, self._generation = snapshot, after
+            self._validation = validation
         except BaseException:
             self._poison()
             raise
@@ -685,23 +772,54 @@ class Journal:
             self._poison()
             raise
 
+    @property
+    def validation(self) -> Doc | None:
+        """Facts for this last validated protected view, without a second validation pass."""
+        return cast(Doc | None, self._read(lambda: self._validation))
+
     @contextmanager
-    def _mutation(self, changes: int) -> Iterator[None]:
+    def _mutation(self, changes: int, expected_rows: Mapping[tuple[str, str], tuple[Any, ...]]) -> Iterator[None]:
+        from exacly import execution_index
+
         self._check()
         previous = self._generation
         assert previous is not None
         self._snapshot = None
+        indexed: execution_index.Checked | None = None
+        captured: Mapping[tuple[str, str], tuple[Any, ...] | None] = {}
+        index_writes = 0
 
         def unchanged_after_begin() -> None:
+            nonlocal indexed, captured
             store.require(
                 _stamp(self._connection, self._deadline) == previous.writing(transaction=True),
                 "completion journal changed before its owned transaction",
             )
+            if dict(previous.pragmas)["user_version"] == store.INDEX_VERSION:
+                indexed = execution_index.check(self._connection, deadline=self._deadline)
+                execution_index.require_writable(indexed)
+                captured = indexed.capture(expected_rows)
 
         try:
             with _transaction(self._connection, self._deadline, on_begin=unchanged_after_begin):
                 yield
-            expected = previous.writing(changes=changes, transaction=False)
+                store.require(
+                    _stamp(self._connection, self._deadline) == previous.writing(changes=changes, transaction=True),
+                    "completion journal changed during its owned transaction",
+                )
+                if indexed is not None:
+                    authorized = {
+                        key: execution_index.Change(captured[key], after) for key, after in expected_rows.items()
+                    }
+                    index_writes, _ = execution_index.maintain(
+                        self._connection, indexed, changes=authorized, deadline=self._deadline
+                    )
+                store.require(
+                    _stamp(self._connection, self._deadline)
+                    == previous.writing(changes=changes + index_writes, transaction=True),
+                    "completion journal changed during index maintenance",
+                )
+            expected = previous.writing(changes=changes + index_writes, transaction=False)
             store.require(
                 _stamp(self._connection, self._deadline) == expected,
                 "completion journal changed during its owned transaction",
@@ -863,6 +981,26 @@ def _get(journal: Journal, intent_id: str) -> Doc:
     return _load(connection, intent_id, deadline)
 
 
+def _intent_row(envelope: Doc, *, phase: str | None = None) -> tuple[Any, ...]:
+    """Construct the exact authorized SQL row from the already checked operation inputs."""
+    metadata = envelope["intent"]
+    return (
+        metadata["id"],
+        metadata["binding_id"],
+        metadata["pending_key"],
+        metadata["request_digest"],
+        envelope["phase"] if phase is None else phase,
+        store.canonical(metadata),
+        envelope["before_state"],
+        envelope["after_state"],
+        envelope["archive"],
+        envelope["report"],
+        store.canonical(envelope["admission_receipt"]),
+        store.canonical(envelope["model_documents"]),
+        store.canonical(envelope["admitted_state"]),
+    )
+
+
 @contextmanager
 def _transaction(
     connection: sqlite3.Connection,
@@ -954,7 +1092,7 @@ def _prepare(
         store.require(existing == value, "completion intent identity is already used")
         return existing
     registration_allowed(connection, binding["pending_key"], deadline=deadline)
-    with journal._mutation(1):
+    with journal._mutation(1, {("completion_intents", identity): _intent_row(value)}):
         _execute(
             connection,
             "INSERT INTO completion_intents (id,binding_id,pending_key,request_digest,phase,intent_json,"
@@ -991,7 +1129,17 @@ def _finalize(journal: Journal, intent_id: str, receipt: Doc) -> Doc:
         return dict(value["receipt"])
     store.require(value["phase"] == "prepared", "only a prepared intent can be finalized")
     after = state_writer.decode(value["after_state"])
-    with journal._mutation(3):
+    expected_rows = {
+        ("completion_receipts", intent_id): (
+            metadata["binding_id"],
+            intent_id,
+            metadata["request_digest"],
+            store.canonical(retained),
+        ),
+        ("completion_intents", intent_id): _intent_row(value, phase="committed"),
+        ("watermarks", metadata["pending_key"]): (metadata["pending_key"], after["serial"], planning.digest(after)),
+    }
+    with journal._mutation(3, expected_rows):
         _execute(
             connection,
             "INSERT INTO completion_receipts (binding_id,intent_id,request_digest,receipt_json) VALUES (?,?,?,?)",
@@ -1018,7 +1166,7 @@ def _abort(journal: Journal, intent_id: str) -> Doc:
     value = _get(journal, intent_id)
     store.require(value["phase"] in ("prepared", "aborted"), "a committed completion cannot be aborted")
     if value["phase"] == "prepared":
-        with journal._mutation(1):
+        with journal._mutation(1, {("completion_intents", intent_id): _intent_row(value, phase="aborted")}):
             _execute(
                 connection,
                 "UPDATE completion_intents SET phase='aborted' WHERE id=? AND phase='prepared'",
