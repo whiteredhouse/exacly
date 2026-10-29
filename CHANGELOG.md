@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- **Installed producer-policy drafting.** `exacly evidence propose-policy
+  github-actions` exposes the existing `exacly.admission.propose_policy` core
+  through the installed CLI. It requires an explicit repository, full revision,
+  YAML/JSON producer proposal, repeated model-file paths, policy name/version
+  and new output file. Authenticated GitHub reads compute remote workflow,
+  observer and model fingerprints; no repository layout or selector defaults
+  are inferred. Omitted branch protection remains omitted. The command writes
+  deterministic candidate JSON outside declared model folders, refuses output
+  overwrites and input aliases, and prints the same bytes with `--json`.
+  Candidate creation exits 0 and errors exit 2. Candidates still need
+  independent review and controlled storage; drafting does not approve or
+  install a policy, admit evidence or authorize execution. Permanent built-wheel
+  and published-version checks exercise the installed command outside the
+  source checkout.
 - **Installed evidence packager.** `exacly evidence package --report FILE
   --out NEW_DIR` prepares the existing manifest/JUnit bundle from GitHub Actions
   push metadata and the actual checkout. `--json` prints the manifest. The
@@ -26,7 +40,7 @@
   The repository-only CI helper is removed; use the installed command or Python API.
 
 The evidence manifest remains `0.1.0`, admission receipts remain `0.2.0`, and
-admission and ledger contracts are unchanged. This command is not included in
+admission and ledger contracts are unchanged. These commands are not included in
 the published `0.6.0rc2` package or tag.
 
 ## 0.6.0rc2 — 2026-10-29

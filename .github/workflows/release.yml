@@ -36,6 +36,7 @@ jobs:
           example="$PWD/spec/examples/0.2/invoice-reminders"
           smoke="$PWD/ci/smoke.py"
           evidence_smoke="$PWD/ci/smoke_evidence.py"
+          policy_smoke="$PWD/ci/smoke_policy.py"
           cd "$RUNNER_TEMP"
           uvx --isolated --from "$wheel" exacly validate "$example"
           uv run --isolated --no-project --with "$wheel" python "$smoke" --example "$example"
@@ -43,6 +44,7 @@ jobs:
           # The wire protocol is independent of the tool release. RC2 consumes the new producer's bundle.
           uv run --isolated --no-project --default-index https://pypi.org/simple \
             --with 'exacly==0.6.0rc2' python "$evidence_smoke" --consume evidence-compatibility.zip
+          uv run --isolated --no-project --with "$wheel" python "$policy_smoke"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist
@@ -84,6 +86,7 @@ jobs:
           example="$PWD/spec/examples/0.2/invoice-reminders"
           smoke="$PWD/ci/smoke.py"
           evidence_smoke="$PWD/ci/smoke_evidence.py"
+          policy_smoke="$PWD/ci/smoke_policy.py"
           cd "$RUNNER_TEMP"
           uv run --isolated --no-project --default-index https://pypi.org/simple \
             --with "exacly==$version" python "$smoke" --example "$example"
@@ -91,3 +94,5 @@ jobs:
             --with "exacly==$version" python "$evidence_smoke" --archive published-evidence-compatibility.zip
           uv run --isolated --no-project --default-index https://pypi.org/simple \
             --with 'exacly==0.6.0rc2' python "$evidence_smoke" --consume published-evidence-compatibility.zip
+          uv run --isolated --no-project --default-index https://pypi.org/simple \
+            --with "exacly==$version" python "$policy_smoke"

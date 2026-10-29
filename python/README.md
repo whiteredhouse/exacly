@@ -12,6 +12,7 @@ explicit ledger-copy upgrades.
 - [`exacly validate`](#validate) checks the model and prints the section 11 validation report.
 - [`exacly refresh`](#refresh) writes state from what the model's bindings observe.
 - [`exacly evidence package`](#package-verification-evidence-unreleased) prepares a producer's manifest/JUnit evidence bundle (unreleased).
+- [`exacly evidence propose-policy github-actions`](#draft-a-producer-policy-unreleased) drafts a producer-policy candidate for independent review (unreleased).
 - [`exacly admit github-actions`](#admit-github-actions-evidence) checks a live CI run against an approved producer policy before deriving verification state.
 - [`exacly show`, `trace`, `impact` and `gaps`](#questions) answer questions about the model, and [`exacly view`](#views) renders them for people.
 - [`exacly assess`](#assess-an-implementation-target) projects observations onto an explicit implementation and scope.
@@ -303,57 +304,92 @@ Each trust policy supplies its exact branch, workflow path, job ID and name, ver
 
 Exacly's own [producer proposal](../ci/evidence-producer.yaml) selects [the verification evidence workflow](../.github/workflows/verification-evidence.yml). This example runs on pushes to `main`, has one job named `Observe verification`, explicitly selects the pytest configuration with `-c pyproject.toml`, and packages `manifest.json` and `junit.xml` in an artifact named `exacly-evidence-RUN-ATTEMPT`. Other repositories supply their own contract. The packaging command checks the checkout and supported run metadata before producing the bundle; admission independently compares that metadata with GitHub responses and the approved policy.
 
-### Approve a producer policy
+### Draft a producer policy (unreleased)
 
-The trust policy names the repository by numeric ID and full name, the exact approved branch, `workflow` with its path, byte digest, job ID/name and step names, `artifact.name_prefix`, `observer` with approved paths and digest, and the approved model revision, file list and config digest. The model revision and selected implementation revision must be full Git commit SHAs. The implementation may be a newer revision whose approved workflow and observer fingerprint still match.
+`exacly evidence propose-policy github-actions` exposes the existing
+`exacly.admission.propose_policy` API through the installed CLI. The command is
+an unreleased repository change, planned for `0.6.0rc3`; the published
+`0.6.0rc2` package does not include it. **The RC3 invocation below is unavailable
+until that version is published.** The Python API remains available in RC2.
 
-Observer paths are literal, safe repository-relative file or directory selectors, with no glob patterns. Each selector pins that file or directory subtree. An explicitly selected absent path pins its absence, so adding it later changes the fingerprint; removing or changing selected content also changes it. Reviewers must check that the selectors cover the observer's execution inputs, including applicable configuration and ancestor test hooks. Selectors identify Git content and absence; they do not discover a complete runtime dependency closure or prove test honesty.
+The trust policy names the repository by numeric ID and full name, the exact
+approved branch, `workflow` with its path, byte digest, job ID/name and step
+names, `artifact.name_prefix`, `observer` with approved paths and digest, and the
+approved model revision, file list and config digest. Model and implementation
+revisions are full Git commit SHAs. An implementation may be a newer revision
+whose approved workflow and observer fingerprint still match.
 
-Prepare a candidate policy from an already reviewed commit containing the producer workflow. Run from a checkout of that revision to read its producer proposal, set `EXACLY_APPROVED_REVISION` to its full SHA and provide a read-permission GitHub token through `GH_TOKEN`:
+Observer paths are literal, safe repository-relative file or directory
+selectors, with no glob patterns. Each selector pins that file or directory
+subtree. An explicitly selected absent path pins its absence, so adding it later
+changes the fingerprint; removing or changing selected content also changes it.
+Reviewers must check that selectors cover the observer's execution inputs,
+including applicable configuration and ancestor test hooks. Selectors identify
+Git content and absence; they do not discover a complete runtime dependency
+closure or prove test honesty.
 
-```python
-import json
-import os
-from pathlib import Path
+Prepare a local YAML or JSON producer proposal containing exactly `producer`
+and `observer_paths`, as in Exacly's
+[proposal](../ci/evidence-producer.yaml). `producer` explicitly supplies `branch`,
+`workflow` with `path`, `job_id`, `job_name` and `steps` (`verification`, `package`,
+`upload`), and `artifact.name_prefix`; `observer_paths` supplies the literal
+selectors. Repository, model files, policy name/version and output destination
+are separate required flags. The CLI supplies no layout, model-file or selector
+defaults.
 
-import yaml
+After RC3 is published, set `EXACLY_PRODUCER_REVISION` to the full immutable SHA
+whose workflow, observer and model content you intend to review. Use a proposal
+reviewed for that revision, and provide a read-permission GitHub token in
+`GH_TOKEN`, falling back to `GITHUB_TOKEN`. There is no token command argument.
+For Exacly's current complete model, run:
 
-from exacly.admission import propose_policy
-from exacly.github_evidence import GitHubClient
-
-source = GitHubClient(os.environ["GH_TOKEN"])
-proposal = yaml.safe_load(Path("ci/evidence-producer.yaml").read_text())
-candidate = propose_policy(
-    source,
-    "whiteredhouse/exacly",
-    os.environ["EXACLY_APPROVED_REVISION"],
-    [
-        "spec/exacly/model.yaml",
-        "spec/exacly/validation.yaml",
-        "spec/exacly/observation.yaml",
-        "spec/exacly/understanding.yaml",
-        "spec/exacly/planning.yaml",
-        "spec/exacly/admission.yaml",
-        "spec/exacly/evidence-packaging.yaml",
-        "spec/exacly/reconciliation.yaml",
-        "spec/exacly/executions.yaml",
-        "spec/exacly/execution-maintenance.yaml",
-        "spec/exacly/ledger-history.yaml",
-        "spec/exacly/automation.yaml",
-    ],
-    producer=proposal["producer"],
-    observer_paths=proposal["observer_paths"],
-)
-Path("admission-policy.candidate.json").write_text(json.dumps(candidate, indent=2) + "\n")
+```sh
+uvx --from 'exacly==0.6.0rc3' exacly evidence propose-policy github-actions \
+  --repository whiteredhouse/exacly \
+  --revision "$EXACLY_PRODUCER_REVISION" \
+  --proposal ci/evidence-producer.yaml \
+  --model-file spec/exacly/model.yaml \
+  --model-file spec/exacly/validation.yaml \
+  --model-file spec/exacly/observation.yaml \
+  --model-file spec/exacly/understanding.yaml \
+  --model-file spec/exacly/planning.yaml \
+  --model-file spec/exacly/admission.yaml \
+  --model-file spec/exacly/evidence-packaging.yaml \
+  --model-file spec/exacly/reconciliation.yaml \
+  --model-file spec/exacly/executions.yaml \
+  --model-file spec/exacly/execution-maintenance.yaml \
+  --model-file spec/exacly/ledger-history.yaml \
+  --model-file spec/exacly/automation.yaml \
+  --name github-verification \
+  --version 1 \
+  --out admission-policy.candidate.json
 ```
 
-The file list must contain the complete approved config at that revision. Include
-new config documents when the model grows, and leave observed state out of this
-list.
+The command reads the selected workflow, observer tree and model files from
+GitHub at that exact revision and reuses `exacly.admission.propose_policy` to
+validate the producer contract and compute fingerprints. The repeated
+`--model-file` flags must identify the complete approved config at that revision.
+Include new config documents when the model grows, and leave observed state out
+of the list. Other repositories supply their own repository, proposal and model
+paths.
 
-`producer` must explicitly supply `branch`, `workflow` with `path`, `job_id`, `job_name` and `steps` (`verification`, `package`, `upload`), and `artifact.name_prefix`. `observer_paths` is also required. The helper computes the workflow, observer and model fingerprints from the selected revision.
+`--out` must name a new file outside the declared model folders. Existing output
+and aliases of inputs are refused. If a declared model file is at the repository
+root, write the candidate outside the local working directory, which is treated
+as the model folder. Candidate JSON is deterministic; `--json`
+prints the same bytes written to the file instead of the text summary. Exit
+status is 0 when the candidate is written and 2 for invalid inputs, GitHub errors
+or output errors. Omit `--branch-protection` to leave that field absent and retain
+the protection-required default, or explicitly choose `required` or
+`not_required` as described below.
 
-Review both the proposal and generated policy independently of the implementation being evaluated, then keep the approved policy in controlled storage outside model directories. A repository proposal is not an approved policy. Generating hashes from candidate content does not approve its workflow, observer paths or model. The helper prepares policy content; it grants no execution authority or approval.
+Review both the proposal and generated policy independently of the
+implementation being evaluated, then keep the approved policy in controlled
+storage outside model directories. Repository proposals and generated
+fingerprints do not approve the workflow, observer inputs or model. Drafting
+only performs the selected GitHub reads and creates a local candidate: it does
+not approve or install a policy, admit evidence, register bindings or authorize
+completion.
 
 ### Choose branch-protection requirements
 
@@ -377,6 +413,8 @@ itself. Only `required` and `not_required` are accepted. The choice is useful fo
 private repositories whose GitHub plan does not provide branch protection.
 `propose_policy(..., branch_protection="not_required")` can prepare the explicit
 choice for review; omitting that argument preserves the existing policy shape.
+In the unreleased drafting CLI, append `--branch-protection not_required` to make
+that choice explicit, or omit the flag to preserve the field's absence.
 Review and version the resulting policy before using it. A generated candidate
 is not approved merely because its content fingerprints are present.
 

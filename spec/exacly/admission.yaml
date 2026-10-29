@@ -18,7 +18,7 @@ records:
       retaining an explainable receipt with the scope and limits of the admission decision.
     acceptance_criteria:
       - A strict policy explicitly identifies the repository by numeric ID and full name, exact branch, workflow path and digest, job ID and name, verification/package/upload step names, artifact prefix, observer selectors and digest, and approved model revision, files and config digest; the library supplies no repository layout defaults.
-      - Candidate-policy generation requires an explicit producer contract and observer selectors; repository proposals and generated fingerprints do not approve their producer, execution inputs or model.
+      - Candidate-policy generation is available through the installed exacly evidence propose-policy github-actions command, requiring an explicit repository, full immutable revision, repeated model-file paths, policy name/version and a YAML or JSON proposal containing exactly producer and observer_paths; it reuses the policy core to compute remote workflow, observer and model fingerprints without inferring layout or selectors, and repository proposals and generated fingerprints do not approve their producer, execution inputs or model.
       - Admission reads the live GitHub source with a read-permission token supplied through the environment and accepts no offline producer metadata or caller-authored state as origin evidence.
       - The run must identify the approved repository, a push to the exact approved branch, the selected full implementation SHA and attempt, the configured workflow, and the single designated observation job; branch protection is required unless the independently approved trust policy explicitly sets branch_protection to not_required, and the selected context is independent of the branch name.
       - Workflow bytes and the selected observer fingerprint must match the approved policy at the implementation revision; approved model files are fetched at their full revision and checked against the policy's config digest.
@@ -34,25 +34,28 @@ records:
       - Exit status is 0 for admitted evidence, 1 for rejected evidence and 2 for invalid inputs or output errors.
       - Receipts limit their claim to checked origin and target applicability, explicitly leave test honesty and acceptance coverage unverified, and are not self-authenticating; admission neither signs receipts, dispatches work nor closes tasks.
       - The optional branch_protection field accepts only required or not_required and omission retains the required default without rewriting the approved policy or its digest; opt-out never bypasses exact branch identity, failed GitHub reads or other admission checks, and changing the choice changes the trust contract for registration, reconciliation and completion.
-    verification_method: Admission core, command, GitHub transport and producer-workflow tests in CI.
+      - The policy-drafting command preserves branch_protection omission, uses the environment token convention for authenticated GitHub reads, writes deterministic candidate JSON only to a new file outside declared model folders without overwriting or aliasing inputs, and returns the same bytes with --json; candidate creation exits 0 and errors exit 2, leaves approval and installation to independent review and controlled storage, and is covered by installed-wheel checks outside the source checkout.
+    verification_method: Admission core, policy-drafting and admission commands, GitHub transport, producer-workflow and installed-wheel tests in CI.
     observe:
       tests:
         cases:
           - "python/tests/test_admission.py::*"
           - "python/tests/test_admission_cli.py::*"
           - "python/tests/test_github_evidence.py::*"
+          - "python/tests/test_policy_drafting_cli.py::*"
           - "tests/test_evidence_workflow.py::*"
+          - "tests/test_policy_distribution.py::*"
 
   - id: APP-008
     type: Application
     name: GitHub verification evidence admission
-    description: The live-source admission command and its shared policy and receipt core.
+    description: Producer-policy drafting and live-source admission commands sharing the policy and receipt core.
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-28"
-    responsibility: Admit verification reports from an approved live GitHub producer and derive fresh state with an explainable receipt.
-    interfaces: [exacly admit github-actions command, exacly.admission Python API]
+    last_reviewed_at: "2026-10-29"
+    responsibility: Draft explicit producer-policy candidates for independent approval, then admit verification reports from an approved live GitHub producer and derive fresh state with an explainable receipt.
+    interfaces: [exacly evidence propose-policy github-actions command, exacly admit github-actions command, exacly.admission Python API]
     implementation_ref: { locator: python/src/exacly/admission.py }
 
 relationships:

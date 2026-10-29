@@ -16,7 +16,7 @@ Exacly models itself, following the layout in section 13 of the specification. C
 - [`observation.yaml`](observation.yaml) covers state observation, publication and the measurement definition it supports.
 - [`understanding.yaml`](understanding.yaml) covers answering questions about a model: the `exacly` command's show, trace, impact and gaps.
 - [`planning.yaml`](planning.yaml) covers target-specific verification plans.
-- [`admission.yaml`](admission.yaml) covers live GitHub evidence admission under an approved producer policy.
+- [`admission.yaml`](admission.yaml) covers drafting producer-policy candidates and live GitHub evidence admission under an independently approved policy.
 - [`evidence-packaging.yaml`](evidence-packaging.yaml) covers the installed evidence producer and its shared manifest-format contract.
 - [`reconciliation.yaml`](reconciliation.yaml) covers read-only completion previews.
 - [`executions.yaml`](executions.yaml) covers operator registrations and the private execution ledger.
@@ -35,6 +35,14 @@ observed verification and release state remain separate. The package and
 admission share manifest `0.1.0` definitions, without making packaging an
 admission or completion decision. See the [producer and installation
 guidance](../../python/README.md#package-verification-evidence-unreleased).
+
+REQ-019 and APP-008 also cover the installed `exacly evidence propose-policy
+github-actions` command for drafting a candidate from explicit producer and
+model inputs. This command is unreleased and absent from `0.6.0rc2`; the existing
+`exacly.admission.propose_policy` API remains available. Drafting grants no
+approval or execution authority. See the [candidate-policy
+guidance](../../python/README.md#draft-a-producer-policy-unreleased) for the
+independent review and controlled storage steps.
 
 - Browse the [published model and observations](https://whiteredhouse.github.io/exacly/project/) for the checked baseline on main. Branch proposals appear there after merge and successful CI publication.
 - Read [`automation.yaml`](automation.yaml) for the automation contracts, process steps and isolation preconditions, informed by the dated [plan/apply research](../../docs/automated-plan-apply-research.md).
