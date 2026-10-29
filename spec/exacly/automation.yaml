@@ -1,0 +1,291 @@
+# Automation contracts. Local verification completion is active; dispatch and candidate execution remain proposed.
+# Proposed records retain future test selectors and explicitly planned implementation references.
+exacly: "0.2.0"
+
+records:
+  - id: CAP-004
+    type: Capability
+    name: Reconcile approved verification work
+    description: Carry a reviewed verification goal through authorized work to observation-confirmed completion.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence:
+      - locator: docs/automated-plan-apply-research.md
+        kind: research
+        claim: Research recommends durable dispatch, observation-confirmed completion and bounded executor adapters.
+        observed_at: "2026-10-28"
+        applies_to: Proposed automation roadmap
+    last_reviewed_at: "2026-10-28"
+    scope: Explicitly authorized verification work, local completion, task dispatch and bounded candidate execution; release and deployment authorization remain separate.
+
+  - id: PROC-004
+    type: Process
+    name: Carry out approved verification work
+    description: The proposed operator-controlled loop from a reviewed plan to evidence for its resulting implementation.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-28"
+    perspective: business
+    actors: [Operator, Exacly, Task adapter, Isolated executor, Trusted evidence producer]
+    trigger: An operator authorizes a reviewed verification action under explicit execution or completion policy
+    steps:
+      - Check the reviewed plan, policies, current state and selected action before committing any authorized effect
+      - For existing work, select its active registered binding; for new work, persist dispatch intent and recover or create one traceable task
+      - When candidate execution is authorized, run a bounded adapter within an enforced isolation boundary
+      - Identify the resulting implementation and admit fresh evidence against the unchanged approved model contract
+      - Evaluate the selected goal against current state merged with admitted observations
+      - Publish completion of the exact pending item through a recoverable intent and receipt protocol
+    completion: The selected verification task has matching admitted evidence, published state and a durable completion receipt
+    exceptions:
+      - Changed criteria, bindings, policy, scope or active registration require explicit replanning or supersession
+      - Missing, failed or incomplete evidence leaves work pending even when an executor finishes or a PR merges
+      - Ambiguous external dispatch outcomes require discovery by stable identity before another create request
+      - An interrupted publication requires recovery from its durable intent; divergent state requires explicit conflict resolution
+      - Isolation setup failure or an exhausted execution budget stops candidate execution and records the reason
+
+  - id: REQ-024
+    type: Requirement
+    name: Complete registered verification work from admitted observations
+    description: Close one exact local pending item only through explicit authority, applicable evidence and recoverable publication.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-29"
+    statement: >-
+      Given explicit operator completion authorization, one active execution binding and fresh admitted
+      evidence for its output target, complete only the registered pending verification item when the
+      merged current state satisfies the unchanged goal, preserving unrelated work and durable history.
+    acceptance_criteria:
+      - Invoking exacly complete github-actions explicitly authorizes local completion scoped to its binding, goal, output target, policies and state destination; registration, a saved plan digest and a ready preview alone do not grant mutation authority, and no confirmation prompt or extra authorization flag is required.
+      - Each new completion evaluation performs fresh live admission for the exact output revision, run and attempt under the approved producer policy; executor self-reports, PR merge and imported receipts cannot substitute for admission.
+      - The approved model, criteria, bindings and readiness and trust policies remain the registered contract; the resulting implementation may differ from the planning input without relabeling retained observations.
+      - Validate the actual current state against the approved model before merging; recheck the active binding, complete pending-entry identity, lineage, serial, digest and registered watermark at commit time, rejecting stale or corrupt inputs without pruning unrelated work.
+      - Apply admitted observations through the existing source and binding replacement rules, preserving unrelated assessments, evidence, relationships and pending entries, then evaluate the selected goal against the merged candidate state; retained applicable failures or missing required observations prevent completion.
+      - Remove only the exact registered pending entry after the selected goal is satisfied; preserve namespace, context and lineage and advance the serial exactly once, while reporting whole-policy readiness separately from completion of this action.
+      - Retain the admitted evidence bytes and receipt with their identities and digests, and commit a prepared completion intent containing the exact before-state identity and candidate after-state bytes and digest before conditional publication; publish those exact recorded bytes rather than reserializing a different candidate.
+      - Hold the ledger and state locks in a deterministic deduplicated order through intent preparation, conditional atomic state publication and receipt finalization; bounded waits and unresolved intents prevent conflicting registration changes.
+      - Completion, completion inspection, recovery and exact replay reuse one full retained-history validation within each unchanged protected database view; any mutation invalidates that view and requires fresh validation before reuse, unexpected database changes fail closed, and reuse ends with the protected operation or connection.
+      - SQLite ledger updates and JSON state publication form a recoverable protocol rather than one atomic transaction; failures after replacement preserve the complete published state and prepared intent and report the unfinished operation.
+      - Repeating the exact completed request, including binding, state destination, plan and action, policies, target, run, attempt and evaluation date, returns its original durable receipt without HTTP, removing another task or increasing the serial again; a different request cannot reuse a completed binding or pending identity.
+      - Explicit offline recovery aborts an intent when the exact before-state remains and requires fresh admission for another attempt; when the exact after-state is present it verifies the retained proof and binding, synchronizes the state and directory and finalizes once without HTTP; any third state conflicts without overwrite or replay of a stale candidate.
+      - Completion supports operational ledger schema version 2 or explicitly activated version 4; version 1 requires explicit copy-only upgrade and version 3 remains audit-only, while ordinary reads, registration and completion never silently migrate, activate or recover a ledger.
+      - Version-4 completion and abort transactions maintain integrity baselines and affected terminal verdicts atomically with the actual phase, receipt and watermark changes; prepared proof always receives fresh semantics, and recognized stale profiles block new completion writes until explicit activation refreshes the profile.
+      - Show reads the retained completion phase without exposing raw proof bytes; completion reports distinguish completed, pending, stale and conflict, and preserve unfinished intent after an operational error. Receipts describe historical completion rather than authenticating the latest state, test honesty, acceptance coverage or executor-to-output provenance.
+      - Complete exits 0 only for completed and 1 for an unmet, stale or conflicting result; show exits 0 for a valid retained phase, offline recovery exits 0 for completed or aborted and 1 for an unresolved result, and invalid inputs or operational errors exit 2. Optional report-output failure does not undo an already recorded completion.
+      - Local completion records observation-confirmed verification without closing an external ticket, dispatching an agent, granting release authority or claiming a machine-verified executor-to-output link.
+    verification_method: Completion contract, command, storage, concurrency and process-kill tests at durable boundaries, including supersession races, exact request replay and retained failing observations.
+    observe:
+      tests:
+        cases:
+          - "python/tests/test_completion.py::*"
+          - "python/tests/test_completion_cli.py::*"
+          - "python/tests/test_completion_faults.py::*"
+          - "python/tests/test_completion_store.py::*"
+          - "python/tests/test_completion_locks.py::*"
+          - "python/tests/test_completion_validation.py::*"
+          - "python/tests/test_completion_journal.py::*"
+          - "python/tests/test_execution_history_reuse.py::*"
+          - "python/tests/test_execution_history_reuse_faults.py::*"
+          - "python/tests/test_execution_history_reuse_crashes.py::*"
+
+  - id: REQ-025
+    type: Requirement
+    name: Isolate candidate execution from operator authority
+    description: Candidate code cannot reach the authority used to approve, dispatch or complete its own work.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-28"
+    statement: >-
+      Before running candidate-controlled code, enforce an execution boundary that denies access to
+      the operator's ledger, authoritative state and policy originals, privileged credentials and
+      control interfaces, while providing only explicitly permitted inputs and capabilities.
+    acceptance_criteria:
+      - Candidate processes and their descendants cannot read or modify the operator's execution ledger, completion journal, authoritative state, policy originals or privileged credentials through filesystem, environment, process or control interfaces.
+      - Enforce separation using distinct operating-system credentials, a virtual-machine boundary or an equivalent independently enforced runtime boundary; same-user directory permissions, path checks and a separate checkout alone do not establish isolation.
+      - Approved criteria and permitted source inputs can be supplied as explicit immutable snapshots; candidate changes and outputs remain untrusted and cannot alter approval policies, the completion authority or admitted evidence history.
+      - Filesystem, network and subprocess capabilities are explicitly constrained for the selected executor; inherited credentials, privileged host mounts and runtime-management interfaces cannot bypass the boundary.
+      - Isolation setup is verified before candidate code starts, and an unavailable or failed boundary stops execution without falling back to the operator's runtime.
+      - Tests attempt forbidden reads and writes and descendant-process access using the real supported runtime boundary, and verify that permitted input and output exchange still works.
+      - Trusted local completion of existing work does not require launching candidate code; the isolation requirement becomes mandatory before an executor runs candidate-controlled code.
+    verification_method: Future runtime integration tests demonstrating denied access from candidate processes and their descendants, fail-closed setup and permitted artifact exchange.
+    observe:
+      tests:
+        cases:
+          - "python/tests/test_execution_isolation.py::*"
+
+  - id: REQ-026
+    type: Requirement
+    name: Dispatch approved work without duplicate external tasks
+    description: A reviewed action can create one traceable task despite concurrent dispatchers, retries and ambiguous responses.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-28"
+    statement: >-
+      Under explicit dispatch authorization, persist intent for a reviewed action before creating
+      external work, recover an existing task by stable identity before retrying, and retain an
+      auditable association between the action, pending work and adapter result.
+    acceptance_criteria:
+      - Dispatch requires explicit reviewed authorization for the selected action, destination, adapter and permitted effect; a saved plan or readiness result alone does not grant permission to create work.
+      - Recheck the approved plan, criteria, bindings, policies, target and actual current state before dispatch; stale contracts require replanning, and a goal already satisfied is recorded as superseded without creating another task.
+      - Dry-run renders the same selected action, preconditions and intended external effect without creating tasks or modifying state, ledger records or watermarks.
+      - Persist a stable dispatch identity and intent before the first external create request; scope the adapter marker to the authorized repository or destination and reviewed action rather than mutable state serials or diagnostic text.
+      - Concurrent workers and repeated applies recover the same task by its stable identity; a crash after remote creation or an ambiguous response triggers discovery before another create request, and multiple matching tasks produce an explicit conflict.
+      - The first adapter supports one explicitly selected GitHub task destination, with repository and adapter settings supplied by reviewed policy rather than library defaults for workflow or test paths.
+      - Retain attempts, remote task identity, immutable receipts and partial successes; bounded retries resume unfinished work without replacing successful history or fabricating external rollback.
+      - Associate a confirmed task with one unambiguous pending verification entry and its reviewed execution binding through recoverable ledger and conditional state writes; ambiguity or changed pending work blocks registration rather than linking a different task.
+      - Replanning, cancellation and retirement preserve history and require explicit supersession; retiring a record or task never authorizes destruction of implementation.
+      - Task creation, issue closure, agent completion reports and PR merge leave verification pending until the separately authorized completion path admits sufficient applicable evidence.
+    verification_method: Future dispatch contract and command tests with controlled GitHub responses, concurrent workers and process termination around external creation and receipt persistence.
+    observe:
+      tests:
+        cases:
+          - "python/tests/test_dispatch.py::*"
+          - "python/tests/test_dispatch_cli.py::*"
+          - "python/tests/test_dispatch_faults.py::*"
+
+  - id: REQ-027
+    type: Requirement
+    name: Bound authorized executor attempts
+    description: An executor adapter has explicit limits and returns identifiable outputs without controlling verification or completion.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-28"
+    statement: >-
+      Run one explicitly approved executor adapter within the enforced isolation boundary and
+      declared attempt, time and concurrency limits, retaining durable outcomes and produced
+      implementation identities for independent evidence evaluation.
+    acceptance_criteria:
+      - The initial executor adapter receives only the authorized task, Requirement IDs, approved criteria and binding fingerprints, input implementation, dependencies and expected observations.
+      - Explicit policy bounds attempts, wall-clock execution time, concurrent work and permitted repository effects; retries and additional actions cannot expand those limits or infer new authorization from failure.
+      - Candidate code runs only through a runtime satisfying the isolation requirement, and the supervisor retains durable attempt identity, limits and status before starting the adapter.
+      - The adapter returns task or PR references, produced immutable revision or build identities, execution outcome and retained output references; missing or ambiguous output identity prevents automatic progression to completion.
+      - Timeout, cancellation, failure and supervisor interruption are observable and recoverable; recovery reconciles or terminates an existing attempt before starting another, and retry-budget exhaustion stops further execution with an actionable reason.
+      - Executor completion and a merged PR are execution outcomes only; the supervisor cannot write verification assessments, alter the approved contract, finalize completion receipts or remove pending work.
+      - Preserve successful attempt history and isolate partial failures so retrying one action does not repeat another successful effect.
+    verification_method: Future executor adapter and command tests with controlled failures, real isolation integration, budget enforcement and process termination and restart.
+    observe:
+      tests:
+        cases:
+          - "python/tests/test_executor.py::*"
+          - "python/tests/test_executor_cli.py::*"
+
+  - id: APP-012
+    type: Application
+    name: Verification completion reconciler
+    description: Explicit local completion, inspection and recovery commands with a durable publication core.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-28"
+    responsibility: Admit fresh evidence, evaluate merged current state and complete one registered verification task through durable intent and receipt recovery.
+    interfaces: [exacly complete github-actions command, exacly completions show command, exacly completions recover command, exacly.completion Python API]
+    implementation_ref: { locator: python/src/exacly/completion.py }
+
+  - id: APP-013
+    type: Application
+    name: Work dispatcher
+    description: Proposed operator-authorized dispatch command with an initial GitHub task adapter.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-28"
+    responsibility: Persist approved dispatch intent, recover or create one external task and associate it with pending verification work without duplicate effects.
+    interfaces: [Planned dispatch dry-run and apply commands, Planned dispatch adapter Python API]
+    implementation_ref: { locator: python/src/exacly/dispatch.py, planned: true }
+
+  - id: APP-014
+    type: Application
+    name: Executor supervisor
+    description: Proposed bounded executor adapter and isolated-runtime supervisor.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-28"
+    responsibility: Enforce candidate isolation and execution limits, retain attempt history and return produced implementation identities without granting completion authority.
+    interfaces: [Planned executor adapter API, Planned isolated-runtime control interface]
+    implementation_ref: { locator: python/src/exacly/executor.py, planned: true }
+
+  - id: INFO-004
+    type: Information
+    name: Completion intents and receipts
+    description: Durable admitted proof and publication history for exact pending verification tasks.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-29"
+    definition: Versioned completion request and authorization, prepared intent, retained admission proof, exact before-state identity and candidate after-state bytes and digest, recovery outcome and finalized immutable receipt in operational version-2 or version-4 ledgers, with unchanged history also retained by audit-only version-3 copies.
+    identifiers: [completion ID, binding ID, pending identity, plan and action IDs, target identity, evidence digests, state lineage and serial]
+    steward: exacly-maintainers
+
+  - id: INFO-005
+    type: Information
+    name: Dispatch and execution attempts
+    description: Proposed durable intent, task association and bounded executor history for approved actions.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-28"
+    definition: Versioned dispatch and execution identities, approved limits, adapter and destination, attempts, remote task references, output identities and receipts for recovery and explicit supersession.
+    identifiers: [dispatch ID, execution attempt ID, plan and action IDs, adapter and destination, remote task identity, output revision or build]
+    steward: exacly-maintainers
+
+  - id: INF-004
+    type: Infrastructure
+    name: Isolated execution runtime
+    description: Proposed runtime boundary separating candidate code from operator authority.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-28"
+    kind: Enforced candidate execution boundary
+    purpose: Run candidate-controlled code with explicitly constrained capabilities and no access to operator storage, credentials or control interfaces.
+    operational_ref: { locator: Isolated executor runtime configuration to be selected and validated before candidate execution, planned: true }
+
+relationships:
+  - { source: CAP-004, type: contributes_to, target: OUT-001 }
+  - { source: PROC-004, type: uses_capability, target: CAP-004 }
+  - { source: REQ-024, type: supports, target: PROC-004 }
+  - { source: REQ-025, type: supports, target: PROC-004 }
+  - { source: REQ-026, type: supports, target: PROC-004 }
+  - { source: REQ-027, type: supports, target: PROC-004 }
+  - { source: APP-012, type: implements, target: REQ-024 }
+  - { source: APP-013, type: implements, target: REQ-026 }
+  - { source: APP-014, type: implements, target: REQ-025 }
+  - { source: APP-014, type: implements, target: REQ-027 }
+  - { source: PROC-004, type: uses, target: APP-007, conditions: Uses existing read-only planning to select a goal before authorization. }
+  - { source: PROC-004, type: uses, target: APP-012 }
+  - { source: PROC-004, type: uses, target: APP-013, conditions: Only when new external work is explicitly authorized. }
+  - { source: PROC-004, type: uses, target: APP-014, conditions: Only when candidate execution is explicitly authorized and isolation is established. }
+  - { source: APP-012, type: depends_on, target: APP-008, conditions: Fresh live evidence admission remains required before each new completion evaluation. }
+  - { source: APP-012, type: depends_on, target: APP-009, conditions: Reuses saved-action contract checks without treating an advisory preview as completion authority. }
+  - { source: APP-012, type: depends_on, target: APP-006, conditions: Evaluates the selected goal against merged current state and reports whole-policy readiness separately. }
+  - { source: APP-012, type: depends_on, target: APP-010, conditions: Rechecks the active binding and watermark under commit-time locks. }
+  - { source: APP-012, type: depends_on, target: APP-002, conditions: Reuses observer ownership rules and conditional atomic publication with locks held through receipt finalization. }
+  - { source: APP-012, type: depends_on, target: INF-003, conditions: Completion storage requires an explicit schema upgrade before use. }
+  - { source: APP-012, type: reads, target: INFO-001 }
+  - { source: APP-012, type: reads, target: INFO-002 }
+  - { source: APP-012, type: writes, target: INFO-002 }
+  - { source: APP-012, type: reads, target: INFO-003 }
+  - { source: APP-012, type: reads, target: INFO-004 }
+  - { source: APP-012, type: writes, target: INFO-004 }
+  - { source: APP-013, type: depends_on, target: APP-007, conditions: Rechecks the reviewed plan and selected action before an authorized effect. }
+  - { source: APP-013, type: depends_on, target: APP-010, conditions: Associates confirmed tasks with reviewed pending-work bindings while preserving registration history. }
+  - { source: APP-013, type: depends_on, target: APP-002, conditions: Uses conditional state publication for recoverable pending-task registration. }
+  - { source: APP-013, type: depends_on, target: INF-002, conditions: The initial adapter creates tasks only in the explicitly authorized GitHub destination. }
+  - { source: APP-013, type: depends_on, target: INF-003, conditions: Dispatch storage requires an explicit schema upgrade before use. }
+  - { source: APP-013, type: reads, target: INFO-001 }
+  - { source: APP-013, type: reads, target: INFO-002 }
+  - { source: APP-013, type: writes, target: INFO-002 }
+  - { source: APP-013, type: reads, target: INFO-003 }
+  - { source: APP-013, type: reads, target: INFO-005 }
+  - { source: APP-013, type: writes, target: INFO-005 }
+  - { source: APP-014, type: depends_on, target: INF-004, conditions: A verified isolation boundary is mandatory before candidate code starts. }
+  - { source: APP-014, type: depends_on, target: INF-003, conditions: The trusted supervisor retains attempts through an explicit ledger extension without exposing the ledger to candidate code. }
+  - { source: APP-014, type: reads, target: INFO-005 }
+  - { source: APP-014, type: writes, target: INFO-005 }
+  - { source: INF-003, type: stores, target: INFO-004, role: system_of_record, conditions: Operational completion history in explicitly selected schema version 2 or 4; audit-only version 3 retains a copy and version 1 has no completion history. }
+  - { source: INF-003, type: stores, target: INFO-005, role: system_of_record, conditions: Proposed dispatch and attempt history after an explicit ledger schema upgrade; absent from the current ledger format. }

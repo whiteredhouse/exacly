@@ -1,0 +1,127 @@
+name: Landing page
+
+on:
+  pull_request:
+    paths:
+      - "docs/site/**"
+      - "spec/examples/0.2/invoice-reminders/**"
+      - "spec/exacly/**"
+      - "spec/schema/**"
+      - "python/src/exacly/**"
+      - "ci/__init__.py"
+      - "ci/build_site.py"
+      - "ci/invoice_demo.py"
+      - "ci/fixtures/invoice-reminders/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "mise.toml"
+      - ".github/workflows/pages.yml"
+  # Spec writes observed state in a [skip ci] commit. Wait for that workflow
+  # to finish, then build main including its newly committed observations.
+  workflow_run:
+    workflows: [Spec]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('pages-pr-{0}', github.event.pull_request.number) || 'github-pages-publication' }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && 'main' || github.ref }}
+      - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
+      - name: Build the static site and both model browsers
+        run: |
+          uv run --locked python -m ci.build_site --out "$RUNNER_TEMP/exacly-site"
+      - name: Check the static site's local references
+        run: |
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          import os
+          from pathlib import Path
+          from urllib.parse import unquote, urlsplit
+
+          root = (Path(os.environ["RUNNER_TEMP"]) / "exacly-site").resolve()
+          assert (root / "index.html").is_file(), "Missing landing page"
+          assert (root / ".nojekyll").is_file(), "Missing .nojekyll"
+
+          class Page(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.references = []
+
+              def handle_starttag(self, tag, attrs):
+                  for name, value in attrs:
+                      if name in ("href", "src") and value:
+                          self.references.append(value)
+
+          checked = 0
+          for source in root.rglob("*.html"):
+              page = Page()
+              page.feed(source.read_text(encoding="utf-8"))
+              for reference in page.references:
+                  url = urlsplit(reference)
+                  if url.scheme or url.netloc or not url.path:
+                      continue
+                  assert not url.path.startswith("/"), (
+                      f"{source}: use a relative URL for GitHub project Pages: {reference}"
+                  )
+                  target = (source.parent / unquote(url.path)).resolve()
+                  assert target.is_relative_to(root), (
+                      f"{source}: reference leaves the published directory: {reference}"
+                  )
+                  if target.is_dir():
+                      target /= "index.html"
+                  assert target.is_file(), f"{source}: missing local reference: {reference}"
+                  checked += 1
+          print(f"Checked {checked} local references")
+          PY
+      - uses: actions/upload-pages-artifact@v3
+        if: >-
+          (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'workflow_run' &&
+           github.event.workflow_run.event == 'push' &&
+           github.event.workflow_run.conclusion == 'success' &&
+           github.event.workflow_run.head_branch == 'main' &&
+           github.event.workflow_run.head_repository.full_name == github.repository)
+        with:
+          path: ${{ runner.temp }}/exacly-site
+
+  deploy:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

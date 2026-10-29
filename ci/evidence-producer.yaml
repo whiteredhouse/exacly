@@ -1,0 +1,38 @@
+# Exacly's producer proposal. Review it at the approved revision before generating a policy.
+# The library supplies no branch, workflow, job, artifact or observer-path defaults.
+producer:
+  branch: main
+  workflow:
+    path: .github/workflows/verification-evidence.yml
+    job_id: observe
+    job_name: Observe verification
+    steps:
+      verification: Run verification
+      package: Package verification evidence
+      upload: Upload verification evidence
+  artifact:
+    name_prefix: exacly-evidence
+
+# Literal repository-relative file or directory selectors, never glob patterns.
+# Missing selectors pin absence; adding them later changes the observer fingerprint.
+# This workflow runs the checkout's installed CLI. Pin its complete source package,
+# including entrypoint imports and future modules, rather than only the packager.
+# Verification executes CI helpers, including the installed-wheel smoke checks.
+# Pin the complete ci subtree so new helpers and fixtures are covered too.
+# Source-package and CI changes require review and regeneration of this policy.
+observer_paths:
+  - .github/workflows/verification-evidence.yml
+  # The installed-wheel smoke test executes this workflow's packaging shell.
+  - .github/workflows/release.yml
+  - ci
+  - python/src/exacly
+  - pyproject.toml
+  - uv.lock
+  - mise.toml
+  - python/tests
+  - spec/tests
+  - tests
+  - conftest.py
+  - python/conftest.py
+  - spec/conftest.py
+  - ci/conftest.py

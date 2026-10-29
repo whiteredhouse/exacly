@@ -115,7 +115,7 @@ def conforms(docs: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
 
 
 def test_selected_cases_that_all_pass_verify_the_record() -> None:
-    docs = {"config": config(requirement("REQ-1", {**CI, "cases": ["tests/cases.yaml::7.*"]}))}
+    docs = {"config": config(requirement("REQ-1", {**CI, "cases": ["tests/cases.yaml::7.[12]*"]}))}
     state = refresh(docs, RESULTS, RUN)
     a = assessment(state, "REQ-1")
     assert (a["state"], a["context"], a["at"]) == ("passed", "0b6ad3b", "2026-10-24T09:00:00Z")
@@ -125,7 +125,7 @@ def test_selected_cases_that_all_pass_verify_the_record() -> None:
             "kind": "test",
             "observed_at": "2026-10-24",
             "applies_to": "0b6ad3b",
-            "claim": "All 2 selected test cases passed; 1 skipped",
+            "claim": "All 2 selected test cases passed",
         }
     ]
     assert "reason" not in a
@@ -180,7 +180,11 @@ def test_nothing_run_is_not_checked_with_a_reason(cases: list[str], reason: str)
         ),
         (["tests/cases.yaml::7.1*", "tests/old/*"], "inconclusive", "Selected nothing: tests/old/*."),
         (["tests/cases.yaml::7.1: a gap", "tests/cases.yaml::7.2: another gap"], "passed", None),
-        (["tests/cases.yaml::7.1: a gap", "tests/cases.yaml::7.3: skipped one"], "passed", None),
+        (
+            ["tests/cases.yaml::7.1: a gap", "tests/cases.yaml::7.3: skipped one"],
+            "inconclusive",
+            "Skipped: tests/cases.yaml::7.3: skipped one.",
+        ),
     ],
 )
 def test_every_pattern_must_select_a_case(cases: list[str], state: str, reason: str | None) -> None:
@@ -195,6 +199,46 @@ def test_many_patterns_that_select_nothing_are_counted() -> None:
     docs = {"config": config(requirement("REQ-1", {**CI, "cases": cases}))}
     a = assessment(refresh(docs, {"t::kept": "passed"}, RUN), "REQ-1")
     assert (a["state"], a["reason"]) == ("inconclusive", "Selected nothing: " + ", ".join(cases[1:6]) + " and 2 more.")
+
+
+@pytest.mark.parametrize(
+    "cases",
+    [
+        ["tests/cases.yaml::7.*"],
+        ["tests/cases.yaml::7.*", "tests/cases.yaml::7.3*"],
+    ],
+)
+def test_mixed_execution_is_inconclusive_even_with_overlapping_patterns(cases: list[str]) -> None:
+    docs = {"config": config(requirement("REQ-1", {**CI, "cases": cases}))}
+    state = valid_state(refresh(docs, RESULTS, RUN))
+    a = assessment(state, "REQ-1")
+    assert a["state"] == "inconclusive"
+    assert a["reason"] == "Skipped: tests/cases.yaml::7.3: skipped one."
+    assert a["evidence"][0]["claim"] == "2 of 3 selected test cases passed; 1 skipped"
+    conforms(docs, state)
+
+
+@pytest.mark.parametrize("failed", [False, True])
+def test_missing_patterns_and_skips_preserve_failure_precedence(failed: bool) -> None:
+    docs = {"config": config(requirement("REQ-1", {**CI, "cases": ["t::*", "gone::*"]}))}
+    results = {"t::checked": "failed" if failed else "passed", "t::skipped": "skipped"}
+    a = assessment(valid_state(refresh(docs, results, RUN)), "REQ-1")
+    assert a["state"] == ("failed" if failed else "inconclusive")
+    assert a["reason"] == (
+        "Failed: t::checked. Selected nothing: gone::*."
+        if failed
+        else "Skipped: t::skipped. Selected nothing: gone::*."
+    )
+    assert a["evidence"]
+
+
+def test_skipped_names_are_sorted_and_bounded() -> None:
+    docs = {"config": config(requirement("REQ-1", {**CI, "cases": ["t::*"]}))}
+    results = {"t::pass": "passed", **{f"t::skip{i}": "skipped" for i in reversed(range(7))}}
+    a = assessment(refresh(docs, results, RUN), "REQ-1")
+    assert a["state"] == "inconclusive"
+    assert a["reason"] == "Skipped: t::skip0, t::skip1, t::skip2, t::skip3, t::skip4 and 2 more."
+    assert a["evidence"][0]["claim"] == "1 of 8 selected test cases passed; 7 skipped"
 
 
 def test_gaps_lists_an_inconclusive_requirement_as_unverified() -> None:
@@ -511,8 +555,21 @@ def test_each_jobs_run_keeps_the_others_result() -> None:
     assert kept == [a for a in both["records"]["REQ-1"]["assessments"] if a["binding"]["job"] == "e2e"]
 
 
+def test_incomplete_refresh_replaces_pass_without_losing_another_jobs_result() -> None:
+    docs = two_jobs()
+    unit = refresh(docs, RESULTS, UNIT_RUN)
+    both = refresh(docs, {"e2e::login": "passed", "e2e::logout": "passed"}, E2E_RUN, previous=unit)
+    later = valid_state(refresh(docs, {"e2e::login": "passed", "e2e::logout": "skipped"}, E2E_RUN, both))
+    status, model = combined(docs, later)
+    assert status == {"main": {"verification": "inconclusive"}}
+    assert [r["id"] for r in query.gaps(model)["coverage"]["unverified"]] == ["REQ-1"]
+    shown = query.show(model, "REQ-1")["state"]["main"]["assessments"]
+    assert [(a["binding"]["job"], a["state"]) for a in shown] == [("unit", "passed"), ("e2e", "inconclusive")]
+    assert later["records"]["REQ-1"]["assessments"][0] == both["records"]["REQ-1"]["assessments"][0]
+
+
 def test_a_run_that_names_no_workflow_or_job_observes_bindings_that_name_them() -> None:
-    docs = {"config": config(requirement("REQ-1", {**CI, "cases": ["tests/cases.yaml::7.*"]}))}
+    docs = {"config": config(requirement("REQ-1", {**CI, "cases": ["tests/cases.yaml::7.[12]*"]}))}
     for missing in ("workflow", "job"):
         assert assessment(refresh(docs, RESULTS, Run(**{**RUN.__dict__, missing: None})), "REQ-1")["state"] == "passed"
 
@@ -534,7 +591,7 @@ def test_the_result_of_a_binding_that_left_the_config_goes() -> None:
 
 @pytest.mark.parametrize("unsupported", ["implementer", "empty", "kind", "context", "expired"])
 def test_verification_before_delivery_still_needs_implementer_and_evidence(unsupported: str) -> None:
-    docs = {"config": config(requirement("REQ-1", {**CI, "cases": ["tests/cases.yaml::7.*"]}))}
+    docs = {"config": config(requirement("REQ-1", {**CI, "cases": ["tests/cases.yaml::7.[12]*"]}))}
     state = refresh(docs, RESULTS, RUN)
     a = assessment(state, "REQ-1")
     if unsupported == "implementer":

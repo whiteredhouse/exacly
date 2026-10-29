@@ -14,4 +14,5 @@ def test_release_smoke_exercises_observations_and_readiness() -> None:
         "failed_gate": "not_satisfied",
         "revision_mismatch": "unknown",
         "skipped_gate": "unknown",
+        "mixed_gate": "unknown",
     }

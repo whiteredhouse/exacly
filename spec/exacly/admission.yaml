@@ -1,0 +1,69 @@
+# Exacly's own model: admit live verification evidence from an approved CI producer.
+# Config, authored by people and agents; admission derives fresh state from accepted reports.
+exacly: "0.2.0"
+
+records:
+  - id: REQ-019
+    type: Requirement
+    name: Admit verification evidence from an approved GitHub producer
+    description: Establish the checked origin and target of a live verification report before deriving state from it.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-29"
+    statement: >-
+      Given an independently approved producer policy, explicit target, GitHub run and exact attempt,
+      and an evaluation date, verify the live producer and artifact through authenticated GitHub reads,
+      then derive fresh verification state only from an admitted report and approved model files,
+      retaining an explainable receipt with the scope and limits of the admission decision.
+    acceptance_criteria:
+      - A strict policy explicitly identifies the repository by numeric ID and full name, exact branch, workflow path and digest, job ID and name, verification/package/upload step names, artifact prefix, observer selectors and digest, and approved model revision, files and config digest; the library supplies no repository layout defaults.
+      - Candidate-policy generation is available through the installed exacly evidence propose-policy github-actions command, requiring an explicit repository, full immutable revision, repeated model-file paths, policy name/version and a YAML or JSON proposal containing exactly producer and observer_paths; it reuses the policy core to compute remote workflow, observer and model fingerprints without inferring layout or selectors, and repository proposals and generated fingerprints do not approve their producer, execution inputs or model.
+      - Admission reads the live GitHub source with a read-permission token supplied through the environment and accepts no offline producer metadata or caller-authored state as origin evidence.
+      - The run must identify the approved repository, a push to the exact approved branch, the selected full implementation SHA and attempt, the configured workflow, and the single designated observation job; branch protection is required unless the independently approved trust policy explicitly sets branch_protection to not_required, and the selected context is independent of the branch name.
+      - Workflow bytes and the selected observer fingerprint must match the approved policy at the implementation revision; approved model files are fetched at their full revision and checked against the policy's config digest.
+      - Observer selectors are literal safe repository-relative files or directory subtrees with no glob patterns; explicitly selected absence is pinned, so later addition, removal or modification changes the fingerprint.
+      - Admission requires conforming 0.2 config and rejects model inputs containing observed state; the explicit evaluation date governs model conformance and expiry checks.
+      - Exactly one attempt-named artifact created within the observation job is accepted; its archive digest, manifest identity and report digest are checked, and unsafe or unexpected archive contents are rejected.
+      - The receipt identifies the artifact's job and attempt association as an inference from the approved single-job contract and timing; it records the selected branch_protection mode, branch_protection_verified and the required live check's actual timestamp separately from as_of, or false and null when protection is not required, without claiming historical protection or evaluating the strength of branch rules.
+      - A producer job completed after the selected UTC evaluation date is rejected.
+      - The approved producer packages only a manifest and a complete JUnit report for a completed verification step, retaining failures as observations; skipped or cancelled steps and missing reports are rejected.
+      - Positive assessments from a failed verification step become inconclusive so that a reported positive cannot hide the failed step.
+      - An admitted result derives fresh state using approved model and observed implementation identities without merging caller-supplied state; rejected results create no verification state.
+      - A decision writes a receipt atomically to a new output directory with POSIX mode 0700; admitted results also retain the archive, report and state, while rejected results retain only the receipt; every retained file is created with mode 0600 independently of the caller's umask, and existing output paths are refused.
+      - Exit status is 0 for admitted evidence, 1 for rejected evidence and 2 for invalid inputs or output errors.
+      - Receipts limit their claim to checked origin and target applicability, explicitly leave test honesty and acceptance coverage unverified, and are not self-authenticating; admission neither signs receipts, dispatches work nor closes tasks.
+      - The optional branch_protection field accepts only required or not_required and omission retains the required default without rewriting the approved policy or its digest; opt-out never bypasses exact branch identity, failed GitHub reads or other admission checks, and changing the choice changes the trust contract for registration, reconciliation and completion.
+      - The policy-drafting command preserves branch_protection omission, uses the environment token convention for authenticated GitHub reads, writes deterministic candidate JSON only to a new file outside declared model folders without overwriting or aliasing inputs, and returns the same bytes with --json; candidate creation exits 0 and errors exit 2, leaves approval and installation to independent review and controlled storage, and is covered by installed-wheel checks outside the source checkout.
+    verification_method: Admission core, policy-drafting and admission commands, GitHub transport, producer-workflow and installed-wheel tests in CI.
+    observe:
+      tests:
+        cases:
+          - "python/tests/test_admission.py::*"
+          - "python/tests/test_admission_cli.py::*"
+          - "python/tests/test_github_evidence.py::*"
+          - "python/tests/test_policy_drafting_cli.py::*"
+          - "tests/test_evidence_workflow.py::*"
+          - "tests/test_policy_distribution.py::*"
+
+  - id: APP-008
+    type: Application
+    name: GitHub verification evidence admission
+    description: Producer-policy drafting and live-source admission commands sharing the policy and receipt core.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-29"
+    responsibility: Draft explicit producer-policy candidates for independent approval, then admit verification reports from an approved live GitHub producer and derive fresh state with an explainable receipt.
+    interfaces: [exacly evidence propose-policy github-actions command, exacly admit github-actions command, exacly.admission Python API]
+    implementation_ref: { locator: python/src/exacly/admission.py }
+
+relationships:
+  - { source: REQ-019, type: supports, target: PROC-002 }
+  - { source: APP-008, type: implements, target: REQ-019 }
+  - { source: PROC-002, type: uses, target: APP-008 }
+  - { source: APP-008, type: reads, target: INFO-001 }
+  - { source: APP-008, type: writes, target: INFO-002 }
+  - { source: APP-008, type: depends_on, target: APP-002, conditions: "Derives fresh state through refresh only after accepting the report and approved model." }
+  - { source: APP-008, type: depends_on, target: INF-001, conditions: "Checks live run, job and artifact identity under the approved producer contract." }
+  - { source: APP-008, type: depends_on, target: INF-002, conditions: "Fetches approved workflow, observer and model content at full Git revisions." }

@@ -47,29 +47,39 @@ records:
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-25"
+    last_reviewed_at: "2026-10-28"
     statement: >-
       For each record with a tests binding, write a verification assessment for
-      the observed commit from the test cases the binding selects, with the run
-      as evidence, and increase the serial while keeping the lineage.
+      the observed implementation against the supplied model from the test cases
+      the binding selects, with the run as evidence, and increase the serial while
+      keeping the lineage and original identities of retained observations.
     acceptance_criteria:
       - Every selected case passing gives passed; any failing gives failed, with the failing cases as the reason.
+      - A mix of passing and skipped selected cases gives inconclusive with evidence and a reason naming skipped cases; skipped cases count as present for pattern matching, and missing-pattern diagnostics and failure precedence are preserved.
       - A binding whose selected cases did not run, or without cases and without the job's result, gives not checked, with the reason.
       - A pattern that selects no case in the report gives inconclusive, naming the pattern, unless a selected case failed, which gives failed and names both.
       - A binding without cases takes the job's result.
       - A record without a binding gets no verification assessment.
+      - An optional model revision identifies the approved criteria and bindings separately from the observed implementation revision; omitting it uses the implementation revision for both, preserving existing callers and positional Run arguments.
+      - State config_revision names the effective model revision; each new test assessment subject names the model and implementation revisions independently, while assessment context and evidence applies_to name the implementation revision.
+      - Revision flags label the supplied config and reports without checking out Git revisions or authenticating their provenance; an automatic GitHub source link uses the selected implementation revision and an explicit source URL is preserved.
       - In a distribution context, a Requirement whose active implementer's reference exists at the revision is assessed as released there.
+      - Distribution refresh rejects distinct model and implementation revisions before writing state; matching full and abbreviated Git revisions retain the existing behavior.
       - The serial increases by one on each write, and the lineage stays the same; earlier state for another model or context is refused.
       - Each assessment names its source, tests with the binding's workflow and job, or distribution.
       - A record may have several tests bindings, each observed only by runs of its workflow and job; a run replaces only the results of the bindings it observed, and a binding's result goes when the binding leaves the config.
       - A write replaces only the assessments of the sources it observed, keeping another observer's, and drops observations and pending work for records and relationships that left the config.
       - An earlier verification or delivery assessment without a source is rewritten as tests or distribution; one of another dimension is kept and reported.
+      - Advancing the enclosing state's model revision or migrating a legacy source never relabels the original subjects or evidence applicability of retained observations.
+      - The refresh command publishes through the shared conditional state writer; a conflicting write requires a fresh observation and does not overwrite the newer state.
       - The state written is accepted by the validator.
     verification_method: Refresh tests in CI.
     observe:
       tests:
         cases:
           - "python/tests/test_refresh.py::*"
+          - "python/tests/test_refresh_identity.py::*"
+          - "python/tests/test_refresh_identity_cli.py::*"
 
   - id: REQ-015
     type: Requirement
@@ -78,7 +88,7 @@ records:
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-26"
+    last_reviewed_at: "2026-10-28"
     statement: >-
       For each record with a manual-qa:observations binding, write one
       verification assessment per platform from the observations that match
@@ -91,12 +101,45 @@ records:
       - A platform with no usable observation is not checked, naming the release and builds.
       - An observation whose criteria were numbered at a revision where they differ, whose retained output is missing or doesn't match its digest, or whose failure has no reason is reported and not used.
       - A tests refresh keeps the manual assessments, and a manual observation keeps the tests assessments.
+      - The observe command publishes through the same conditional state writer as refresh; a conflicting write requires a fresh observation and does not overwrite the newer state.
       - When the model declares the extension, its bindings and the fields it writes on assessments are checked against the extension's schemas, and an observation without a valid timestamp is not used.
     verification_method: Manual-qa tests in CI.
     observe:
       tests:
         cases:
           - "python/tests/test_manual_qa.py::*"
+
+  - id: REQ-023
+    type: Requirement
+    name: Publish state conditionally and atomically
+    description: Cooperating local observers cannot overwrite a state change made since their observation began or expose a partially written document.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-28"
+    statement: >-
+      Publish an observed state only when the destination still matches the
+      captured state or its captured absence, under a shared local POSIX lock,
+      and replace the complete document atomically.
+    acceptance_criteria:
+      - Refresh and manual-QA observation capture the earlier state before computing their observations and use the same publication protocol.
+      - Publication checks the captured exact file content and namespace, context, lineage and serial under a stable parent-directory lock; concurrent creation, deletion or content changes conflict without overwriting the destination.
+      - Existing state advances by exactly one serial with the same namespace, context and lineage; initial state starts at serial one.
+      - A conflict requires a new snapshot and observation; the writer never automatically retries a previously computed state against newer content.
+      - The lock wait accepts a finite nonnegative timeout, defaults to 30 seconds, and allows an immediate attempt at zero; timeout leaves the state unchanged.
+      - Publication synchronizes a hidden temporary file, atomically replaces the destination and synchronizes its directory before reporting success; failure before replacement preserves the earlier state bytes or absence.
+      - Failure after replacement reports that publication may already have happened and durability is uncertain, leaving the complete new document in place rather than attempting rollback.
+      - Process termination before or after replacement leaves a complete earlier or newer state; a leftover hidden staging file does not block a later write or become a model document.
+      - Captured and candidate documents must satisfy the 0.2 state schema; the writer refuses duplicate keys, nonfinite JSON values and symbolic-link, hard-linked or nonregular destinations, and a changed destination is never treated as a valid successor merely because its serial matches.
+      - Existing destination permission bits are preserved and new state files use mode 0600; required parent-directory creation is synchronized and replacing the captured parent directory conflicts.
+      - Guarantees apply to cooperating writers on supported local POSIX filesystems, without claiming coordination with arbitrary file editors, network filesystems, or an execution ledger transaction.
+    verification_method: State-writer, CLI interleaving, bounded-lock and process termination tests in CI.
+    observe:
+      tests:
+        cases:
+          - "python/tests/test_state_writer.py::*"
+          - "python/tests/test_state_writer_faults.py::*"
+          - "python/tests/test_state_writer_cli.py::*"
 
   - id: APP-002
     type: Application
@@ -105,9 +148,9 @@ records:
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-24"
-    responsibility: Observe the sources a model's bindings name and write state.
-    interfaces: [exacly refresh command, exacly observe command, exacly.refresh and exacly.manual_qa Python APIs]
+    last_reviewed_at: "2026-10-28"
+    responsibility: Observe the sources a model's bindings name and conditionally publish state retaining explicit model and implementation identities.
+    interfaces: [exacly refresh command, exacly observe command, exacly.refresh and exacly.manual_qa Python APIs, exacly.state_writer Python API]
     implementation_ref: { locator: python/src/exacly/refresh.py }
 
   - id: MEAS-001
@@ -133,6 +176,8 @@ relationships:
   - { source: APP-002, type: implements, target: REQ-010 }
   - { source: REQ-015, type: supports, target: PROC-002 }
   - { source: APP-002, type: implements, target: REQ-015 }
+  - { source: REQ-023, type: supports, target: PROC-002 }
+  - { source: APP-002, type: implements, target: REQ-023 }
   - { source: APP-002, type: reads, target: INFO-001 }
   - { source: APP-002, type: writes, target: INFO-002 }
   - { source: APP-002, type: depends_on, target: INF-001, conditions: Only to read the results of a finished run. }

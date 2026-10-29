@@ -2,8 +2,8 @@
 
 The first observer reads test results: JUnit XML reports from one CI run. For each
 record with a `tests` binding, it writes a verification assessment for the observed
-config revision. With `distribution`, the observed context is how the product is
-distributed (for example, users install from main), so a Requirement whose
+implementation against the supplied model revision. With `distribution`, the observed
+context is how the product is distributed (for example, users install from main), so a Requirement whose
 implementer's reference exists at the revision is also assessed as released there.
 
 State is rebuilt by observing again, never edited: each write increases the serial
@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from exacly.core import bindings, identity, is_state, version_of
+from exacly.core import bindings, identity, is_state, revisions_match, version_of
 
 Doc = dict[str, Any]
 CASE_PROPERTY = "exacly-case"
@@ -41,7 +41,11 @@ class RefreshError(Exception):
 
 @dataclass(frozen=True)
 class Run:
-    """One observation: the config revision and the CI run whose results are read."""
+    """One CI observation, with implementation and optional separate model identity.
+
+    Omitting model_revision retains the original single-revision behavior. These are caller-supplied
+    identities, not proof that the supplied config or reports came from the named revisions.
+    """
 
     revision: str
     context: str
@@ -51,6 +55,28 @@ class Run:
     job_status: str | None = None
     url: str | None = None
     source_url: str | None = None  # Base URL for the revision's files, such as https://github.com/o/r/blob/<sha>
+    model_revision: str | None = None
+
+    def __post_init__(self) -> None:
+        for name, revision in (("revision", self.revision), ("model_revision", self.model_revision)):
+            if name == "model_revision" and revision is None:
+                continue
+            if not isinstance(revision, str) or not revision.strip():
+                raise RefreshError(f"{name} must be a nonblank string")
+
+    @property
+    def config_revision(self) -> str:
+        """The supplied model identity; legacy runs use the implementation identity for both."""
+        return self.revision if self.model_revision is None else self.model_revision
+
+
+def check_distribution_identity(run: Run) -> None:
+    """The filesystem-based distribution observer cannot establish separate implementation identity."""
+    if not revisions_match(run.config_revision, run.revision):
+        raise RefreshError(
+            "distribution with different model and implementation revisions is not supported; "
+            "use verification-only refresh"
+        )
 
 
 def timestamp(run: Run) -> str:
@@ -102,7 +128,7 @@ def verification(binding: Doc, results: Mapping[str, str], run: Run) -> Doc:
         "applies_to": run.revision,
     }
     assessment: Doc = {"dimension": "verification", "state": None, "context": run.revision, "at": timestamp(run)}
-    assessment["subject"] = {"model_revision": run.revision, "revision": run.revision}
+    assessment["subject"] = {"model_revision": run.config_revision, "revision": run.revision}
     assessment["source"] = "tests"
     if identity("tests", binding):
         assessment["binding"] = identity("tests", binding)
@@ -138,10 +164,15 @@ def verification(binding: Doc, results: Mapping[str, str], run: Run) -> Doc:
             "evidence": [{**evidence, "claim": claim}],
             "reason": f"Failed: {named(failed)}.{missing}",
         }
-    skipped = len(selected) - len(ran)
-    claim = f"All {len(ran)} selected test cases passed" + (f"; {skipped} skipped" if skipped else "")
-    if empty:
-        reason = missing.strip()
+    skipped = sorted(cid for cid, outcome in selected.items() if outcome == "skipped")
+    claim = (
+        f"{len(ran)} of {len(selected)} selected test cases passed; {len(skipped)} skipped"
+        if skipped
+        else f"All {len(ran)} selected test cases passed"
+    )
+    if skipped or empty:
+        reason = (f"Skipped: {named(skipped)}." if skipped else "") + missing
+        reason = reason.strip()
         return {**assessment, "state": "inconclusive", "evidence": [{**evidence, "claim": claim}], "reason": reason}
     return {**assessment, "state": "passed", "evidence": [{**evidence, "claim": claim}]}
 
@@ -150,6 +181,7 @@ def delivery(
     requirement: str, records: Mapping[str, Doc], relationships: list[Doc], run: Run, root: Path
 ) -> Doc | None:
     """A released assessment in the distribution context, when an implementer's reference exists at the revision."""
+    check_distribution_identity(run)
     found = []
     for rel in relationships:
         implementer = records.get(rel["source"])
@@ -176,7 +208,7 @@ def delivery(
         "context": run.context,
         "at": timestamp(run),
         "source": "distribution",
-        "subject": {"model_revision": run.revision, "revision": run.revision, "environment": run.context},
+        "subject": {"model_revision": run.config_revision, "revision": run.revision, "environment": run.context},
         "evidence": evidence,
     }
 
@@ -323,6 +355,8 @@ def refresh(
 
     `previous` is the context's earlier state, whose lineage is kept and whose serial is increased.
     """
+    if distribution:
+        check_distribution_identity(run)
     carried = carry(documents, run.context, previous)
     records, relationships = carried.records, carried.relationships
     for rid, record in records.items():
@@ -345,4 +379,4 @@ def refresh(
         # observed. Other assessments, such as another observer's or another job's, and evidence stay; a tests
         # result of a binding that has left the config goes.
         replace(carried, rid, fresh, functools.partial(observed_again, sources, seen, current, single))
-    return assemble(carried, run.context, run.revision, timestamp(run))
+    return assemble(carried, run.context, run.config_revision, timestamp(run))

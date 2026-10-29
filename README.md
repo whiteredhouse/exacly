@@ -4,12 +4,14 @@ Keep a product model true to what ships, across the software development lifecyc
 
 ```mermaid
 flowchart LR
-    config["<b>Config</b><br/>what you intend<br/><i>YAML, reviewed in pull requests</i>"]
-    product["<b>The product</b><br/>code, tests, deployments"]
-    state["<b>State</b><br/>what is proven<br/><i>written only by tooling</i>"]
-    config -- "plan and apply:<br/>work that closes the gap" --> product
-    product -- "refresh:<br/>observe and cite evidence" --> state
-    state -. "compare" .-> config
+    state["State<br/>what is observed"]
+    config["Config<br/>what you intend"]
+    config --> plan(("plan"))
+    state --> plan
+    plan -- "work plan" --> apply(("apply"))
+    apply -- "people, agents<br/>and workflows" --> product["Product<br/>code, tests, deployments"]
+    product --> refresh(("refresh"))
+    refresh -- "evidence" --> state
 ```
 
 Exacly describes a product from business purpose down to the systems that run it: outcomes, capabilities, processes, requirements, information, applications and infrastructure, and how they relate. Teams and agents author that description as **config**. Tooling observes the real system (builds, tests, deployments, metrics) and records what it finds as **state**, with the evidence behind it. Comparing the two shows what is planned, what has shipped, and where the model and the product have drifted apart.
@@ -71,8 +73,13 @@ Exacly borrows the plan and apply loop from infrastructure as code, and the spec
 | **Validate** | Check config against the schema, the relationship rules and the traceability rules. | [`exacly validate`](python/README.md#validate), 0.1 and 0.2 |
 | **Refresh** | Observe the real system and write state: assessments per environment and the evidence behind them. | [`exacly refresh`](python/README.md#refresh), from test results; [`exacly observe manual-qa`](python/README.md#manual-verification), from manual checks people commit |
 | **Ask** | Show a record, trace why it exists and what realizes it, list what a change affects and what the model is missing. | [`exacly`](python/README.md#questions) show, trace, impact and gaps; [views](python/README.md#views) as a pull request plan and a site; an [MCP server and skill](#with-coding-agents) for agents |
-| **Plan** | Compare config with state and list the work needed to make them agree. | Planned |
-| **Apply** | Turn the plan into tasks for people or agents. The next refresh closes them. | Planned |
+| **Plan** | Propose the next observation or investigation for each verification prerequisite in a policy, against an explicit implementation target. | [`exacly plan`](python/README.md#plan-verification-work), read-only verification proposals; delivery planning remains planned |
+| **Register work** | Bind an existing pending task to a reviewed verification plan and output target in an operator-controlled ledger. | [`exacly executions register`](python/README.md#register-execution-bindings), with explicit [ledger diagnosis, backup and recovery](python/README.md#maintain-an-execution-ledger); task dispatch remains planned |
+| **Apply** | Dispatch an authorized plan action as traceable work for a person, agent or workflow. | [Proposed automation](spec/exacly/README.md#automation-roadmap) |
+| **Reconcile** | Check whether a selected plan action's verification goal is satisfied by fresh admitted evidence, optionally checking its registered pending-task binding. | [`exacly reconcile github-actions --dry-run`](python/README.md#preview-verification-reconciliation), read-only preview |
+| **Complete** | Complete one registered local verification task from fresh admitted evidence and merged current state, retaining a recoverable intent and completion receipt. | [`exacly complete github-actions`](python/README.md#complete-registered-verification-work), with explicit local authorization; new ledgers are completion-ready, and existing version-1 ledgers need a [copy-only upgrade](python/README.md#upgrade-a-ledger-for-completion) |
+
+See [Exacly's model](spec/exacly/README.md) for record lifecycles, traceability and observed verification and delivery.
 
 ## Where it comes from
 
@@ -92,9 +99,10 @@ Its ideas come from established practice:
 | Path | Contents |
 | --- | --- |
 | [`spec/`](spec/README.md) | Specification versions, JSON Schemas, worked examples and data-driven test cases |
-| [`python/`](python/README.md) | `exacly`, the command and Python package: validate, refresh, questions, views and the MCP server |
+| [`python/`](python/README.md) | `exacly`, the command and Python package: validate, refresh, questions, verification plans, views and the MCP server |
 | [`skills/`](skills/exacly/SKILL.md) | The skill that tells coding agents how to work with a model |
 | [`docs/`](docs/) | Research and pilot notes |
+| [`docs/site/`](docs/site/README.md) | Static landing-page mockup, worked model example, and GitHub Pages instructions |
 
 ## Quick start
 
@@ -104,6 +112,19 @@ Validate the [invoice reminders example](spec/examples/0.2/invoice-reminders/), 
 uv tool install exacly
 exacly validate spec/examples/0.2/invoice-reminders
 ```
+
+Version `0.6.0` adds verification planning, installed evidence packaging and
+producer-policy drafting, live evidence admission and recoverable local
+completion. New ledgers are completion-ready, and admission files are private.
+Select the version explicitly for a one-off run:
+
+```sh
+uvx --from 'exacly==0.6.0' exacly validate spec/examples/0.2/invoice-reminders
+```
+
+An unpinned install selects the latest stable release. See the
+[release notes and upgrade paths](CHANGELOG.md) before using existing ledger
+files or consuming JSON reports with this version.
 
 In your own project, keep config in `spec/exacly/` and pass the commit it was validated at with `--revision "$(git rev-parse HEAD)"`.
 
@@ -141,6 +162,8 @@ The check also evaluates [`ci/verification.yaml`](ci/verification.yaml) against 
 
 ## Status
 
+Browse [Exacly's own model and recorded state](https://whiteredhouse.github.io/exacly/project/). CI updates this view after successful checks on `main`. The [raw state](spec/exacly/state/main.json) retains each observation’s revision and time.
+
 Exacly is at 0.x and unstable: anything may change until 1.0, which comes with the first outside adopter. See [Versioning](spec/README.md#versioning).
 
 Each part of Exacly has its own version, tagged as `<part>-vX.Y.Z`, as release-please and Changesets tag the parts of one repository:
@@ -156,3 +179,5 @@ Each part of Exacly has its own version, tagged as `<part>-vX.Y.Z`, as release-p
 | 0.2.1, the first on [PyPI](https://pypi.org/project/exacly/) | 0.1, 0.2 |
 | 0.3.0: assessment sources, combined results, lists of bindings, the manual-qa extension | 0.1, 0.2 |
 | 0.4.0: independent verification, explicit assessment targets and readiness policies | 0.1, 0.2 |
+| 0.5.0: incomplete execution of case-bound tests gives inconclusive verification | 0.1, 0.2 |
+| 0.6.0: operator-controlled verification work, installed producer tools and recoverable local completion | 0.1, 0.2 |

@@ -1,0 +1,68 @@
+# Exacly's own model: preview observation-confirmed verification for a saved plan action.
+# Config, authored by people and agents; previews never change observations or pending work.
+exacly: "0.2.0"
+
+records:
+  - id: REQ-020
+    type: Requirement
+    name: Preview verification reconciliation from live evidence
+    description: Check a selected plan action's verification goal against fresh admitted observations for an output implementation.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-28"
+    statement: >-
+      Given a saved plan and existing action ID, current readiness and trust policies, output target,
+      live GitHub run and exact attempt, and evaluation date, preview whether fresh admitted evidence
+      satisfies the selected verification goal against the unchanged planned model contract, without
+      changing inputs, observations or pending work or authorizing task closure.
+    acceptance_criteria:
+      - The saved plan must match its schema and digest and contain the selected action with consistent action, check and completion identity; invalid plans and unknown action IDs are rejected.
+      - A saved plan and its self-reported content digest establish internal consistency only, without implying independent approval, dispatch authority or task-closure authority.
+      - The current readiness policy and approved model revision, config digest, namespace, criteria and bindings must match the planned contract; changed contracts produce stale with a replan reason.
+      - Source-verification targets contain only context, model_revision and revision with full commit SHAs; output context and model revision stay fixed while the implementation may change or remain the same.
+      - Every evidence evaluation performs fresh live admission for the selected run attempt and date under the explicit producer trust policy, fetching approved model files rather than accepting local model, receipt or state substitutes; stale policy or scope can be reported before live reads.
+      - Only freshly admitted state is evaluated; failed, missing, incomplete, mismatched or rejected evidence leaves the selected action pending rather than trusting an executor completion claim.
+      - Applicable evidence satisfying the selected action's verification goal produces ready, while whole-policy readiness is reported separately and may remain unsatisfied.
+      - Reports identify the plan, selected action, original and output targets, provenance checks, verification result and reasons for ready, pending or stale.
+      - The CLI requires dry-run mode and an evaluation date that does not precede the plan; ready exits 0, pending or stale exits 1, and invalid inputs or output errors exit 2.
+      - Text and JSON render the same preview; optional report output cannot overwrite inputs or enter protected model folders, including input aliases.
+      - Ledger, binding ID and current state are optional all-or-none inputs; bound previews read an existing valid ledger without initialization, migration, recovery or writes.
+      - Bound previews accept a finite nonnegative lock timeout defaulting to 30 seconds; each ledger read shares one monotonic budget across directory and SQLite waits, while reads before and after live admission have separate deadlines; zero permits an immediate attempt and timeout is an actionable invalid-input error without ledger mutation, rather than an HTTP or whole-preview timeout.
+      - A bound preview requires the active registered binding, exact pending entry and goal, policies and output scope to match; current state must match model revision, context and lineage, preserve the complete pending entry, and respect the latest registered serial and digest watermark.
+      - Higher refreshed state serials with the same pending entry are allowed; binding or watermark mismatches produce stale and ledger errors are invalid input, while fresh live admission remains required for evidence evaluation.
+      - Registered binding verification is reported only when bound checks succeed; unbound previews imply no registered task binding.
+      - A bound preview rechecks the active binding and watermark after evidence evaluation before reporting ready, records the last check time, and reports stale if registration changed during the evaluation.
+      - Repeated previews leave inputs, observations, pending work and ledger watermarks unchanged; reports remain advisory and unsigned and neither prove an executor-output link, dispatch work, maintain the execution ledger nor close tasks.
+    verification_method: Reconciliation core and command acceptance tests in CI.
+    observe:
+      tests:
+        cases:
+          - "python/tests/test_reconciliation.py::*"
+          - "python/tests/test_reconciliation_cli.py::*"
+          - "python/tests/test_executions.py::*"
+          - "python/tests/test_executions_cli.py::*"
+
+  - id: APP-009
+    type: Application
+    name: Verification reconciliation preview
+    description: The read-only reconciliation command and shared preview core.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-28"
+    responsibility: Preview a saved verification goal and optional registered task binding against fresh admitted evidence while preserving observations and pending work.
+    interfaces: [exacly reconcile github-actions --dry-run command, exacly.reconciliation Python API]
+    implementation_ref: { locator: python/src/exacly/reconciliation.py }
+
+relationships:
+  - { source: REQ-020, type: supports, target: PROC-002 }
+  - { source: APP-009, type: implements, target: REQ-020 }
+  - { source: PROC-002, type: uses, target: APP-009 }
+  - { source: APP-009, type: reads, target: INFO-001 }
+  - { source: APP-009, type: reads, target: INFO-002 }
+  - { source: APP-009, type: reads, target: INFO-003 }
+  - { source: APP-009, type: depends_on, target: APP-007, conditions: "Checks the saved plan and selected action contract." }
+  - { source: APP-009, type: depends_on, target: APP-008, conditions: "Obtains fresh live admission and the approved model before evaluating verification." }
+  - { source: APP-009, type: depends_on, target: APP-006, conditions: "Keeps selected-action verification separate from whole-policy readiness." }
+  - { source: APP-009, type: depends_on, target: APP-010, conditions: "Checks registered pending-task bindings through read-only ledger access when explicitly requested." }

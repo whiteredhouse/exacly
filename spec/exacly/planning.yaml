@@ -1,0 +1,56 @@
+# Exacly's own model: read-only proposals for gaps in target-specific verification.
+# Config, authored by people and agents (section 9); observations remain tool-written state.
+exacly: "0.2.0"
+
+records:
+  - id: REQ-018
+    type: Requirement
+    name: Plan verification work for a selected target
+    description: Turn verification prerequisites and applicable observations into reproducible work proposals.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-28"
+    statement: >-
+      Given config, observations, a verification-only readiness policy, an explicit implementation target
+      and an evaluation date, produce a versioned plan explaining each prerequisite and the observation,
+      investigation or configuration decision needed to resolve it, without dispatching work or changing inputs.
+    acceptance_criteria:
+      - Identical inputs and evaluation date produce identical plans, with object and document mapping order normalized.
+      - Plans identify their schema and tool versions, namespace, target, policy and input fingerprints, evaluation date, state lineage and serials, checks, actions and plan digest.
+      - Applicable satisfied verification produces no action, including a supported review decision without an observation binding.
+      - Applicable failed verification proposes investigation even when other observations are missing; remaining unknown verification proposes evidence collection, or a configuration blocker when no verification binding exists.
+      - Different revisions, builds, environments, obsolete bindings, skipped or absent checks and expired evidence cannot establish satisfaction for the selected target.
+      - Each action identifies its Requirement, verification dimension, stable ID, reason, criteria and binding fingerprints, and observable completion condition.
+      - Action identity excludes evaluation date, state serial and mutable reasons; changing approved policy, target, criteria or bindings changes the relevant identity.
+      - A nonconforming model produces a blocked plan with findings and no proposals; invalid policies, delivery checks and schema-invalid inputs are rejected.
+      - Text and JSON render the same plan; optional saved JSON cannot overwrite model, state, policy or target inputs or enter a model directory or model glob prefix, including through symlink aliases.
+      - Successful planning returns 0 even for unresolved or blocked plans; invalid input or output errors return 2, preserving readiness exit semantics on gate.
+      - Planning leaves supplied documents and input files unchanged, does not infer implementation tasks from missing evidence, and neither dispatches work nor authenticates evidence or closes pending work.
+    verification_method: Planner core and command acceptance tests in CI.
+    observe:
+      tests:
+        cases:
+          - "python/tests/test_planning.py::*"
+          - "python/tests/test_plan_cli.py::*"
+
+  - id: APP-007
+    type: Application
+    name: Verification planner
+    description: The read-only exacly plan command and its shared planning core.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-28"
+    responsibility: Propose target-specific verification work with reproducible identity and observable completion conditions.
+    interfaces: [exacly plan command, exacly.planning Python API]
+    implementation_ref: { locator: python/src/exacly/planning.py }
+
+relationships:
+  - { source: REQ-018, type: supports, target: PROC-003 }
+  - { source: APP-007, type: implements, target: REQ-018 }
+  - { source: PROC-003, type: uses, target: APP-007 }
+  - { source: APP-007, type: reads, target: INFO-001 }
+  - { source: APP-007, type: reads, target: INFO-002 }
+  - { source: APP-007, type: depends_on, target: APP-003, conditions: Uses target-specific observations and model validation findings. }
+  - { source: APP-007, type: depends_on, target: APP-006, conditions: Uses the same readiness checks for each selected prerequisite. }
