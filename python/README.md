@@ -173,7 +173,7 @@ It writes one verification assessment per platform of each binding, with source 
 ## Package verification evidence
 
 `exacly evidence package` provides the installed producer command and the
-`exacly.evidence.package` Python API from `0.6.0rc3`. The consumer checks out its
+`exacly.evidence.package` Python API in `0.6.0`. The consumer checks out its
 own project and runs its tests normally, without checking out Exacly's source
 or copying Exacly's Python helper.
 
@@ -236,7 +236,7 @@ tests while independently validating their inputs. Manifest `0.1.0` is versioned
 separately from Exacly's package: compatible producer and consumer releases need
 not be identical. Permanent release checks run the built wheel and the published
 exact-version CLI outside the source checkout, exercise valid and invalid
-packaging cases, and pass a newly packaged bundle to the published `0.6.0rc2`
+packaging cases, and pass a newly packaged bundle to a previously published
 consumer. Those checks guard installation and format compatibility, without
 establishing test honesty or acceptance coverage.
 
@@ -304,7 +304,7 @@ Exacly's own [producer proposal](../ci/evidence-producer.yaml) selects [the veri
 ### Draft a producer policy
 
 `exacly evidence propose-policy github-actions` exposes the existing
-`exacly.admission.propose_policy` API through the installed CLI from `0.6.0rc3`.
+`exacly.admission.propose_policy` API through the installed CLI in `0.6.0`.
 The Python API remains compatible with earlier releases.
 
 The trust policy names the repository by numeric ID and full name, the exact
@@ -388,9 +388,8 @@ completion.
 
 ### Choose branch-protection requirements
 
-The following policy option and admission receipt version `0.2.0` are available
-from `0.6.0rc2`. Earlier `0.6.0rc1` requires branch protection and emits admission
-receipts in version `0.1.0`.
+The following policy option is available in `0.6.0`. Admission receipts use
+version `0.2.0`, including the explicit branch-protection claims below.
 
 An omitted top-level `branch_protection` field requires GitHub to report the
 selected branch currently protected. Explicit `"branch_protection": "required"`
@@ -438,18 +437,16 @@ versions. Existing policies without the new field retain their original content
 and digest.
 
 Existing version-4 ledgers retain their recorded validation profile, which
-fingerprints code, schemas, parser dependencies and runtime. The `0.6.0` runtime
-and schemas match RC4: with the same installed dependency artifacts and runtime,
-the retained RC4 profile remains current. Exacly's version metadata and README
-changes alone do not require activation. Recreating or changing the environment
-can change fingerprinted dependency artifacts, such as generated launcher paths,
-even when package versions match; matching version numbers alone do not establish
-profile equality.
+fingerprints code, schemas, installed dependency artifacts and runtime. The
+profile remains current while those inputs remain identical. Exacly's version
+metadata and README changes alone do not require activation. Recreating or
+changing the environment can change fingerprinted dependency artifacts, such as
+generated launcher paths, even when package versions match; matching version
+numbers alone do not establish profile equality.
 
-Changed validation inputs, including the older RC1–RC3 code, can produce a
-recognized `known_stale` profile. Reads and offline replay freshly validate
-retained history after checking required integrity baselines. Before further
-writes under a stale profile, run:
+Changed validation inputs can produce a recognized `known_stale` profile. Reads
+and offline replay freshly validate retained history after checking required
+integrity baselines. Before further writes under a stale profile, run:
 
 ```sh
 exacly executions activate --ledger SOURCE --out NEW_DIR
