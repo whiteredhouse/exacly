@@ -1,6 +1,15 @@
 # exacly
 
-The `exacly` command and Python package work with an Exacly model, either a 0.1 product map or 0.2 config and state documents, as the [Exacly Specification](../spec/README.md) describes it:
+The `exacly` command and Python package work with an Exacly model, either a 0.1 product map or 0.2 config and state documents, as the [Exacly Specification](../spec/README.md) describes it.
+
+This reference describes **0.6.0rc1**, a release candidate for product context,
+evidence-based verification and recoverable local task completion. The new
+commands run in an operator-controlled environment. That release excludes
+candidate isolation, task dispatch and executor supervision (REQ-025–027).
+The [isolation section](#isolate-a-candidate-command) describes additional
+unreleased functionality on main. Review the
+[release notes and upgrade paths](../CHANGELOG.md) for report-format changes and
+explicit ledger-copy upgrades.
 
 - [`exacly validate`](#validate) checks the model and prints the section 11 validation report.
 - [`exacly refresh`](#refresh) writes state from what the model's bindings observe.
@@ -11,16 +20,23 @@ The `exacly` command and Python package work with an Exacly model, either a 0.1 
 - [`exacly plan`](#plan-verification-work) proposes work for verification prerequisites against that target, with an explicit evaluation date.
 - [`exacly executions register` and `show`](#register-execution-bindings) record and inspect operator-controlled bindings between existing pending work and reviewed verification contracts.
 - [`exacly executions inspect`, `backup` and `recover`](#maintain-an-execution-ledger) diagnose, back up and recover an explicitly selected ledger without changing its source files.
+- [`exacly executions upgrade`](#upgrade-a-ledger-for-completion), [`index` and `audit`](#create-and-audit-an-integrity-index-copy), and [`activate`](#activate-an-operational-indexed-ledger) create or inspect explicitly selected ledger copies.
 - [`exacly reconcile github-actions --dry-run`](#preview-verification-reconciliation) previews whether fresh admitted evidence satisfies a selected plan action's verification goal.
+- [`exacly complete github-actions` and `exacly completions show` / `recover`](#complete-registered-verification-work) complete one registered local task from admitted evidence and inspect or resolve interrupted completion.
 - [`exacly isolate`](#isolate-a-candidate-command) runs one explicitly authorized command through a verified Linux boundary and retains untrusted outputs.
 - [`exacly mcp`](#mcp-server) answers show, trace, impact and gaps questions for coding agents.
 
 ```sh
-uv tool install exacly    # or: pipx install exacly, pip install exacly
-uvx exacly validate spec/exacly    # or run it once without installing
+uv tool install 'exacly==0.6.0rc1'
+uvx --from 'exacly==0.6.0rc1' exacly validate spec/exacly    # one-off run
 ```
 
-Exacly is at 0.x and the specification is a Draft, so commands, output and the model may change in any release until 1.0. Pin a version (`exacly==0.5.0`) where a change would break you. To run the latest main instead, install `"exacly @ git+https://github.com/whiteredhouse/exacly"`.
+The exact pin selects this prerelease; `uv tool install exacly` selects the latest
+stable release instead. Python 3.12 or newer is required. Exacly is at 0.x and the
+specification is a Draft, so commands, output and the model may change in any
+release until 1.0. Pin the package version where a change would break you. To run
+the latest main instead, install
+`"exacly @ git+https://github.com/whiteredhouse/exacly"`.
 
 Before 0.2.0 the package was `exacly-validate`, with `exacly-validate` and `exacly-refresh` commands. Those commands still run, with a note, until the next release.
 
@@ -733,8 +749,9 @@ In Python, `exacly.completion.complete(source, plan_doc, action_id, readiness_po
 
 Completion receipts remain unsigned and do not prove test honesty, acceptance coverage or that an executor produced the named output. These commands complete local verification work without closing external tickets, running candidate code, dispatching agents or granting release authority. The ledger must remain in the operator-controlled runtime; its file permissions do not isolate code running as the same operating-system user.
 
-
 ## Isolate a candidate command
+
+**Unreleased functionality on main.**
 
 `exacly isolate` runs one explicit argument vector through Linux Bubblewrap using a reviewed detached root filesystem and immutable input snapshots. Before starting candidate code, a trusted bootstrap verifies the actual launch's namespace separation, capability and mount protections and mandatory syscall filter. The runtime provides private writable temporary filesystems and no host network, candidate-writable host mounts, operator storage, inherited credentials or control interfaces; child processes retain the boundary.
 
