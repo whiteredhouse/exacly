@@ -6,6 +6,7 @@ copy and retains the original bytes. Manifests describe snapshots, not authentic
 
 from __future__ import annotations
 
+import copy
 import datetime as dt
 import hashlib
 import json
@@ -22,6 +23,8 @@ from exacly import execution_store as store
 
 Doc = dict[str, Any]
 VERSION = "0.2.0"
+V4_VERSION = "0.3.0"
+INDEX_VERSION = 4
 JOURNAL_MAGIC = bytes.fromhex("d9d505f920a163d7")
 CHUNK = 64 * 1024
 CLAIMS = {
@@ -31,7 +34,7 @@ CLAIMS = {
     "latest_state_verified": False,
     "automatic_cutover": False,
 }
-SCHEMA: Doc = {
+LEGACY_SCHEMA: Doc = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "title": "Exacly ledger maintenance snapshot 0.2.0",
     **planning.fields(
@@ -67,6 +70,57 @@ SCHEMA: Doc = {
         }
     ),
 }
+V4_SCHEMA: Doc = copy.deepcopy(LEGACY_SCHEMA)
+V4_SCHEMA["title"] = "Exacly operational indexed ledger maintenance snapshot 0.3.0"
+V4_SCHEMA["properties"]["schema_version"] = {"const": V4_VERSION}
+V4_SCHEMA["properties"]["store"]["properties"]["user_version"] = {"const": INDEX_VERSION}
+V4_SCHEMA["properties"]["validation"] = planning.fields(
+    {
+        **LEGACY_SCHEMA["properties"]["validation"]["properties"],
+        "scope": {"const": "full_history"},
+        "all_retained_bytes_checked": {"type": "boolean"},
+        "integrity_baseline_checked": {"type": "boolean"},
+        "profile_status": {"enum": ["not_checked", "current", "known_stale", "unsupported"]},
+        "semantics": planning.fields(
+            {
+                "bindings": {"type": "integer", "minimum": 0},
+                "fresh": {"type": "integer", "minimum": 0},
+                "reused": {"const": 0},
+                "prepared": {"type": "integer", "minimum": 0},
+            }
+        ),
+        "facts": {"type": ["object", "null"]},
+    }
+)
+SCHEMA_V4 = V4_SCHEMA
+SCHEMA: Doc = {"$schema": LEGACY_SCHEMA["$schema"], "oneOf": [LEGACY_SCHEMA, V4_SCHEMA]}
+
+
+def _v4(report: Doc) -> None:
+    if report["schema_version"] != V4_VERSION:
+        report["schema_version"] = V4_VERSION
+        report["validation"] = {
+            "status": "not_performed",
+            "bindings": 0,
+            "active": 0,
+            "scope": "full_history",
+            "all_retained_bytes_checked": False,
+            "integrity_baseline_checked": False,
+            "profile_status": "not_checked",
+            "semantics": {"bindings": 0, "fresh": 0, "reused": 0, "prepared": 0},
+            "facts": None,
+        }
+    report["store"]["user_version"] = INDEX_VERSION
+
+
+def _recognized_v4(report: Doc) -> None:
+    observed = report["observed_store"]
+    if (
+        observed["sqlite_header"]
+        and observed["application_id"] == store.APPLICATION_ID
+        and observed["user_version"] == INDEX_VERSION
+    ):
+        _v4(report)
 
 
 def _digest(fd: int) -> str:
@@ -173,24 +227,53 @@ def _finish(report: Doc) -> Doc:
     return report
 
 
+def _validate_connection(connection: sqlite3.Connection, budget: store.Deadline, report: Doc) -> Doc:
+    store.busy_timeout(connection, budget)
+    version = connection.execute("PRAGMA user_version").fetchone()[0]
+    if version == INDEX_VERSION:
+        from exacly import execution_index
+
+        _v4(report)
+        facts = execution_index.audit(connection, deadline=budget)
+        store.require(facts["format_version"] == INDEX_VERSION, "unexpected indexed ledger audit version")
+        store.require(
+            facts["integrity"]["complete"] is True, "maintenance requires the complete retained-byte baseline"
+        )
+        store.require(facts["semantics"]["reused"] == 0, "maintenance requires fresh retained-proof validation")
+        store.busy_timeout(connection, budget)
+        active = connection.execute("SELECT count(*) FROM active").fetchone()[0]
+        return {
+            "status": "passed",
+            "bindings": facts["semantics"]["bindings"],
+            "active": active,
+            "scope": "full_history",
+            "all_retained_bytes_checked": True,
+            "integrity_baseline_checked": True,
+            "profile_status": facts["profile_status"],
+            "semantics": facts["semantics"],
+            "facts": facts,
+        }
+    store.require(version in (store.USER_VERSION, store.COMPLETION_VERSION), "unsupported ledger version")
+    records, active_records, _ = store.validate(connection, deadline=budget)
+    try:
+        for record in records.values():
+            executions.validate_record(record)
+    except ValueError:
+        raise store.StoreError("ledger contains an invalid execution binding contract") from None
+    report["store"]["user_version"] = version
+    return {"status": "passed", "bindings": len(records), "active": len(active_records)}
+
+
 def _validate(path: Path, budget: store.Deadline, report: Doc) -> Doc:
     try:
         with store.database(path, create=False, deadline=budget) as (connection, _):
-            records, active, _ = store.validate(connection, deadline=budget)
             store.busy_timeout(connection, budget)
-            version = connection.execute("PRAGMA user_version").fetchone()[0]
-            store.require(version in (store.USER_VERSION, store.COMPLETION_VERSION), "unsupported ledger version")
-            try:
-                for record in records.values():
-                    executions.validate_record(record)
-            except ValueError:
-                raise store.StoreError("ledger contains an invalid execution binding contract") from None
+            connection.execute("BEGIN")
+            return _validate_connection(connection, budget, report)
     except sqlite3.Error as error:
         if store.sqlite_lock_error(error):
             raise store.LockTimeoutError(store.LOCK_TIMEOUT_MESSAGE) from None
         raise store.StoreError("ledger integrity validation failed") from None
-    report["store"]["user_version"] = version
-    return {"status": "passed", "bindings": len(records), "active": len(active)}
 
 
 def _capture(stack: ExitStack, path: Path, report: Doc) -> dict[str, tuple[int, Doc]]:
@@ -238,6 +321,7 @@ def inspect(path: Path, *, lock_timeout: float = store.DEFAULT_LOCK_TIMEOUT) -> 
         with _locks(path, None, budget) as source, ExitStack() as stack:
             report = _report(source, "inspect")
             found = _capture(stack, source, report)
+            _recognized_v4(report)
             try:
                 has_journal = _supported(found, report)
             except store.StoreError as error:
@@ -253,6 +337,14 @@ def inspect(path: Path, *, lock_timeout: float = store.DEFAULT_LOCK_TIMEOUT) -> 
                     except store.StoreError as error:
                         if isinstance(error, store.LockTimeoutError):
                             raise
+                        if report["schema_version"] == V4_VERSION:
+                            from exacly.execution_history import UnsupportedProfileError
+
+                            if isinstance(error, UnsupportedProfileError):
+                                report["validation"]["profile_status"] = "unsupported"
+                                report["diagnostics"].append(str(error))
+                                _stable(found, source)
+                                return _finish(report)
                         report["status"] = "corrupt"
                         report["validation"]["status"] = "failed"
                         report["diagnostics"].append(str(error))
@@ -332,6 +424,7 @@ def _maintain(path: Path, out: Path, operation: str, lock_timeout: float) -> Doc
         with _locks(path, out, budget) as source, ExitStack() as stack:
             report = _report(source, operation)
             found = _capture(stack, source, report)
+            _recognized_v4(report)
             has_journal = _supported(found, report)
             store.require(
                 has_journal == (operation == "recover"),
@@ -387,11 +480,16 @@ def _maintain(path: Path, out: Path, operation: str, lock_timeout: float) -> Doc
                             result.as_uri() + "?mode=rw", uri=True, timeout=budget.remaining(), isolation_level=None
                         )
                     ) as connection:
-                        report["validation"] = {"status": "passed", "bindings": 0, "active": 0}
-                        records, active, _ = store.validate(connection, deadline=budget)
-                        report["validation"].update(bindings=len(records), active=len(active))
+                        store.busy_timeout(connection, budget)
+                        connection.execute("BEGIN")
+                        report["validation"] = _validate_connection(connection, budget, report)
                     store.auxiliary_files(result)
                 report["validation"] = _validate(result, budget, report)
+                if report["observed_store"]["user_version"] == INDEX_VERSION:
+                    store.require(
+                        report["store"]["user_version"] == INDEX_VERSION,
+                        "maintenance copy changed the indexed ledger format",
+                    )
                 if operation == "upgrade":
                     store.require(
                         report["store"]["user_version"] == store.COMPLETION_VERSION,

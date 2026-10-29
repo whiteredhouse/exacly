@@ -1,0 +1,3549 @@
+{
+  "schema_version": "0.1.0",
+  "benchmark": "benchmarks/ledger_history_reuse.py",
+  "complete": true,
+  "metadata": {
+    "generated_at_utc": "2026-10-29T01:21:52.878998+00:00",
+    "python": "3.12.14",
+    "sqlite": "3.53.1",
+    "platform": "Linux-6.18.55-x86_64-with-glibc2.41",
+    "machine": "x86_64",
+    "revision": "5642293f3b43804d76cea383cffbecf787b1f17c",
+    "working_tree_changes": [
+      " M CHANGELOG.md",
+      " M benchmarks/README.md",
+      " M benchmarks/ledger_history.py",
+      " M ci/verification.yaml",
+      " M docs/ledger-history-scaling.md",
+      " M python/README.md",
+      " M python/src/exacly/cli.py",
+      " M python/src/exacly/completion.py",
+      " M python/src/exacly/completion_store.py",
+      " M python/src/exacly/execution_maintenance.py",
+      " M python/src/exacly/execution_store.py",
+      " M python/src/exacly/executions.py",
+      " M python/src/exacly/history_maintenance.py",
+      " M python/src/exacly/reconciliation.py",
+      " M python/tests/test_ledger_history_benchmark.py",
+      " M spec/exacly/README.md",
+      " M spec/exacly/automation.yaml",
+      " M spec/exacly/execution-maintenance.yaml",
+      " M spec/exacly/executions.yaml",
+      " M spec/exacly/ledger-history.yaml",
+      "?? benchmarks/ledger_history_reuse.py",
+      "?? benchmarks/results/ledger_history_reuse.json",
+      "?? python/src/exacly/execution_index.py",
+      "?? python/tests/test_execution_history_reuse.py",
+      "?? python/tests/test_execution_history_reuse_cli.py",
+      "?? python/tests/test_execution_history_reuse_crashes.py",
+      "?? python/tests/test_execution_history_reuse_faults.py",
+      "?? python/tests/test_execution_index_atomicity.py",
+      "?? python/tests/test_execution_maintenance_v4.py",
+      "?? python/tests/test_history_index_distribution.py",
+      "?? python/tests/test_history_reuse_benchmark.py"
+    ],
+    "clock": "time.perf_counter",
+    "cache_conditions": "warm after fixture validation, activation and independent typed-cell comparison; indexed engine timing includes its own profile and integrity checks",
+    "timing_relationship": "component timers are inclusive; installed profile and integrity baseline run inside the indexed elapsed timer; no separate hash-only or quick_check timing pass",
+    "fixture_authority": "controlled offline test fixtures; byte hashing is a cost comparison, not validation or a proposed trust boundary",
+    "installed_operational_profile": {
+      "format_version": "0.1.0",
+      "family": "exacly-ledger-operational-v1",
+      "codec": "typed-cells-v1",
+      "inputs": [
+        {
+          "name": "dependency-code/attrs/attr",
+          "digest": "sha256:5e5fd390830dbac37b1591f39fe55fea8c9c08cbad4a5d422342474e2c9659ce",
+          "size": 210198
+        },
+        {
+          "name": "dependency-code/attrs/attrs",
+          "digest": "sha256:5693c7eaa427f80f229cdd6121ba8cca1f7d060bf856284215a16df5f38562e9",
+          "size": 10973
+        },
+        {
+          "name": "dependency-code/jsonpointer/jsonpointer",
+          "digest": "sha256:95638f5d7b6131118bf3a043c48b80dc08bfbc0a37f0d4dd65c17cdb35f57a5b",
+          "size": 13792
+        },
+        {
+          "name": "dependency-code/jsonschema-specifications/jsonschema_specifications",
+          "digest": "sha256:244b2393d139b0521e40aa274252fe0e9112deb16226f074a1140a6ed723c416",
+          "size": 39986
+        },
+        {
+          "name": "dependency-code/jsonschema/jsonschema",
+          "digest": "sha256:277ae0aebabeca0297d10208dc0170bcbef7dd5232fdf061d80b742ee582bcb7",
+          "size": 463467
+        },
+        {
+          "name": "dependency-code/pyyaml/_yaml",
+          "digest": "sha256:189b707b7612586a3732fba902fc55da990898e29a10957eaaa26f3aa0ad5707",
+          "size": 1402
+        },
+        {
+          "name": "dependency-code/pyyaml/yaml",
+          "digest": "sha256:878fe37a1f305e66f79249d9e9a9cff8466b92c619a96c8340f36a16f04f8faa",
+          "size": 2896770
+        },
+        {
+          "name": "dependency-code/referencing/referencing",
+          "digest": "sha256:ccef19f8025b4b65bba2efd261bb600cef0678f82076728bd41477f343d80df6",
+          "size": 109797
+        },
+        {
+          "name": "dependency-code/rpds-py/rpds",
+          "digest": "sha256:4a4cf92bdbbcf2897916901cb90b778840fbb043724826f40dcef77318d696f2",
+          "size": 1042357
+        },
+        {
+          "name": "dependency-code/typing-extensions/typing_extensions",
+          "digest": "sha256:b5098266537dc058724b2f2225a7680deb05b90f3fb452f02af0cceccfa42fa8",
+          "size": 165012
+        },
+        {
+          "name": "dependency/attrs",
+          "digest": "sha256:4502c1b169f1e8fd99ee02c2d03c165e901a78bc9b68902ed3b5f2930bf12067",
+          "size": 233865
+        },
+        {
+          "name": "dependency/jsonpointer",
+          "digest": "sha256:f59a71f961345c992ce347e294c342a84c1f72c8f87201247f96fbf4d93e2b85",
+          "size": 22472
+        },
+        {
+          "name": "dependency/jsonschema",
+          "digest": "sha256:bcae7c37aafa18eb72062270bc8804a2858c67d92196d46ae9cfa5620b32476c",
+          "size": 476658
+        },
+        {
+          "name": "dependency/jsonschema-specifications",
+          "digest": "sha256:6015b35d56a2728d59e84422f1424edefad7501ffa1afd558aaef1a2b8bfa485",
+          "size": 47479
+        },
+        {
+          "name": "dependency/pyyaml",
+          "digest": "sha256:60a3fb90368767aa05cae4117c822c0c58d3bb494361c1beca01b2c86698628b",
+          "size": 2903798
+        },
+        {
+          "name": "dependency/referencing",
+          "digest": "sha256:ec57b023f0dcd8b840063f692e7a523199c8e548a96e7f1bd74b7c8371399b26",
+          "size": 115554
+        },
+        {
+          "name": "dependency/rpds-py",
+          "digest": "sha256:d61bdb1e7b91b2f1d40398c68332f8540143f4f0d9b9b3baa538e86fc99b8e52",
+          "size": 1069226
+        },
+        {
+          "name": "dependency/typing-extensions",
+          "digest": "sha256:15f2834c34e7b22fb85100c59a6217973b42fae9911c79a0deca83b851866404",
+          "size": 182965
+        },
+        {
+          "name": "exacly/python",
+          "digest": "sha256:de58c57e7ac33d929820671b07473d233689d4a65ea08949a8ad783819edac2b",
+          "size": 545218
+        },
+        {
+          "name": "exacly/schemas",
+          "digest": "sha256:571d7d084db0e68bc4c76b5889900295032dfaa7bfcc45b829c8ec983fa925a7",
+          "size": 103298
+        },
+        {
+          "name": "runtime/codecs",
+          "digest": "sha256:557c579fefe3783fb92363bb32135c56277f0786418606ac2a0d8e0ba8e1fdbe",
+          "size": 36870
+        },
+        {
+          "name": "runtime/datetime",
+          "digest": "sha256:6fa356097adc2d5184c78cc4205e04c887e892bdbf071492141e8c97f6dc56f0",
+          "size": 268
+        },
+        {
+          "name": "runtime/encodings",
+          "digest": "sha256:b4bcd6f112759f1a34766446af57efc46a82d42726948d5a472c50f4ec13845f",
+          "size": 1415341
+        },
+        {
+          "name": "runtime/hashlib",
+          "digest": "sha256:c086fd06dd8b27b09fdd48a99d505df6d716584d73db6b19e97f56e1dabc08ea",
+          "size": 9349
+        },
+        {
+          "name": "runtime/json",
+          "digest": "sha256:3f7c0c7e39389c18ab294a52ee1267be3411b94ee83b17e0c47a676c005218fa",
+          "size": 48393
+        },
+        {
+          "name": "runtime/python",
+          "digest": "sha256:fa67443527ed9647f760d807e2a38f26340757123e643c4639cf273ed15d5ea7",
+          "size": 30894944
+        },
+        {
+          "name": "runtime/re",
+          "digest": "sha256:6963389ce753c7f24b3a1b1ff8e7710a2099149c2674f458e09db645d517b94d",
+          "size": 95289
+        },
+        {
+          "name": "runtime/sqlite3",
+          "digest": "sha256:ca7005d91feef005b21a48758a11bf96a662de48b4a668d32e75ce6704b664a9",
+          "size": 13525
+        },
+        {
+          "name": "runtime/struct",
+          "digest": "sha256:82fa75a9554f45ff1e72274899fb66b2b3e5644f6b99f88244c209dbb6842ad0",
+          "size": 257
+        },
+        {
+          "name": "runtime/xml",
+          "digest": "sha256:a47d3e6a246e3c7501a7bbc15b2c5ad62307371a346feb5d480d5e0a1ecc3fcb",
+          "size": 301828
+        },
+        {
+          "name": "runtime/zipfile",
+          "digest": "sha256:e12afe26ffbce2e7f96f52a9e387e7d936966e879f44b9c47c90be033649aabb",
+          "size": 101596
+        }
+      ],
+      "runtime": {
+        "python": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+        "implementation": "cpython",
+        "sqlite": "3.53.1",
+        "sqlite_source": "2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9"
+      },
+      "format_checkers": {
+        "jsonschema/date": {
+          "function": "jsonschema._format.is_date",
+          "digest": "sha256:fceb93283f71fb7a5de1843edbb3b5e455dc8a1c51ca79791541debafcea6c94",
+          "raises": [
+            "builtins.ValueError"
+          ]
+        },
+        "jsonschema/email": {
+          "function": "jsonschema._format.is_email",
+          "digest": "sha256:c2206d71da5023795f76eb47b0996b827ca6aa29a788cc299e0bba95f91836ed",
+          "raises": []
+        },
+        "jsonschema/idn-email": {
+          "function": "jsonschema._format.is_email",
+          "digest": "sha256:c2206d71da5023795f76eb47b0996b827ca6aa29a788cc299e0bba95f91836ed",
+          "raises": []
+        },
+        "jsonschema/ipv4": {
+          "function": "jsonschema._format.is_ipv4",
+          "digest": "sha256:b8ac542a1021667d3d8522fd1b2f96d293b8530cab51475dd9c865dabfe7b822",
+          "raises": [
+            "ipaddress.AddressValueError"
+          ]
+        },
+        "jsonschema/ipv6": {
+          "function": "jsonschema._format.is_ipv6",
+          "digest": "sha256:ce0e54cd9a6fdc637f6a4cff575aa8869abf36f6c26d8bba23aa277eccb5c0ba",
+          "raises": [
+            "ipaddress.AddressValueError"
+          ]
+        },
+        "jsonschema/json-pointer": {
+          "function": "jsonschema._format.is_json_pointer",
+          "digest": "sha256:d6c03598c2bf19e20f02f0eb94d19df0954ee163923062cf934558b29beaefac",
+          "raises": [
+            "jsonpointer.JsonPointerException"
+          ]
+        },
+        "jsonschema/regex": {
+          "function": "jsonschema._format.is_regex",
+          "digest": "sha256:92f818084446b5563ba15fdf030ad790bfc0808ec6ba642c159d604bf01e2c8a",
+          "raises": [
+            "re.error"
+          ]
+        },
+        "jsonschema/relative-json-pointer": {
+          "function": "jsonschema._format.is_relative_json_pointer",
+          "digest": "sha256:98263a5cd6ef20fff5865db3763fd027dd68276db330bc643f43f3c71f889fb3",
+          "raises": [
+            "jsonpointer.JsonPointerException"
+          ]
+        },
+        "jsonschema/time": {
+          "function": "jsonschema._format.is_draft3_time",
+          "digest": "sha256:c2c6506b9fa345036ad741050be55b5ed1a96b38fbaefa767767fe14ffd2ed7d",
+          "raises": [
+            "builtins.ValueError"
+          ]
+        },
+        "jsonschema/uuid": {
+          "function": "jsonschema._format.is_uuid",
+          "digest": "sha256:68e96873e49b42b2d4ae42d9dc459cede3040cf7a818f06b761fe62290f92886",
+          "raises": [
+            "builtins.ValueError"
+          ]
+        },
+        "state/date": {
+          "function": "jsonschema._format.is_date",
+          "digest": "sha256:fceb93283f71fb7a5de1843edbb3b5e455dc8a1c51ca79791541debafcea6c94",
+          "raises": [
+            "builtins.ValueError"
+          ]
+        },
+        "state/date-time": {
+          "function": "exacly.state_writer._date_time",
+          "digest": "sha256:734fe300af4c2d27133493c36c673d56e9ed251932dd1e4c80eea4d55ed5b409",
+          "raises": []
+        },
+        "state/email": {
+          "function": "jsonschema._format.is_email",
+          "digest": "sha256:c2206d71da5023795f76eb47b0996b827ca6aa29a788cc299e0bba95f91836ed",
+          "raises": []
+        },
+        "state/idn-email": {
+          "function": "jsonschema._format.is_email",
+          "digest": "sha256:c2206d71da5023795f76eb47b0996b827ca6aa29a788cc299e0bba95f91836ed",
+          "raises": []
+        },
+        "state/ipv4": {
+          "function": "jsonschema._format.is_ipv4",
+          "digest": "sha256:b8ac542a1021667d3d8522fd1b2f96d293b8530cab51475dd9c865dabfe7b822",
+          "raises": [
+            "ipaddress.AddressValueError"
+          ]
+        },
+        "state/ipv6": {
+          "function": "jsonschema._format.is_ipv6",
+          "digest": "sha256:ce0e54cd9a6fdc637f6a4cff575aa8869abf36f6c26d8bba23aa277eccb5c0ba",
+          "raises": [
+            "ipaddress.AddressValueError"
+          ]
+        },
+        "state/json-pointer": {
+          "function": "jsonschema._format.is_json_pointer",
+          "digest": "sha256:d6c03598c2bf19e20f02f0eb94d19df0954ee163923062cf934558b29beaefac",
+          "raises": [
+            "jsonpointer.JsonPointerException"
+          ]
+        },
+        "state/regex": {
+          "function": "jsonschema._format.is_regex",
+          "digest": "sha256:92f818084446b5563ba15fdf030ad790bfc0808ec6ba642c159d604bf01e2c8a",
+          "raises": [
+            "re.error"
+          ]
+        },
+        "state/relative-json-pointer": {
+          "function": "jsonschema._format.is_relative_json_pointer",
+          "digest": "sha256:98263a5cd6ef20fff5865db3763fd027dd68276db330bc643f43f3c71f889fb3",
+          "raises": [
+            "jsonpointer.JsonPointerException"
+          ]
+        },
+        "state/time": {
+          "function": "jsonschema._format.is_draft3_time",
+          "digest": "sha256:c2c6506b9fa345036ad741050be55b5ed1a96b38fbaefa767767fe14ffd2ed7d",
+          "raises": [
+            "builtins.ValueError"
+          ]
+        },
+        "state/uuid": {
+          "function": "jsonschema._format.is_uuid",
+          "digest": "sha256:68e96873e49b42b2d4ae42d9dc459cede3040cf7a818f06b761fe62290f92886",
+          "raises": [
+            "builtins.ValueError"
+          ]
+        }
+      },
+      "digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+    },
+    "harness_digest": "06de847362d76aef00b90108edc5a1aefdfad7872084c153ea5b41c8adad8e4f",
+    "published_harness_digest": "06de847362d76aef00b90108edc5a1aefdfad7872084c153ea5b41c8adad8e4f",
+    "fixture_digest": "023eb5ae1086a317ba0522c4b0c49f8b14e2af4a8b5218d4d3e55899c4fe5c95",
+    "published_workloads_digest": "36788aaa60cafe9590a8ce65199bbdcef576482e056b030a4d58361181f93a19"
+  },
+  "method": {
+    "comparison": "same canonical retained cells; v2 full semantics vs v4 normal engine vs v4 full audit",
+    "baseline": "both engines share grouping and compiled schema helpers, but v4 freshly checks every binding while v2 checks full binding schemas through retained payload semantics; historical v1 metadata-only and old schema-construction timings are separate",
+    "timed_scope": "protected coherent read transaction; locks/open/setup/upgrade/activation excluded; profile+baseline+semantic work included",
+    "timers": "inclusive component timers; do not sum them; returned facts are cross-checked against observed semantic calls and independent typed-cell coverage",
+    "coverage": "source-volume counters cover original retained typed cells; index metadata and installed-profile reads are additional work included in elapsed time, not a measured total physical IO volume",
+    "cache": "warm after fixture full validation, explicit activation and independent retained-byte comparison; no cold-cache claim",
+    "authority": "controlled offline fixtures; no live GitHub, candidate execution, dispatch, task closure or authority granted by benchmark digests",
+    "repetitions": "one per workload by default; elapsed results are diagnostic, not machine-dependent acceptance thresholds",
+    "growth": "normal checks still read all retained bytes, recheck global structure and fresh binding schemas; storage/latency are not bounded"
+  },
+  "results": [
+    {
+      "label": "open-bindings",
+      "tasks": 10,
+      "bindings": 10,
+      "supersession_depth": 1,
+      "testcases_per_report": 1,
+      "model_requirements": 1,
+      "backlog": false,
+      "bindings_only": true,
+      "published_source_format": 1,
+      "compared_source_format": 2,
+      "index_format": 4,
+      "repeats": 1,
+      "v1_upgrade_seconds_excluded": 0.019420816002821084,
+      "activation_seconds_excluded": 0.47369280899874866,
+      "source_sizes": {
+        "ledger_bytes": 102400,
+        "binding_json_bytes": 19011
+      },
+      "indexed_sizes": {
+        "ledger_bytes": 139264,
+        "binding_json_bytes": 19011
+      },
+      "retained_cells": {
+        "rows": 30,
+        "cells": 90,
+        "bytes": 23281,
+        "diagnostic_digest": "6bf4a5cc2e040f5471ffd81b6212ec8cb58c4769496cf096472edede2420a2a8"
+      },
+      "protected_input_digests_unchanged": true,
+      "v4_normal_divided_by_v2_full": 26.585534871194085,
+      "modes": {
+        "v2_full": {
+          "median_seconds": 0.003635260996816214,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.003635260996816214,
+              "component_seconds": {
+                "installed_profile_seconds": 0.0,
+                "integrity_baseline_seconds": 0.0,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.0,
+                "binding_decode_seconds": 0.0027766799976234324
+              },
+              "calls": {
+                "installed_profile_seconds": 0,
+                "integrity_baseline_seconds": 0,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 0,
+                "binding_decode_seconds": 10
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 30,
+                "cells": 90,
+                "bytes": 23281,
+                "diagnostic_digest": "6bf4a5cc2e040f5471ffd81b6212ec8cb58c4769496cf096472edede2420a2a8"
+              },
+              "facts": {
+                "format_version": 2,
+                "semantics": {
+                  "bindings": 10,
+                  "fresh": 0,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "integrity_baseline_checked": false
+              }
+            }
+          ]
+        },
+        "v4_normal": {
+          "median_seconds": 0.09664535799674923,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.09664535799674923,
+              "component_seconds": {
+                "installed_profile_seconds": 0.08860146299412008,
+                "integrity_baseline_seconds": 0.0017914620038936846,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.004303195993998088,
+                "binding_decode_seconds": 0.0009921200035023503
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 10,
+                "binding_decode_seconds": 10
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 30,
+                "cells": 90,
+                "bytes": 23281,
+                "diagnostic_digest": "6bf4a5cc2e040f5471ffd81b6212ec8cb58c4769496cf096472edede2420a2a8"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:10bf5c24979c1de8817a48bed732595eadd2177d8336acd5ac8d9e625ad49eae",
+                  "rows": 30,
+                  "cells": 90,
+                  "bytes": 23281,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 10,
+                  "fresh": 0,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 30,
+                  "semantic": 0
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        },
+        "v4_audit": {
+          "median_seconds": 0.09121800499997335,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.09121800499997335,
+              "component_seconds": {
+                "installed_profile_seconds": 0.0829427040007431,
+                "integrity_baseline_seconds": 0.001657540000451263,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.004345906003436539,
+                "binding_decode_seconds": 0.001038249014527537
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 10,
+                "binding_decode_seconds": 10
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 30,
+                "cells": 90,
+                "bytes": 23281,
+                "diagnostic_digest": "6bf4a5cc2e040f5471ffd81b6212ec8cb58c4769496cf096472edede2420a2a8"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:10bf5c24979c1de8817a48bed732595eadd2177d8336acd5ac8d9e625ad49eae",
+                  "rows": 30,
+                  "cells": 90,
+                  "bytes": 23281,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 10,
+                  "fresh": 0,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 30,
+                  "semantic": 0
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "open-bindings",
+      "tasks": 100,
+      "bindings": 100,
+      "supersession_depth": 1,
+      "testcases_per_report": 1,
+      "model_requirements": 1,
+      "backlog": false,
+      "bindings_only": true,
+      "published_source_format": 1,
+      "compared_source_format": 2,
+      "index_format": 4,
+      "repeats": 1,
+      "v1_upgrade_seconds_excluded": 0.2011509579970152,
+      "activation_seconds_excluded": 0.6137915619983687,
+      "source_sizes": {
+        "ledger_bytes": 536576,
+        "binding_json_bytes": 190192
+      },
+      "indexed_sizes": {
+        "ledger_bytes": 647168,
+        "binding_json_bytes": 190192
+      },
+      "retained_cells": {
+        "rows": 300,
+        "cells": 900,
+        "bytes": 232892,
+        "diagnostic_digest": "287094965c45327fe55106e452adaede33e3337a29fe8cf16b5266eaddb3e7c6"
+      },
+      "protected_input_digests_unchanged": true,
+      "v4_normal_divided_by_v2_full": 9.418474347005725,
+      "modes": {
+        "v2_full": {
+          "median_seconds": 0.014551886000845116,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.014551886000845116,
+              "component_seconds": {
+                "installed_profile_seconds": 0.0,
+                "integrity_baseline_seconds": 0.0,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.0,
+                "binding_decode_seconds": 0.013669141968421172
+              },
+              "calls": {
+                "installed_profile_seconds": 0,
+                "integrity_baseline_seconds": 0,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 0,
+                "binding_decode_seconds": 100
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 300,
+                "cells": 900,
+                "bytes": 232892,
+                "diagnostic_digest": "287094965c45327fe55106e452adaede33e3337a29fe8cf16b5266eaddb3e7c6"
+              },
+              "facts": {
+                "format_version": 2,
+                "semantics": {
+                  "bindings": 100,
+                  "fresh": 0,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "integrity_baseline_checked": false
+              }
+            }
+          ]
+        },
+        "v4_normal": {
+          "median_seconds": 0.13705656499951147,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.13705656499951147,
+              "component_seconds": {
+                "installed_profile_seconds": 0.08144726300088223,
+                "integrity_baseline_seconds": 0.005879983997147065,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.03639934601960704,
+                "binding_decode_seconds": 0.008456465984636452
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 100,
+                "binding_decode_seconds": 100
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 300,
+                "cells": 900,
+                "bytes": 232892,
+                "diagnostic_digest": "287094965c45327fe55106e452adaede33e3337a29fe8cf16b5266eaddb3e7c6"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:36daf05fa53f7118be0fe529240af2b71a4f7c4db47fa0ad71fdb8468b6944d5",
+                  "rows": 300,
+                  "cells": 900,
+                  "bytes": 232892,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 100,
+                  "fresh": 0,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 300,
+                  "semantic": 0
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        },
+        "v4_audit": {
+          "median_seconds": 0.1400302530018962,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.1400302530018962,
+              "component_seconds": {
+                "installed_profile_seconds": 0.08115133899991633,
+                "integrity_baseline_seconds": 0.006970401998842135,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.03911827800038736,
+                "binding_decode_seconds": 0.00859592900815187
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 100,
+                "binding_decode_seconds": 100
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 300,
+                "cells": 900,
+                "bytes": 232892,
+                "diagnostic_digest": "287094965c45327fe55106e452adaede33e3337a29fe8cf16b5266eaddb3e7c6"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:36daf05fa53f7118be0fe529240af2b71a4f7c4db47fa0ad71fdb8468b6944d5",
+                  "rows": 300,
+                  "cells": 900,
+                  "bytes": 232892,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 100,
+                  "fresh": 0,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 300,
+                  "semantic": 0
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "open-bindings",
+      "tasks": 300,
+      "bindings": 300,
+      "supersession_depth": 1,
+      "testcases_per_report": 1,
+      "model_requirements": 1,
+      "backlog": false,
+      "bindings_only": true,
+      "published_source_format": 1,
+      "compared_source_format": 2,
+      "index_format": 4,
+      "repeats": 1,
+      "v1_upgrade_seconds_excluded": 0.488125449999643,
+      "activation_seconds_excluded": 0.9553494799984037,
+      "source_sizes": {
+        "ledger_bytes": 1503232,
+        "binding_json_bytes": 570792
+      },
+      "indexed_sizes": {
+        "ledger_bytes": 1777664,
+        "binding_json_bytes": 570792
+      },
+      "retained_cells": {
+        "rows": 900,
+        "cells": 2700,
+        "bytes": 698892,
+        "diagnostic_digest": "280ed4c748daecf1be340209fe0ff76f9c40447bd624d0f7f94472fc6c370a6c"
+      },
+      "protected_input_digests_unchanged": true,
+      "v4_normal_divided_by_v2_full": 8.864509521150186,
+      "modes": {
+        "v2_full": {
+          "median_seconds": 0.029703364001761656,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.029703364001761656,
+              "component_seconds": {
+                "installed_profile_seconds": 0.0,
+                "integrity_baseline_seconds": 0.0,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.0,
+                "binding_decode_seconds": 0.02691294298711
+              },
+              "calls": {
+                "installed_profile_seconds": 0,
+                "integrity_baseline_seconds": 0,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 0,
+                "binding_decode_seconds": 300
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 900,
+                "cells": 2700,
+                "bytes": 698892,
+                "diagnostic_digest": "280ed4c748daecf1be340209fe0ff76f9c40447bd624d0f7f94472fc6c370a6c"
+              },
+              "facts": {
+                "format_version": 2,
+                "semantics": {
+                  "bindings": 300,
+                  "fresh": 0,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "integrity_baseline_checked": false
+              }
+            }
+          ]
+        },
+        "v4_normal": {
+          "median_seconds": 0.2633057530038059,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.2633057530038059,
+              "component_seconds": {
+                "installed_profile_seconds": 0.08339318200160051,
+                "integrity_baseline_seconds": 0.017215912994288374,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.12015992203669157,
+                "binding_decode_seconds": 0.029144120009732433
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 300,
+                "binding_decode_seconds": 300
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 900,
+                "cells": 2700,
+                "bytes": 698892,
+                "diagnostic_digest": "280ed4c748daecf1be340209fe0ff76f9c40447bd624d0f7f94472fc6c370a6c"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:aac75759c9c0579f03fa1f5a997afcaccd2c14be271dcf276b701be2c9cd1fa2",
+                  "rows": 900,
+                  "cells": 2700,
+                  "bytes": 698892,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 300,
+                  "fresh": 0,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 900,
+                  "semantic": 0
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        },
+        "v4_audit": {
+          "median_seconds": 0.2598673079992295,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.2598673079992295,
+              "component_seconds": {
+                "installed_profile_seconds": 0.08892239700071514,
+                "integrity_baseline_seconds": 0.024088488004053943,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.10814877002849244,
+                "binding_decode_seconds": 0.027979322032479104
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 300,
+                "binding_decode_seconds": 300
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 900,
+                "cells": 2700,
+                "bytes": 698892,
+                "diagnostic_digest": "280ed4c748daecf1be340209fe0ff76f9c40447bd624d0f7f94472fc6c370a6c"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:aac75759c9c0579f03fa1f5a997afcaccd2c14be271dcf276b701be2c9cd1fa2",
+                  "rows": 900,
+                  "cells": 2700,
+                  "bytes": 698892,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 300,
+                  "fresh": 0,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 900,
+                  "semantic": 0
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "open-bindings",
+      "tasks": 1000,
+      "bindings": 1000,
+      "supersession_depth": 1,
+      "testcases_per_report": 1,
+      "model_requirements": 1,
+      "backlog": false,
+      "bindings_only": true,
+      "published_source_format": 1,
+      "compared_source_format": 2,
+      "index_format": 4,
+      "repeats": 1,
+      "v1_upgrade_seconds_excluded": 1.4751726539980154,
+      "activation_seconds_excluded": 1.8486705649993382,
+      "source_sizes": {
+        "ledger_bytes": 4837376,
+        "binding_json_bytes": 1902893
+      },
+      "indexed_sizes": {
+        "ledger_bytes": 5685248,
+        "binding_json_bytes": 1902893
+      },
+      "retained_cells": {
+        "rows": 3000,
+        "cells": 9000,
+        "bytes": 2329893,
+        "diagnostic_digest": "1004aef9951034e14a13a7f9b79c4be9ec8c75410a391724efc8ba6c0879e85c"
+      },
+      "protected_input_digests_unchanged": true,
+      "v4_normal_divided_by_v2_full": 6.139691847912836,
+      "modes": {
+        "v2_full": {
+          "median_seconds": 0.10201255999709247,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.10201255999709247,
+              "component_seconds": {
+                "installed_profile_seconds": 0.0,
+                "integrity_baseline_seconds": 0.0,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.0,
+                "binding_decode_seconds": 0.09102325691492297
+              },
+              "calls": {
+                "installed_profile_seconds": 0,
+                "integrity_baseline_seconds": 0,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 0,
+                "binding_decode_seconds": 1000
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 3000,
+                "cells": 9000,
+                "bytes": 2329893,
+                "diagnostic_digest": "1004aef9951034e14a13a7f9b79c4be9ec8c75410a391724efc8ba6c0879e85c"
+              },
+              "facts": {
+                "format_version": 2,
+                "semantics": {
+                  "bindings": 1000,
+                  "fresh": 0,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "integrity_baseline_checked": false
+              }
+            }
+          ]
+        },
+        "v4_normal": {
+          "median_seconds": 0.6263256829988677,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.6263256829988677,
+              "component_seconds": {
+                "installed_profile_seconds": 0.07897802400111686,
+                "integrity_baseline_seconds": 0.06370886499644257,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.3597167349580559,
+                "binding_decode_seconds": 0.08749456796067534
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 1000,
+                "binding_decode_seconds": 1000
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 3000,
+                "cells": 9000,
+                "bytes": 2329893,
+                "diagnostic_digest": "1004aef9951034e14a13a7f9b79c4be9ec8c75410a391724efc8ba6c0879e85c"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:deafec9ec1cdbf8988405195923d676212fdee3f3fbf80df6bb4b42f29ba12ba",
+                  "rows": 3000,
+                  "cells": 9000,
+                  "bytes": 2329893,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 1000,
+                  "fresh": 0,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 3000,
+                  "semantic": 0
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        },
+        "v4_audit": {
+          "median_seconds": 0.637992280004255,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.637992280004255,
+              "component_seconds": {
+                "installed_profile_seconds": 0.08199661400431069,
+                "integrity_baseline_seconds": 0.06240873099886812,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.353757650082116,
+                "binding_decode_seconds": 0.10348170514043886
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 1000,
+                "binding_decode_seconds": 1000
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 3000,
+                "cells": 9000,
+                "bytes": 2329893,
+                "diagnostic_digest": "1004aef9951034e14a13a7f9b79c4be9ec8c75410a391724efc8ba6c0879e85c"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:deafec9ec1cdbf8988405195923d676212fdee3f3fbf80df6bb4b42f29ba12ba",
+                  "rows": 3000,
+                  "cells": 9000,
+                  "bytes": 2329893,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 1000,
+                  "fresh": 0,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 3000,
+                  "semantic": 0
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "open-bindings",
+      "tasks": 3000,
+      "bindings": 3000,
+      "supersession_depth": 1,
+      "testcases_per_report": 1,
+      "model_requirements": 1,
+      "backlog": false,
+      "bindings_only": true,
+      "published_source_format": 1,
+      "compared_source_format": 2,
+      "index_format": 4,
+      "repeats": 1,
+      "v1_upgrade_seconds_excluded": 4.444583402000717,
+      "activation_seconds_excluded": 5.069499466997513,
+      "source_sizes": {
+        "ledger_bytes": 14446592,
+        "binding_json_bytes": 5710893
+      },
+      "indexed_sizes": {
+        "ledger_bytes": 16936960,
+        "binding_json_bytes": 5710893
+      },
+      "retained_cells": {
+        "rows": 9000,
+        "cells": 27000,
+        "bytes": 6991893,
+        "diagnostic_digest": "2d751b97b744d66d402ea92bb33657d0b6a665f34f9d300b2d816511c4751fd8"
+      },
+      "protected_input_digests_unchanged": true,
+      "v4_normal_divided_by_v2_full": 6.359404437828358,
+      "modes": {
+        "v2_full": {
+          "median_seconds": 0.27338162700471,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.27338162700471,
+              "component_seconds": {
+                "installed_profile_seconds": 0.0,
+                "integrity_baseline_seconds": 0.0,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.0,
+                "binding_decode_seconds": 0.24042926786205499
+              },
+              "calls": {
+                "installed_profile_seconds": 0,
+                "integrity_baseline_seconds": 0,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 0,
+                "binding_decode_seconds": 3000
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 9000,
+                "cells": 27000,
+                "bytes": 6991893,
+                "diagnostic_digest": "2d751b97b744d66d402ea92bb33657d0b6a665f34f9d300b2d816511c4751fd8"
+              },
+              "facts": {
+                "format_version": 2,
+                "semantics": {
+                  "bindings": 3000,
+                  "fresh": 0,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "integrity_baseline_checked": false
+              }
+            }
+          ]
+        },
+        "v4_normal": {
+          "median_seconds": 1.7385443319944898,
+          "repetitions": [
+            {
+              "elapsed_seconds": 1.7385443319944898,
+              "component_seconds": {
+                "installed_profile_seconds": 0.0795404679956846,
+                "integrity_baseline_seconds": 0.17400885399547406,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 1.0983218220499111,
+                "binding_decode_seconds": 0.27554827192943776
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 3000,
+                "binding_decode_seconds": 3000
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 9000,
+                "cells": 27000,
+                "bytes": 6991893,
+                "diagnostic_digest": "2d751b97b744d66d402ea92bb33657d0b6a665f34f9d300b2d816511c4751fd8"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:b84067e11cf59b91ab4747af2cedcfaf5bf05928eb7abba871b7d84f2f093738",
+                  "rows": 9000,
+                  "cells": 27000,
+                  "bytes": 6991893,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 3000,
+                  "fresh": 0,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 9000,
+                  "semantic": 0
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        },
+        "v4_audit": {
+          "median_seconds": 1.834759180994297,
+          "repetitions": [
+            {
+              "elapsed_seconds": 1.834759180994297,
+              "component_seconds": {
+                "installed_profile_seconds": 0.0868713630043203,
+                "integrity_baseline_seconds": 0.21125260600092588,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 1.1439185592753347,
+                "binding_decode_seconds": 0.28122745393193327
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 3000,
+                "binding_decode_seconds": 3000
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 9000,
+                "cells": 27000,
+                "bytes": 6991893,
+                "diagnostic_digest": "2d751b97b744d66d402ea92bb33657d0b6a665f34f9d300b2d816511c4751fd8"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:b84067e11cf59b91ab4747af2cedcfaf5bf05928eb7abba871b7d84f2f093738",
+                  "rows": 9000,
+                  "cells": 27000,
+                  "bytes": 6991893,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 3000,
+                  "fresh": 0,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 9000,
+                  "semantic": 0
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "open-bindings-supersession-depth3",
+      "tasks": 100,
+      "bindings": 300,
+      "supersession_depth": 3,
+      "testcases_per_report": 1,
+      "model_requirements": 1,
+      "backlog": false,
+      "bindings_only": true,
+      "published_source_format": 1,
+      "compared_source_format": 2,
+      "index_format": 4,
+      "repeats": 1,
+      "v1_upgrade_seconds_excluded": 0.4617484120026347,
+      "activation_seconds_excluded": 0.883124845000566,
+      "source_sizes": {
+        "ledger_bytes": 1392640,
+        "binding_json_bytes": 584376
+      },
+      "indexed_sizes": {
+        "ledger_bytes": 1556480,
+        "binding_json_bytes": 584376
+      },
+      "retained_cells": {
+        "rows": 500,
+        "cells": 1700,
+        "bytes": 669676,
+        "diagnostic_digest": "733a75baf8ab9a79db5b6451ce6a10515fe00b9e9237aec546a3f3d4e45e9c6e"
+      },
+      "protected_input_digests_unchanged": true,
+      "v4_normal_divided_by_v2_full": 8.15850523627206,
+      "modes": {
+        "v2_full": {
+          "median_seconds": 0.03231200500158593,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.03231200500158593,
+              "component_seconds": {
+                "installed_profile_seconds": 0.0,
+                "integrity_baseline_seconds": 0.0,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.0,
+                "binding_decode_seconds": 0.030131508050544653
+              },
+              "calls": {
+                "installed_profile_seconds": 0,
+                "integrity_baseline_seconds": 0,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 0,
+                "binding_decode_seconds": 300
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 500,
+                "cells": 1700,
+                "bytes": 669676,
+                "diagnostic_digest": "733a75baf8ab9a79db5b6451ce6a10515fe00b9e9237aec546a3f3d4e45e9c6e"
+              },
+              "facts": {
+                "format_version": 2,
+                "semantics": {
+                  "bindings": 300,
+                  "fresh": 0,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "integrity_baseline_checked": false
+              }
+            }
+          ]
+        },
+        "v4_normal": {
+          "median_seconds": 0.2636176619998878,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.2636176619998878,
+              "component_seconds": {
+                "installed_profile_seconds": 0.08427669399679871,
+                "integrity_baseline_seconds": 0.011313417999190278,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.1257330850858125,
+                "binding_decode_seconds": 0.025643295026384294
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 300,
+                "binding_decode_seconds": 300
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 500,
+                "cells": 1700,
+                "bytes": 669676,
+                "diagnostic_digest": "733a75baf8ab9a79db5b6451ce6a10515fe00b9e9237aec546a3f3d4e45e9c6e"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:c0570929a1a59d5221c65a3aa67d8c1e164d922c936f9cf4c6aea82e11978052",
+                  "rows": 500,
+                  "cells": 1700,
+                  "bytes": 669676,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 300,
+                  "fresh": 0,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 500,
+                  "semantic": 0
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        },
+        "v4_audit": {
+          "median_seconds": 0.27652300000045216,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.27652300000045216,
+              "component_seconds": {
+                "installed_profile_seconds": 0.09686445600527804,
+                "integrity_baseline_seconds": 0.01613223700405797,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.12123974889982492,
+                "binding_decode_seconds": 0.03490590291767148
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 300,
+                "binding_decode_seconds": 300
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 500,
+                "cells": 1700,
+                "bytes": 669676,
+                "diagnostic_digest": "733a75baf8ab9a79db5b6451ce6a10515fe00b9e9237aec546a3f3d4e45e9c6e"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:c0570929a1a59d5221c65a3aa67d8c1e164d922c936f9cf4c6aea82e11978052",
+                  "rows": 500,
+                  "cells": 1700,
+                  "bytes": 669676,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 300,
+                  "fresh": 0,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 500,
+                  "semantic": 0
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "open-bindings-supersession-depth3",
+      "tasks": 300,
+      "bindings": 900,
+      "supersession_depth": 3,
+      "testcases_per_report": 1,
+      "model_requirements": 1,
+      "backlog": false,
+      "bindings_only": true,
+      "published_source_format": 1,
+      "compared_source_format": 2,
+      "index_format": 4,
+      "repeats": 1,
+      "v1_upgrade_seconds_excluded": 1.6391368190015783,
+      "activation_seconds_excluded": 1.9916647560021374,
+      "source_sizes": {
+        "ledger_bytes": 4075520,
+        "binding_json_bytes": 1753776
+      },
+      "indexed_sizes": {
+        "ledger_bytes": 4513792,
+        "binding_json_bytes": 1753776
+      },
+      "retained_cells": {
+        "rows": 1500,
+        "cells": 5100,
+        "bytes": 2009676,
+        "diagnostic_digest": "afd155af06b961b23abd482c7bd6ee110e810c5c0a8bf9aede749a5e852b8c78"
+      },
+      "protected_input_digests_unchanged": true,
+      "v4_normal_divided_by_v2_full": 5.900958957261956,
+      "modes": {
+        "v2_full": {
+          "median_seconds": 0.09689296199940145,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.09689296199940145,
+              "component_seconds": {
+                "installed_profile_seconds": 0.0,
+                "integrity_baseline_seconds": 0.0,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.0,
+                "binding_decode_seconds": 0.08819622292503482
+              },
+              "calls": {
+                "installed_profile_seconds": 0,
+                "integrity_baseline_seconds": 0,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 0,
+                "binding_decode_seconds": 900
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 1500,
+                "cells": 5100,
+                "bytes": 2009676,
+                "diagnostic_digest": "afd155af06b961b23abd482c7bd6ee110e810c5c0a8bf9aede749a5e852b8c78"
+              },
+              "facts": {
+                "format_version": 2,
+                "semantics": {
+                  "bindings": 900,
+                  "fresh": 0,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "integrity_baseline_checked": false
+              }
+            }
+          ]
+        },
+        "v4_normal": {
+          "median_seconds": 0.5717613920060103,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.5717613920060103,
+              "component_seconds": {
+                "installed_profile_seconds": 0.08351602400216507,
+                "integrity_baseline_seconds": 0.0328673969997908,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.3273532711828011,
+                "binding_decode_seconds": 0.10522931210289244
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 900,
+                "binding_decode_seconds": 900
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 1500,
+                "cells": 5100,
+                "bytes": 2009676,
+                "diagnostic_digest": "afd155af06b961b23abd482c7bd6ee110e810c5c0a8bf9aede749a5e852b8c78"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:7589e06fa5b09bb740a7432e89db40de1c72a7e11851ef486dc1b8a575f4ec55",
+                  "rows": 1500,
+                  "cells": 5100,
+                  "bytes": 2009676,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 900,
+                  "fresh": 0,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 1500,
+                  "semantic": 0
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        },
+        "v4_audit": {
+          "median_seconds": 0.549964785001066,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.549964785001066,
+              "component_seconds": {
+                "installed_profile_seconds": 0.08835196200379869,
+                "integrity_baseline_seconds": 0.03391278899653116,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.3181079750211211,
+                "binding_decode_seconds": 0.08478859391470905
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 900,
+                "binding_decode_seconds": 900
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 1500,
+                "cells": 5100,
+                "bytes": 2009676,
+                "diagnostic_digest": "afd155af06b961b23abd482c7bd6ee110e810c5c0a8bf9aede749a5e852b8c78"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:7589e06fa5b09bb740a7432e89db40de1c72a7e11851ef486dc1b8a575f4ec55",
+                  "rows": 1500,
+                  "cells": 5100,
+                  "bytes": 2009676,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 900,
+                  "fresh": 0,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 1500,
+                  "semantic": 0
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "open-bindings-supersession-depth3",
+      "tasks": 1000,
+      "bindings": 3000,
+      "supersession_depth": 3,
+      "testcases_per_report": 1,
+      "model_requirements": 1,
+      "backlog": false,
+      "bindings_only": true,
+      "published_source_format": 1,
+      "compared_source_format": 2,
+      "index_format": 4,
+      "repeats": 1,
+      "v1_upgrade_seconds_excluded": 4.226969559997087,
+      "activation_seconds_excluded": 4.445386214996688,
+      "source_sizes": {
+        "ledger_bytes": 13418496,
+        "binding_json_bytes": 5846679
+      },
+      "indexed_sizes": {
+        "ledger_bytes": 14815232,
+        "binding_json_bytes": 5846679
+      },
+      "retained_cells": {
+        "rows": 5000,
+        "cells": 17000,
+        "bytes": 6699679,
+        "diagnostic_digest": "65ebaf40b3596d27bf0d842dbf9962b20f3762e46662f9f284c323efd0010ba2"
+      },
+      "protected_input_digests_unchanged": true,
+      "v4_normal_divided_by_v2_full": 4.9215594018902475,
+      "modes": {
+        "v2_full": {
+          "median_seconds": 0.28906199800258037,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.28906199800258037,
+              "component_seconds": {
+                "installed_profile_seconds": 0.0,
+                "integrity_baseline_seconds": 0.0,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.0,
+                "binding_decode_seconds": 0.2618287218356272
+              },
+              "calls": {
+                "installed_profile_seconds": 0,
+                "integrity_baseline_seconds": 0,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 0,
+                "binding_decode_seconds": 3000
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 5000,
+                "cells": 17000,
+                "bytes": 6699679,
+                "diagnostic_digest": "65ebaf40b3596d27bf0d842dbf9962b20f3762e46662f9f284c323efd0010ba2"
+              },
+              "facts": {
+                "format_version": 2,
+                "semantics": {
+                  "bindings": 3000,
+                  "fresh": 0,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "integrity_baseline_checked": false
+              }
+            }
+          ]
+        },
+        "v4_normal": {
+          "median_seconds": 1.4226357939987793,
+          "repetitions": [
+            {
+              "elapsed_seconds": 1.4226357939987793,
+              "component_seconds": {
+                "installed_profile_seconds": 0.07751639899652218,
+                "integrity_baseline_seconds": 0.11239214899978833,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.9180454016168369,
+                "binding_decode_seconds": 0.24906782891775947
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 3000,
+                "binding_decode_seconds": 3000
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 5000,
+                "cells": 17000,
+                "bytes": 6699679,
+                "diagnostic_digest": "65ebaf40b3596d27bf0d842dbf9962b20f3762e46662f9f284c323efd0010ba2"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:835eba03d1ec3d7029d208fb804f8c4fcd3c3185f127d81cc149c48a6ae068a9",
+                  "rows": 5000,
+                  "cells": 17000,
+                  "bytes": 6699679,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 3000,
+                  "fresh": 0,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 5000,
+                  "semantic": 0
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        },
+        "v4_audit": {
+          "median_seconds": 1.5320187350007473,
+          "repetitions": [
+            {
+              "elapsed_seconds": 1.5320187350007473,
+              "component_seconds": {
+                "installed_profile_seconds": 0.07736244999978226,
+                "integrity_baseline_seconds": 0.11721840500104008,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.9913014029516489,
+                "binding_decode_seconds": 0.27913001178967534
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 3000,
+                "binding_decode_seconds": 3000
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 5000,
+                "cells": 17000,
+                "bytes": 6699679,
+                "diagnostic_digest": "65ebaf40b3596d27bf0d842dbf9962b20f3762e46662f9f284c323efd0010ba2"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:835eba03d1ec3d7029d208fb804f8c4fcd3c3185f127d81cc149c48a6ae068a9",
+                  "rows": 5000,
+                  "cells": 17000,
+                  "bytes": 6699679,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 3000,
+                  "fresh": 0,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 5000,
+                  "semantic": 0
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "completed-sequential-small",
+      "tasks": 10,
+      "bindings": 10,
+      "supersession_depth": 1,
+      "testcases_per_report": 1,
+      "model_requirements": 1,
+      "backlog": false,
+      "bindings_only": false,
+      "published_source_format": 2,
+      "compared_source_format": 2,
+      "index_format": 4,
+      "repeats": 1,
+      "v1_upgrade_seconds_excluded": 0.0,
+      "activation_seconds_excluded": 0.9884154909959761,
+      "source_sizes": {
+        "ledger_bytes": 266240,
+        "binding_json_bytes": 19016,
+        "retained_bytes_by_column": {
+          "intent_json": 21361,
+          "before_state": 17330,
+          "after_state": 15816,
+          "archive": 6481,
+          "report": 3200,
+          "admission_json": 19320,
+          "model_json": 20380,
+          "admitted_state_json": 8120
+        },
+        "retained_payload_bytes": 112008,
+        "receipt_json_bytes": 22091
+      },
+      "indexed_sizes": {
+        "ledger_bytes": 323584,
+        "binding_json_bytes": 19016,
+        "retained_bytes_by_column": {
+          "intent_json": 21361,
+          "before_state": 17330,
+          "after_state": 15816,
+          "archive": 6481,
+          "report": 3200,
+          "admission_json": 19320,
+          "model_json": 20380,
+          "admitted_state_json": 8120
+        },
+        "retained_payload_bytes": 112008,
+        "receipt_json_bytes": 22091
+      },
+      "retained_cells": {
+        "rows": 50,
+        "cells": 260,
+        "bytes": 161671,
+        "diagnostic_digest": "275653ebaceee40afd4d382bc185dc40406fa2f0c18f28d4838a91bd8c95e6e5"
+      },
+      "protected_input_digests_unchanged": true,
+      "v4_normal_divided_by_v2_full": 0.43236219279171106,
+      "modes": {
+        "v2_full": {
+          "median_seconds": 0.19247585099947173,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.19247585099947173,
+              "component_seconds": {
+                "installed_profile_seconds": 0.0,
+                "integrity_baseline_seconds": 0.0,
+                "semantic_facts_seconds": 0.1860664799969527,
+                "observation_rederivation_seconds": 0.002845495007932186,
+                "binding_schema_seconds": 0.0044138420053059235,
+                "binding_decode_seconds": 0.0008169589928002097
+              },
+              "calls": {
+                "installed_profile_seconds": 0,
+                "integrity_baseline_seconds": 0,
+                "semantic_facts_seconds": 10,
+                "observation_rederivation_seconds": 10,
+                "binding_schema_seconds": 10,
+                "binding_decode_seconds": 10
+              },
+              "fresh_terminal_payloads_observed": 10,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 50,
+                "cells": 260,
+                "bytes": 161671,
+                "diagnostic_digest": "275653ebaceee40afd4d382bc185dc40406fa2f0c18f28d4838a91bd8c95e6e5"
+              },
+              "facts": {
+                "format_version": 2,
+                "semantics": {
+                  "bindings": 10,
+                  "fresh": 10,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "integrity_baseline_checked": false
+              }
+            }
+          ]
+        },
+        "v4_normal": {
+          "median_seconds": 0.08321928099758225,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.08321928099758225,
+              "component_seconds": {
+                "installed_profile_seconds": 0.07234734499797923,
+                "integrity_baseline_seconds": 0.0018985130009241402,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.0033134100085590035,
+                "binding_decode_seconds": 0.0012692880045506172
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 10,
+                "binding_decode_seconds": 10
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 50,
+                "cells": 260,
+                "bytes": 161671,
+                "diagnostic_digest": "275653ebaceee40afd4d382bc185dc40406fa2f0c18f28d4838a91bd8c95e6e5"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:f752c5ffbfc353b6426b7dde213178772dec25c6b31644828f20f24eab472007",
+                  "rows": 50,
+                  "cells": 260,
+                  "bytes": 161671,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 10,
+                  "fresh": 0,
+                  "reused": 10,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 50,
+                  "semantic": 10
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        },
+        "v4_audit": {
+          "median_seconds": 0.31823482499748934,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.31823482499748934,
+              "component_seconds": {
+                "installed_profile_seconds": 0.07785188499838114,
+                "integrity_baseline_seconds": 0.0021472660009749234,
+                "semantic_facts_seconds": 0.22476169598667184,
+                "observation_rederivation_seconds": 0.0036633640047512017,
+                "binding_schema_seconds": 0.008516549001797102,
+                "binding_decode_seconds": 0.0009819980114116333
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 10,
+                "observation_rederivation_seconds": 10,
+                "binding_schema_seconds": 20,
+                "binding_decode_seconds": 10
+              },
+              "fresh_terminal_payloads_observed": 10,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 50,
+                "cells": 260,
+                "bytes": 161671,
+                "diagnostic_digest": "275653ebaceee40afd4d382bc185dc40406fa2f0c18f28d4838a91bd8c95e6e5"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:f752c5ffbfc353b6426b7dde213178772dec25c6b31644828f20f24eab472007",
+                  "rows": 50,
+                  "cells": 260,
+                  "bytes": 161671,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 10,
+                  "fresh": 10,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 50,
+                  "semantic": 10
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "completed-sequential-small",
+      "tasks": 100,
+      "bindings": 100,
+      "supersession_depth": 1,
+      "testcases_per_report": 1,
+      "model_requirements": 1,
+      "backlog": false,
+      "bindings_only": false,
+      "published_source_format": 2,
+      "compared_source_format": 2,
+      "index_format": 4,
+      "repeats": 1,
+      "v1_upgrade_seconds_excluded": 0.0,
+      "activation_seconds_excluded": 6.0936208959974465,
+      "source_sizes": {
+        "ledger_bytes": 2191360,
+        "binding_json_bytes": 190337,
+        "retained_bytes_by_column": {
+          "intent_json": 213792,
+          "before_state": 175151,
+          "after_state": 158247,
+          "archive": 64954,
+          "report": 32000,
+          "admission_json": 193200,
+          "model_json": 203800,
+          "admitted_state_json": 81200
+        },
+        "retained_payload_bytes": 1122344,
+        "receipt_json_bytes": 221092
+      },
+      "indexed_sizes": {
+        "ledger_bytes": 2551808,
+        "binding_json_bytes": 190337,
+        "retained_bytes_by_column": {
+          "intent_json": 213792,
+          "before_state": 175151,
+          "after_state": 158247,
+          "archive": 64954,
+          "report": 32000,
+          "admission_json": 193200,
+          "model_json": 203800,
+          "admitted_state_json": 81200
+        },
+        "retained_payload_bytes": 1122344,
+        "receipt_json_bytes": 221092
+      },
+      "retained_cells": {
+        "rows": 500,
+        "cells": 2600,
+        "bytes": 1619420,
+        "diagnostic_digest": "b7dc402c0383f88f22e66b0f64a0480ad925cc300f713d5962e20e8bf8509e1d"
+      },
+      "protected_input_digests_unchanged": true,
+      "v4_normal_divided_by_v2_full": 0.08019614080567318,
+      "modes": {
+        "v2_full": {
+          "median_seconds": 2.03308210799878,
+          "repetitions": [
+            {
+              "elapsed_seconds": 2.03308210799878,
+              "component_seconds": {
+                "installed_profile_seconds": 0.0,
+                "integrity_baseline_seconds": 0.0,
+                "semantic_facts_seconds": 1.9649584809594671,
+                "observation_rederivation_seconds": 0.030121400995994918,
+                "binding_schema_seconds": 0.044887005009513814,
+                "binding_decode_seconds": 0.00985973101342097
+              },
+              "calls": {
+                "installed_profile_seconds": 0,
+                "integrity_baseline_seconds": 0,
+                "semantic_facts_seconds": 100,
+                "observation_rederivation_seconds": 100,
+                "binding_schema_seconds": 100,
+                "binding_decode_seconds": 100
+              },
+              "fresh_terminal_payloads_observed": 100,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 500,
+                "cells": 2600,
+                "bytes": 1619420,
+                "diagnostic_digest": "b7dc402c0383f88f22e66b0f64a0480ad925cc300f713d5962e20e8bf8509e1d"
+              },
+              "facts": {
+                "format_version": 2,
+                "semantics": {
+                  "bindings": 100,
+                  "fresh": 100,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "integrity_baseline_checked": false
+              }
+            }
+          ]
+        },
+        "v4_normal": {
+          "median_seconds": 0.16304533900256502,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.16304533900256502,
+              "component_seconds": {
+                "installed_profile_seconds": 0.07096825600456214,
+                "integrity_baseline_seconds": 0.012718810998194385,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.03065535305358935,
+                "binding_decode_seconds": 0.008423729967034888
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 100,
+                "binding_decode_seconds": 100
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 500,
+                "cells": 2600,
+                "bytes": 1619420,
+                "diagnostic_digest": "b7dc402c0383f88f22e66b0f64a0480ad925cc300f713d5962e20e8bf8509e1d"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:4265e6a11970698e3015683e98a9eb97281b55cd54bc90f1420149ffd32a7e89",
+                  "rows": 500,
+                  "cells": 2600,
+                  "bytes": 1619420,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 100,
+                  "fresh": 0,
+                  "reused": 100,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 500,
+                  "semantic": 100
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        },
+        "v4_audit": {
+          "median_seconds": 2.0905743300027098,
+          "repetitions": [
+            {
+              "elapsed_seconds": 2.0905743300027098,
+              "component_seconds": {
+                "installed_profile_seconds": 0.07068972699926235,
+                "integrity_baseline_seconds": 0.013283599997521378,
+                "semantic_facts_seconds": 1.8858821489775437,
+                "observation_rederivation_seconds": 0.02969476007274352,
+                "binding_schema_seconds": 0.07367828801943688,
+                "binding_decode_seconds": 0.008192669964046218
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 100,
+                "observation_rederivation_seconds": 100,
+                "binding_schema_seconds": 200,
+                "binding_decode_seconds": 100
+              },
+              "fresh_terminal_payloads_observed": 100,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 500,
+                "cells": 2600,
+                "bytes": 1619420,
+                "diagnostic_digest": "b7dc402c0383f88f22e66b0f64a0480ad925cc300f713d5962e20e8bf8509e1d"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:4265e6a11970698e3015683e98a9eb97281b55cd54bc90f1420149ffd32a7e89",
+                  "rows": 500,
+                  "cells": 2600,
+                  "bytes": 1619420,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 100,
+                  "fresh": 100,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 500,
+                  "semantic": 100
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "completed-sequential-small",
+      "tasks": 300,
+      "bindings": 300,
+      "supersession_depth": 1,
+      "testcases_per_report": 1,
+      "model_requirements": 1,
+      "backlog": false,
+      "bindings_only": false,
+      "published_source_format": 2,
+      "compared_source_format": 2,
+      "index_format": 4,
+      "repeats": 1,
+      "v1_upgrade_seconds_excluded": 0.0,
+      "activation_seconds_excluded": 19.670515634003095,
+      "source_sizes": {
+        "ledger_bytes": 6500352,
+        "binding_json_bytes": 571337,
+        "retained_bytes_by_column": {
+          "intent_json": 642192,
+          "before_state": 526151,
+          "after_state": 474847,
+          "archive": 194902,
+          "report": 96000,
+          "admission_json": 579600,
+          "model_json": 611400,
+          "admitted_state_json": 243600
+        },
+        "retained_payload_bytes": 3368692,
+        "receipt_json_bytes": 663792
+      },
+      "indexed_sizes": {
+        "ledger_bytes": 7528448,
+        "binding_json_bytes": 571337,
+        "retained_bytes_by_column": {
+          "intent_json": 642192,
+          "before_state": 526151,
+          "after_state": 474847,
+          "archive": 194902,
+          "report": 96000,
+          "admission_json": 579600,
+          "model_json": 611400,
+          "admitted_state_json": 243600
+        },
+        "retained_payload_bytes": 3368692,
+        "receipt_json_bytes": 663792
+      },
+      "retained_cells": {
+        "rows": 1500,
+        "cells": 7800,
+        "bytes": 4860868,
+        "diagnostic_digest": "e5bfe5bb8e03f22e4f925df10d3747af43f540fb7e1770c5c707d63511860309"
+      },
+      "protected_input_digests_unchanged": true,
+      "v4_normal_divided_by_v2_full": 0.06140024613223253,
+      "modes": {
+        "v2_full": {
+          "median_seconds": 5.969618985000125,
+          "repetitions": [
+            {
+              "elapsed_seconds": 5.969618985000125,
+              "component_seconds": {
+                "installed_profile_seconds": 0.0,
+                "integrity_baseline_seconds": 0.0,
+                "semantic_facts_seconds": 5.771263240967528,
+                "observation_rederivation_seconds": 0.09108251892030239,
+                "binding_schema_seconds": 0.12787532001675572,
+                "binding_decode_seconds": 0.023502509953686967
+              },
+              "calls": {
+                "installed_profile_seconds": 0,
+                "integrity_baseline_seconds": 0,
+                "semantic_facts_seconds": 300,
+                "observation_rederivation_seconds": 300,
+                "binding_schema_seconds": 300,
+                "binding_decode_seconds": 300
+              },
+              "fresh_terminal_payloads_observed": 300,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 1500,
+                "cells": 7800,
+                "bytes": 4860868,
+                "diagnostic_digest": "e5bfe5bb8e03f22e4f925df10d3747af43f540fb7e1770c5c707d63511860309"
+              },
+              "facts": {
+                "format_version": 2,
+                "semantics": {
+                  "bindings": 300,
+                  "fresh": 300,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "integrity_baseline_checked": false
+              }
+            }
+          ]
+        },
+        "v4_normal": {
+          "median_seconds": 0.3665360749946558,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.3665360749946558,
+              "component_seconds": {
+                "installed_profile_seconds": 0.07495071899757022,
+                "integrity_baseline_seconds": 0.040920866005762946,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.10423245307902107,
+                "binding_decode_seconds": 0.025165205079247244
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 300,
+                "binding_decode_seconds": 300
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 1500,
+                "cells": 7800,
+                "bytes": 4860868,
+                "diagnostic_digest": "e5bfe5bb8e03f22e4f925df10d3747af43f540fb7e1770c5c707d63511860309"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:1268795654eb56907df754ae779c67989bcf93d00374396aed986a6e7e9d8444",
+                  "rows": 1500,
+                  "cells": 7800,
+                  "bytes": 4860868,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 300,
+                  "fresh": 0,
+                  "reused": 300,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 1500,
+                  "semantic": 300
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        },
+        "v4_audit": {
+          "median_seconds": 6.072844540998631,
+          "repetitions": [
+            {
+              "elapsed_seconds": 6.072844540998631,
+              "component_seconds": {
+                "installed_profile_seconds": 0.07234697599778883,
+                "integrity_baseline_seconds": 0.04156661100569181,
+                "semantic_facts_seconds": 5.597514483961277,
+                "observation_rederivation_seconds": 0.08560045597550925,
+                "binding_schema_seconds": 0.2154985991655849,
+                "binding_decode_seconds": 0.02544858295004815
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 300,
+                "observation_rederivation_seconds": 300,
+                "binding_schema_seconds": 600,
+                "binding_decode_seconds": 300
+              },
+              "fresh_terminal_payloads_observed": 300,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 1500,
+                "cells": 7800,
+                "bytes": 4860868,
+                "diagnostic_digest": "e5bfe5bb8e03f22e4f925df10d3747af43f540fb7e1770c5c707d63511860309"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:1268795654eb56907df754ae779c67989bcf93d00374396aed986a6e7e9d8444",
+                  "rows": 1500,
+                  "cells": 7800,
+                  "bytes": 4860868,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 300,
+                  "fresh": 300,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 1500,
+                  "semantic": 300
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "completed-initial-backlog",
+      "tasks": 10,
+      "bindings": 10,
+      "supersession_depth": 1,
+      "testcases_per_report": 1,
+      "model_requirements": 1,
+      "backlog": true,
+      "bindings_only": false,
+      "published_source_format": 2,
+      "compared_source_format": 2,
+      "index_format": 4,
+      "repeats": 1,
+      "v1_upgrade_seconds_excluded": 0.0,
+      "activation_seconds_excluded": 1.0761478700005682,
+      "source_sizes": {
+        "ledger_bytes": 278528,
+        "binding_json_bytes": 19011,
+        "retained_bytes_by_column": {
+          "intent_json": 21373,
+          "before_state": 24130,
+          "after_state": 22787,
+          "archive": 6481,
+          "report": 3200,
+          "admission_json": 19320,
+          "model_json": 20380,
+          "admitted_state_json": 8120
+        },
+        "retained_payload_bytes": 125791,
+        "receipt_json_bytes": 22093
+      },
+      "indexed_sizes": {
+        "ledger_bytes": 335872,
+        "binding_json_bytes": 19011,
+        "retained_bytes_by_column": {
+          "intent_json": 21373,
+          "before_state": 24130,
+          "after_state": 22787,
+          "archive": 6481,
+          "report": 3200,
+          "admission_json": 19320,
+          "model_json": 20380,
+          "admitted_state_json": 8120
+        },
+        "retained_payload_bytes": 125791,
+        "receipt_json_bytes": 22093
+      },
+      "retained_cells": {
+        "rows": 50,
+        "cells": 260,
+        "bytes": 175447,
+        "diagnostic_digest": "5097dc7211a0abf4d9fbcd726ae6740f9a2ef0f1f25cfe73777b00b00b570176"
+      },
+      "protected_input_digests_unchanged": true,
+      "v4_normal_divided_by_v2_full": 0.4228575140773501,
+      "modes": {
+        "v2_full": {
+          "median_seconds": 0.21905790700111538,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.21905790700111538,
+              "component_seconds": {
+                "installed_profile_seconds": 0.0,
+                "integrity_baseline_seconds": 0.0,
+                "semantic_facts_seconds": 0.21210368700849358,
+                "observation_rederivation_seconds": 0.003634167995187454,
+                "binding_schema_seconds": 0.004128751999814995,
+                "binding_decode_seconds": 0.0008578600027249195
+              },
+              "calls": {
+                "installed_profile_seconds": 0,
+                "integrity_baseline_seconds": 0,
+                "semantic_facts_seconds": 10,
+                "observation_rederivation_seconds": 10,
+                "binding_schema_seconds": 10,
+                "binding_decode_seconds": 10
+              },
+              "fresh_terminal_payloads_observed": 10,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 50,
+                "cells": 260,
+                "bytes": 175447,
+                "diagnostic_digest": "5097dc7211a0abf4d9fbcd726ae6740f9a2ef0f1f25cfe73777b00b00b570176"
+              },
+              "facts": {
+                "format_version": 2,
+                "semantics": {
+                  "bindings": 10,
+                  "fresh": 10,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "integrity_baseline_checked": false
+              }
+            }
+          ]
+        },
+        "v4_normal": {
+          "median_seconds": 0.092630281993479,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.092630281993479,
+              "component_seconds": {
+                "installed_profile_seconds": 0.08086294100212399,
+                "integrity_baseline_seconds": 0.0023845429968787357,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.0036895929952152073,
+                "binding_decode_seconds": 0.0008745239974814467
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 10,
+                "binding_decode_seconds": 10
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 50,
+                "cells": 260,
+                "bytes": 175447,
+                "diagnostic_digest": "5097dc7211a0abf4d9fbcd726ae6740f9a2ef0f1f25cfe73777b00b00b570176"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:e9ea9c172423514bd03d3f784fe025ca44cea79f394d6ae2ac101fe3ea28f3da",
+                  "rows": 50,
+                  "cells": 260,
+                  "bytes": 175447,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 10,
+                  "fresh": 0,
+                  "reused": 10,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 50,
+                  "semantic": 10
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        },
+        "v4_audit": {
+          "median_seconds": 0.3166026690014405,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.3166026690014405,
+              "component_seconds": {
+                "installed_profile_seconds": 0.08417269900382962,
+                "integrity_baseline_seconds": 0.002166486003261525,
+                "semantic_facts_seconds": 0.21576523999101482,
+                "observation_rederivation_seconds": 0.0033910330166690983,
+                "binding_schema_seconds": 0.007874143986555282,
+                "binding_decode_seconds": 0.0010235180161544122
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 10,
+                "observation_rederivation_seconds": 10,
+                "binding_schema_seconds": 20,
+                "binding_decode_seconds": 10
+              },
+              "fresh_terminal_payloads_observed": 10,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 50,
+                "cells": 260,
+                "bytes": 175447,
+                "diagnostic_digest": "5097dc7211a0abf4d9fbcd726ae6740f9a2ef0f1f25cfe73777b00b00b570176"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:e9ea9c172423514bd03d3f784fe025ca44cea79f394d6ae2ac101fe3ea28f3da",
+                  "rows": 50,
+                  "cells": 260,
+                  "bytes": 175447,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 10,
+                  "fresh": 10,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 50,
+                  "semantic": 10
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "completed-initial-backlog",
+      "tasks": 100,
+      "bindings": 100,
+      "supersession_depth": 1,
+      "testcases_per_report": 1,
+      "model_requirements": 1,
+      "backlog": true,
+      "bindings_only": false,
+      "published_source_format": 2,
+      "compared_source_format": 2,
+      "index_format": 4,
+      "repeats": 1,
+      "v1_upgrade_seconds_excluded": 0.0,
+      "activation_seconds_excluded": 9.549432621999586,
+      "source_sizes": {
+        "ledger_bytes": 3694592,
+        "binding_json_bytes": 190192,
+        "retained_bytes_by_column": {
+          "intent_json": 213975,
+          "before_state": 927561,
+          "after_state": 912538,
+          "archive": 64954,
+          "report": 32000,
+          "admission_json": 193200,
+          "model_json": 203800,
+          "admitted_state_json": 81200
+        },
+        "retained_payload_bytes": 2629228,
+        "receipt_json_bytes": 221086
+      },
+      "indexed_sizes": {
+        "ledger_bytes": 4055040,
+        "binding_json_bytes": 190192,
+        "retained_bytes_by_column": {
+          "intent_json": 213975,
+          "before_state": 927561,
+          "after_state": 912538,
+          "archive": 64954,
+          "report": 32000,
+          "admission_json": 193200,
+          "model_json": 203800,
+          "admitted_state_json": 81200
+        },
+        "retained_payload_bytes": 2629228,
+        "receipt_json_bytes": 221086
+      },
+      "retained_cells": {
+        "rows": 500,
+        "cells": 2600,
+        "bytes": 3126100,
+        "diagnostic_digest": "1428a1583a6841703fa2918248d7e8ec29468b1dec1ee7f76e5cce4d5f9140e5"
+      },
+      "protected_input_digests_unchanged": true,
+      "v4_normal_divided_by_v2_full": 0.059295569343406684,
+      "modes": {
+        "v2_full": {
+          "median_seconds": 2.8856303749998915,
+          "repetitions": [
+            {
+              "elapsed_seconds": 2.8856303749998915,
+              "component_seconds": {
+                "installed_profile_seconds": 0.0,
+                "integrity_baseline_seconds": 0.0,
+                "semantic_facts_seconds": 2.8186664009990636,
+                "observation_rederivation_seconds": 0.029273825988639146,
+                "binding_schema_seconds": 0.040368931979173794,
+                "binding_decode_seconds": 0.008708628018212039
+              },
+              "calls": {
+                "installed_profile_seconds": 0,
+                "integrity_baseline_seconds": 0,
+                "semantic_facts_seconds": 100,
+                "observation_rederivation_seconds": 100,
+                "binding_schema_seconds": 100,
+                "binding_decode_seconds": 100
+              },
+              "fresh_terminal_payloads_observed": 100,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 500,
+                "cells": 2600,
+                "bytes": 3126100,
+                "diagnostic_digest": "1428a1583a6841703fa2918248d7e8ec29468b1dec1ee7f76e5cce4d5f9140e5"
+              },
+              "facts": {
+                "format_version": 2,
+                "semantics": {
+                  "bindings": 100,
+                  "fresh": 100,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "integrity_baseline_checked": false
+              }
+            }
+          ]
+        },
+        "v4_normal": {
+          "median_seconds": 0.1711050960002467,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.1711050960002467,
+              "component_seconds": {
+                "installed_profile_seconds": 0.07442596499458887,
+                "integrity_baseline_seconds": 0.015585790999466553,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.03177950900862925,
+                "binding_decode_seconds": 0.009284483028750401
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 100,
+                "binding_decode_seconds": 100
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 500,
+                "cells": 2600,
+                "bytes": 3126100,
+                "diagnostic_digest": "1428a1583a6841703fa2918248d7e8ec29468b1dec1ee7f76e5cce4d5f9140e5"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:db84284e130e308b54011e3a03c289210ddd2da989e37365bc83bc5202f99d91",
+                  "rows": 500,
+                  "cells": 2600,
+                  "bytes": 3126100,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 100,
+                  "fresh": 0,
+                  "reused": 100,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 500,
+                  "semantic": 100
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        },
+        "v4_audit": {
+          "median_seconds": 2.9920667910046177,
+          "repetitions": [
+            {
+              "elapsed_seconds": 2.9920667910046177,
+              "component_seconds": {
+                "installed_profile_seconds": 0.07327162099682027,
+                "integrity_baseline_seconds": 0.014839109993772581,
+                "semantic_facts_seconds": 2.7868866920325672,
+                "observation_rederivation_seconds": 0.028675064066192135,
+                "binding_schema_seconds": 0.07032407597580459,
+                "binding_decode_seconds": 0.007924834018922411
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 100,
+                "observation_rederivation_seconds": 100,
+                "binding_schema_seconds": 200,
+                "binding_decode_seconds": 100
+              },
+              "fresh_terminal_payloads_observed": 100,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 500,
+                "cells": 2600,
+                "bytes": 3126100,
+                "diagnostic_digest": "1428a1583a6841703fa2918248d7e8ec29468b1dec1ee7f76e5cce4d5f9140e5"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:db84284e130e308b54011e3a03c289210ddd2da989e37365bc83bc5202f99d91",
+                  "rows": 500,
+                  "cells": 2600,
+                  "bytes": 3126100,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 100,
+                  "fresh": 100,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 500,
+                  "semantic": 100
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "completed-initial-backlog",
+      "tasks": 300,
+      "bindings": 300,
+      "supersession_depth": 1,
+      "testcases_per_report": 1,
+      "model_requirements": 1,
+      "backlog": true,
+      "bindings_only": false,
+      "published_source_format": 2,
+      "compared_source_format": 2,
+      "index_format": 4,
+      "repeats": 1,
+      "v1_upgrade_seconds_excluded": 0.0,
+      "activation_seconds_excluded": 49.25741095600097,
+      "source_sizes": {
+        "ledger_bytes": 20226048,
+        "binding_json_bytes": 570792,
+        "retained_bytes_by_column": {
+          "intent_json": 642577,
+          "before_state": 7383261,
+          "after_state": 7337638,
+          "archive": 194902,
+          "report": 96000,
+          "admission_json": 579600,
+          "model_json": 611400,
+          "admitted_state_json": 243600
+        },
+        "retained_payload_bytes": 17088978,
+        "receipt_json_bytes": 663686
+      },
+      "indexed_sizes": {
+        "ledger_bytes": 21254144,
+        "binding_json_bytes": 570792,
+        "retained_bytes_by_column": {
+          "intent_json": 642577,
+          "before_state": 7383261,
+          "after_state": 7337638,
+          "archive": 194902,
+          "report": 96000,
+          "admission_json": 579600,
+          "model_json": 611400,
+          "admitted_state_json": 243600
+        },
+        "retained_payload_bytes": 17088978,
+        "receipt_json_bytes": 663686
+      },
+      "retained_cells": {
+        "rows": 1500,
+        "cells": 7800,
+        "bytes": 18580450,
+        "diagnostic_digest": "c768323cc4c5dd70eb9fe845c1727989b89280c284f454479da6c5936ce8bc15"
+      },
+      "protected_input_digests_unchanged": true,
+      "v4_normal_divided_by_v2_full": 0.026930761755006243,
+      "modes": {
+        "v2_full": {
+          "median_seconds": 15.711322979004763,
+          "repetitions": [
+            {
+              "elapsed_seconds": 15.711322979004763,
+              "component_seconds": {
+                "installed_profile_seconds": 0.0,
+                "integrity_baseline_seconds": 0.0,
+                "semantic_facts_seconds": 15.486763535001955,
+                "observation_rederivation_seconds": 0.09622661413595779,
+                "binding_schema_seconds": 0.13355308094469365,
+                "binding_decode_seconds": 0.02743120102240937
+              },
+              "calls": {
+                "installed_profile_seconds": 0,
+                "integrity_baseline_seconds": 0,
+                "semantic_facts_seconds": 300,
+                "observation_rederivation_seconds": 300,
+                "binding_schema_seconds": 300,
+                "binding_decode_seconds": 300
+              },
+              "fresh_terminal_payloads_observed": 300,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 1500,
+                "cells": 7800,
+                "bytes": 18580450,
+                "diagnostic_digest": "c768323cc4c5dd70eb9fe845c1727989b89280c284f454479da6c5936ce8bc15"
+              },
+              "facts": {
+                "format_version": 2,
+                "semantics": {
+                  "bindings": 300,
+                  "fresh": 300,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "integrity_baseline_checked": false
+              }
+            }
+          ]
+        },
+        "v4_normal": {
+          "median_seconds": 0.4231178960035322,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.4231178960035322,
+              "component_seconds": {
+                "installed_profile_seconds": 0.07889890300430125,
+                "integrity_baseline_seconds": 0.060720522997144144,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.11074981710407883,
+                "binding_decode_seconds": 0.026911280016065575
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 300,
+                "binding_decode_seconds": 300
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 1500,
+                "cells": 7800,
+                "bytes": 18580450,
+                "diagnostic_digest": "c768323cc4c5dd70eb9fe845c1727989b89280c284f454479da6c5936ce8bc15"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:f55e4bedf65dfb99609359a69839b097437bbdad95e561bd3ad9090c6767c4f9",
+                  "rows": 1500,
+                  "cells": 7800,
+                  "bytes": 18580450,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 300,
+                  "fresh": 0,
+                  "reused": 300,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 1500,
+                  "semantic": 300
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        },
+        "v4_audit": {
+          "median_seconds": 16.22918893300084,
+          "repetitions": [
+            {
+              "elapsed_seconds": 16.22918893300084,
+              "component_seconds": {
+                "installed_profile_seconds": 0.07570968200161587,
+                "integrity_baseline_seconds": 0.06796286900498671,
+                "semantic_facts_seconds": 15.680919462967722,
+                "observation_rederivation_seconds": 0.10583733904059045,
+                "binding_schema_seconds": 0.23527253293286776,
+                "binding_decode_seconds": 0.026625373058777768
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 300,
+                "observation_rederivation_seconds": 300,
+                "binding_schema_seconds": 600,
+                "binding_decode_seconds": 300
+              },
+              "fresh_terminal_payloads_observed": 300,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 1500,
+                "cells": 7800,
+                "bytes": 18580450,
+                "diagnostic_digest": "c768323cc4c5dd70eb9fe845c1727989b89280c284f454479da6c5936ce8bc15"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:f55e4bedf65dfb99609359a69839b097437bbdad95e561bd3ad9090c6767c4f9",
+                  "rows": 1500,
+                  "cells": 7800,
+                  "bytes": 18580450,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 300,
+                  "fresh": 300,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 1500,
+                  "semantic": 300
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "completed-100cases-10requirements",
+      "tasks": 10,
+      "bindings": 10,
+      "supersession_depth": 1,
+      "testcases_per_report": 100,
+      "model_requirements": 10,
+      "backlog": false,
+      "bindings_only": false,
+      "published_source_format": 2,
+      "compared_source_format": 2,
+      "index_format": 4,
+      "repeats": 1,
+      "v1_upgrade_seconds_excluded": 0.0,
+      "activation_seconds_excluded": 1.5607368530036183,
+      "source_sizes": {
+        "ledger_bytes": 839680,
+        "binding_json_bytes": 19016,
+        "retained_bytes_by_column": {
+          "intent_json": 21390,
+          "before_state": 99276,
+          "after_state": 99446,
+          "archive": 55343,
+          "report": 254690,
+          "admission_json": 19320,
+          "model_json": 68750,
+          "admitted_state_json": 61600
+        },
+        "retained_payload_bytes": 679815,
+        "receipt_json_bytes": 22101
+      },
+      "indexed_sizes": {
+        "ledger_bytes": 897024,
+        "binding_json_bytes": 19016,
+        "retained_bytes_by_column": {
+          "intent_json": 21390,
+          "before_state": 99276,
+          "after_state": 99446,
+          "archive": 55343,
+          "report": 254690,
+          "admission_json": 19320,
+          "model_json": 68750,
+          "admitted_state_json": 61600
+        },
+        "retained_payload_bytes": 679815,
+        "receipt_json_bytes": 22101
+      },
+      "retained_cells": {
+        "rows": 50,
+        "cells": 260,
+        "bytes": 729488,
+        "diagnostic_digest": "9cff5edc8b5d07d2b9a90f08edf5422f2d7350e28902cd06869a8e8efe983eed"
+      },
+      "protected_input_digests_unchanged": true,
+      "v4_normal_divided_by_v2_full": 0.20415206356243365,
+      "modes": {
+        "v2_full": {
+          "median_seconds": 0.42760857999383006,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.42760857999383006,
+              "component_seconds": {
+                "installed_profile_seconds": 0.0,
+                "integrity_baseline_seconds": 0.0,
+                "semantic_facts_seconds": 0.4182077970035607,
+                "observation_rederivation_seconds": 0.012141461986175273,
+                "binding_schema_seconds": 0.004292429017368704,
+                "binding_decode_seconds": 0.0012350080214673653
+              },
+              "calls": {
+                "installed_profile_seconds": 0,
+                "integrity_baseline_seconds": 0,
+                "semantic_facts_seconds": 10,
+                "observation_rederivation_seconds": 10,
+                "binding_schema_seconds": 10,
+                "binding_decode_seconds": 10
+              },
+              "fresh_terminal_payloads_observed": 10,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 50,
+                "cells": 260,
+                "bytes": 729488,
+                "diagnostic_digest": "9cff5edc8b5d07d2b9a90f08edf5422f2d7350e28902cd06869a8e8efe983eed"
+              },
+              "facts": {
+                "format_version": 2,
+                "semantics": {
+                  "bindings": 10,
+                  "fresh": 10,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "integrity_baseline_checked": false
+              }
+            }
+          ]
+        },
+        "v4_normal": {
+          "median_seconds": 0.0872971740027424,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.0872971740027424,
+              "component_seconds": {
+                "installed_profile_seconds": 0.07558234300086042,
+                "integrity_baseline_seconds": 0.0024725249968469143,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.003807040993706323,
+                "binding_decode_seconds": 0.0009365850200993009
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 10,
+                "binding_decode_seconds": 10
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 50,
+                "cells": 260,
+                "bytes": 729488,
+                "diagnostic_digest": "9cff5edc8b5d07d2b9a90f08edf5422f2d7350e28902cd06869a8e8efe983eed"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:d593738401b48b8f93c1903849d5382b6b94543448c3af59398ef80e132956fc",
+                  "rows": 50,
+                  "cells": 260,
+                  "bytes": 729488,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 10,
+                  "fresh": 0,
+                  "reused": 10,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 50,
+                  "semantic": 10
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        },
+        "v4_audit": {
+          "median_seconds": 0.52677227499953,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.52677227499953,
+              "component_seconds": {
+                "installed_profile_seconds": 0.07965527800115524,
+                "integrity_baseline_seconds": 0.0035710250012925826,
+                "semantic_facts_seconds": 0.427010251005413,
+                "observation_rederivation_seconds": 0.0120742120052455,
+                "binding_schema_seconds": 0.00741113399999449,
+                "binding_decode_seconds": 0.0013916679890826344
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 10,
+                "observation_rederivation_seconds": 10,
+                "binding_schema_seconds": 20,
+                "binding_decode_seconds": 10
+              },
+              "fresh_terminal_payloads_observed": 10,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 50,
+                "cells": 260,
+                "bytes": 729488,
+                "diagnostic_digest": "9cff5edc8b5d07d2b9a90f08edf5422f2d7350e28902cd06869a8e8efe983eed"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:d593738401b48b8f93c1903849d5382b6b94543448c3af59398ef80e132956fc",
+                  "rows": 50,
+                  "cells": 260,
+                  "bytes": 729488,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 10,
+                  "fresh": 10,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 50,
+                  "semantic": 10
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "completed-1000cases-100requirements",
+      "tasks": 10,
+      "bindings": 10,
+      "supersession_depth": 1,
+      "testcases_per_report": 1000,
+      "model_requirements": 100,
+      "backlog": false,
+      "bindings_only": false,
+      "published_source_format": 2,
+      "compared_source_format": 2,
+      "index_format": 4,
+      "repeats": 1,
+      "v1_upgrade_seconds_excluded": 0.0,
+      "activation_seconds_excluded": 9.88799340800324,
+      "source_sizes": {
+        "ledger_bytes": 6275072,
+        "binding_json_bytes": 19016,
+        "retained_bytes_by_column": {
+          "intent_json": 21401,
+          "before_state": 919456,
+          "after_state": 936456,
+          "archive": 511738,
+          "report": 2558800,
+          "admission_json": 19320,
+          "model_json": 555690,
+          "admitted_state_json": 597110
+        },
+        "retained_payload_bytes": 6119971,
+        "receipt_json_bytes": 22101
+      },
+      "indexed_sizes": {
+        "ledger_bytes": 6332416,
+        "binding_json_bytes": 19016,
+        "retained_bytes_by_column": {
+          "intent_json": 21401,
+          "before_state": 919456,
+          "after_state": 936456,
+          "archive": 511738,
+          "report": 2558800,
+          "admission_json": 19320,
+          "model_json": 555690,
+          "admitted_state_json": 597110
+        },
+        "retained_payload_bytes": 6119971,
+        "receipt_json_bytes": 22101
+      },
+      "retained_cells": {
+        "rows": 50,
+        "cells": 260,
+        "bytes": 6169644,
+        "diagnostic_digest": "bb36d8bc7ca3a150b7542424f4c9ea15e19cea443939c0aaed264279d4dcb859"
+      },
+      "protected_input_digests_unchanged": true,
+      "v4_normal_divided_by_v2_full": 0.030422809692781303,
+      "modes": {
+        "v2_full": {
+          "median_seconds": 3.041493798002193,
+          "repetitions": [
+            {
+              "elapsed_seconds": 3.041493798002193,
+              "component_seconds": {
+                "installed_profile_seconds": 0.0,
+                "integrity_baseline_seconds": 0.0,
+                "semantic_facts_seconds": 3.0026056039932882,
+                "observation_rederivation_seconds": 0.5207545750090503,
+                "binding_schema_seconds": 0.004794805994606577,
+                "binding_decode_seconds": 0.001056818015058525
+              },
+              "calls": {
+                "installed_profile_seconds": 0,
+                "integrity_baseline_seconds": 0,
+                "semantic_facts_seconds": 10,
+                "observation_rederivation_seconds": 10,
+                "binding_schema_seconds": 10,
+                "binding_decode_seconds": 10
+              },
+              "fresh_terminal_payloads_observed": 10,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 50,
+                "cells": 260,
+                "bytes": 6169644,
+                "diagnostic_digest": "bb36d8bc7ca3a150b7542424f4c9ea15e19cea443939c0aaed264279d4dcb859"
+              },
+              "facts": {
+                "format_version": 2,
+                "semantics": {
+                  "bindings": 10,
+                  "fresh": 10,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "integrity_baseline_checked": false
+              }
+            }
+          ]
+        },
+        "v4_normal": {
+          "median_seconds": 0.09253078699839534,
+          "repetitions": [
+            {
+              "elapsed_seconds": 0.09253078699839534,
+              "component_seconds": {
+                "installed_profile_seconds": 0.07414788999449229,
+                "integrity_baseline_seconds": 0.008870516998285893,
+                "semantic_facts_seconds": 0.0,
+                "observation_rederivation_seconds": 0.0,
+                "binding_schema_seconds": 0.003526378008245956,
+                "binding_decode_seconds": 0.0008542249852325767
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 0,
+                "observation_rederivation_seconds": 0,
+                "binding_schema_seconds": 10,
+                "binding_decode_seconds": 10
+              },
+              "fresh_terminal_payloads_observed": 0,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 50,
+                "cells": 260,
+                "bytes": 6169644,
+                "diagnostic_digest": "bb36d8bc7ca3a150b7542424f4c9ea15e19cea443939c0aaed264279d4dcb859"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:55180cc30afa2a6028577b4150e2b024cfdb821e231b4c88a81aebb22832bd01",
+                  "rows": 50,
+                  "cells": 260,
+                  "bytes": 6169644,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 10,
+                  "fresh": 0,
+                  "reused": 10,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 50,
+                  "semantic": 10
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        },
+        "v4_audit": {
+          "median_seconds": 3.2652677229998517,
+          "repetitions": [
+            {
+              "elapsed_seconds": 3.2652677229998517,
+              "component_seconds": {
+                "installed_profile_seconds": 0.07088621899310965,
+                "integrity_baseline_seconds": 0.008056143997237086,
+                "semantic_facts_seconds": 3.1417318529784097,
+                "observation_rederivation_seconds": 0.5337347340027918,
+                "binding_schema_seconds": 0.008010533987544477,
+                "binding_decode_seconds": 0.0011845709886983968
+              },
+              "calls": {
+                "installed_profile_seconds": 1,
+                "integrity_baseline_seconds": 1,
+                "semantic_facts_seconds": 10,
+                "observation_rederivation_seconds": 10,
+                "binding_schema_seconds": 20,
+                "binding_decode_seconds": 10
+              },
+              "fresh_terminal_payloads_observed": 10,
+              "fresh_prepared_payloads_observed": 0,
+              "coverage": {
+                "rows": 50,
+                "cells": 260,
+                "bytes": 6169644,
+                "diagnostic_digest": "bb36d8bc7ca3a150b7542424f4c9ea15e19cea443939c0aaed264279d4dcb859"
+              },
+              "facts": {
+                "format_version": 4,
+                "profile_status": "current",
+                "integrity": {
+                  "algorithm": "sha256",
+                  "roster_digest": "sha256:55180cc30afa2a6028577b4150e2b024cfdb821e231b4c88a81aebb22832bd01",
+                  "rows": 50,
+                  "cells": 260,
+                  "bytes": 6169644,
+                  "complete": true
+                },
+                "semantics": {
+                  "bindings": 10,
+                  "fresh": 10,
+                  "reused": 0,
+                  "prepared": 0
+                },
+                "index_rows": {
+                  "integrity": 50,
+                  "semantic": 10
+                },
+                "profile_digest": "sha256:f876e2879122d6f432641d177a4c978c42540302c06bb4c78888507068ec024b"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "parameters": {
+    "workloads": null,
+    "counts": null,
+    "repeats": 1,
+    "out": "benchmarks/results/ledger_history_reuse.json"
+  }
+}

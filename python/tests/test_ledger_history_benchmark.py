@@ -113,7 +113,8 @@ def test_profile_cli_reports_deterministic_work_and_exact_read_hash_bytes() -> N
     measured = document["results"][0]
     assert measured["tasks"] == measured["completed_proofs"] == 2
     assert measured["bindings"] == 4
-    assert measured["current_binding_group_comparisons"] == 8
+    assert measured["legacy_binding_group_comparisons"] == 8
+    assert measured["current_binding_membership_rows"] == 4
     assert measured["repetitions"][0]["proof_rederivations"] == 2
     assert measured["repetitions"][0]["calls_by_component"]["binding_decode_seconds"] == 4
     sizes = measured["sizes"]

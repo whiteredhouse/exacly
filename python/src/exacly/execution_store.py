@@ -14,7 +14,7 @@ import re
 import sqlite3
 import stat
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -28,7 +28,8 @@ Doc = dict[str, Any]
 APPLICATION_ID = 0x4558434C  # EXCL
 USER_VERSION = 1
 COMPLETION_VERSION = 2
-MAX_USER_VERSION = COMPLETION_VERSION
+INDEX_VERSION = 4
+MAX_USER_VERSION = INDEX_VERSION
 DEFAULT_LOCK_TIMEOUT = 30.0
 MAX_LOCK_TIMEOUT = (2**31 - 1) / 1000
 LOCK_RETRY_INTERVAL = 0.01
@@ -300,7 +301,7 @@ def _operational_version(version: int) -> None:
         version != 3,
         "version 3 is an audit-only ledger; use executions audit, and select the original v2 ledger for operations",
     )
-    require(version in (USER_VERSION, COMPLETION_VERSION), "unsupported execution store schema version")
+    require(version in (USER_VERSION, COMPLETION_VERSION, INDEX_VERSION), "unsupported execution store schema version")
 
 
 def header(fd: int) -> int:
@@ -402,7 +403,10 @@ def _base(
         pending: {"serial": serial, "digest": digest}
         for pending, serial, digest in execute("SELECT pending_key, serial, digest FROM watermarks")
     }
-    pending_keys = {value["pending_key"] for value in records.values()}
+    members: dict[str, set[str]] = {}
+    for identity, value in records.items():
+        members.setdefault(value["pending_key"], set()).add(identity)
+    pending_keys = set(members)
     require(set(active) == set(watermarks) == pending_keys, "execution store active bindings are incomplete")
     for pending in pending_keys:
         watermark = watermarks[pending]
@@ -429,7 +433,7 @@ def _base(
             )
             current = records[current]["supersedes"]
         require(
-            seen == {identity for identity, value in records.items() if value["pending_key"] == pending},
+            seen == members[pending],
             "execution supersession chain is incomplete",
         )
     return records, active, watermarks
@@ -442,6 +446,17 @@ def validate(
         busy_timeout(connection, deadline)
     version = connection.execute("PRAGMA user_version").fetchone()[0]
     _operational_version(version)
+    if version == INDEX_VERSION:
+        from exacly import execution_index
+
+        owned = not connection.in_transaction
+        if owned:
+            connection.execute("BEGIN")
+        try:
+            return execution_index.check(connection, deadline=deadline).snapshot
+        finally:
+            if owned and connection.in_transaction:
+                connection.rollback()
     schema = dict(SCHEMA)
     if version == COMPLETION_VERSION:
         from exacly import completion_store
@@ -458,7 +473,7 @@ def configure(connection: sqlite3.Connection, *, deadline: Deadline | None = Non
     if deadline is not None:
         busy_timeout(connection, deadline)
     version = connection.execute("PRAGMA user_version").fetchone()[0]
-    synchronous = "EXTRA" if version == COMPLETION_VERSION else "FULL"
+    synchronous = "EXTRA" if version in (COMPLETION_VERSION, INDEX_VERSION) else "FULL"
     for statement in ("PRAGMA journal_mode=DELETE", f"PRAGMA synchronous={synchronous}", "PRAGMA foreign_keys=ON"):
         if deadline is not None:
             busy_timeout(connection, deadline)
@@ -474,6 +489,7 @@ def put(path: Path, value: Doc, *, lock_timeout: float = DEFAULT_LOCK_TIMEOUT) -
             locked(path, write=True, deadline=deadline) as (absolute, directory_fd),
             database(absolute, create=True, deadline=deadline) as (connection, created),
         ):
+            indexed = None
             if created:
                 configure(connection, deadline=deadline)
                 busy_timeout(connection, deadline)
@@ -486,13 +502,20 @@ def put(path: Path, value: Doc, *, lock_timeout: float = DEFAULT_LOCK_TIMEOUT) -
                 active: dict[str, str] = {}
                 watermarks: dict[str, Doc] = {}
             else:
-                records, active, watermarks = validate(connection, deadline=deadline)
-                busy_timeout(connection, deadline)
+                version = connection.execute("PRAGMA user_version").fetchone()[0]
+                if version != INDEX_VERSION:
+                    records, active, watermarks = validate(connection, deadline=deadline)
                 configure(connection, deadline=deadline)
                 busy_timeout(connection, deadline)
                 connection.execute("BEGIN IMMEDIATE")
+                if version == INDEX_VERSION:
+                    from exacly import execution_index
+
+                    indexed = execution_index.check(connection, deadline=deadline)
+                    execution_index.require_writable(indexed)
+                    records, active, watermarks = indexed.snapshot
             identity, pending = proposed["id"], proposed["pending_key"]
-            if connection.execute("PRAGMA user_version").fetchone() == (COMPLETION_VERSION,):
+            if connection.execute("PRAGMA user_version").fetchone()[0] in (COMPLETION_VERSION, INDEX_VERSION):
                 from exacly import completion_store
 
                 completion_store.registration_allowed(connection, pending, deadline=deadline)
@@ -519,6 +542,17 @@ def put(path: Path, value: Doc, *, lock_timeout: float = DEFAULT_LOCK_TIMEOUT) -
                     capture["serial"] != watermark["serial"] or capture["digest"] == watermark["digest"],
                     "state digest changed at the registered serial",
                 )
+            expected: dict[tuple[str, str], tuple[Any, ...]] = {}
+            captured: Mapping[tuple[str, str], tuple[Any, ...] | None] = {}
+            if indexed is not None:
+                expected = {
+                    ("watermarks", pending): (pending, capture["serial"], capture["digest"]),
+                }
+                if existing is None:
+                    expected[("bindings", identity)] = (identity, pending, proposed["supersedes"], canonical(proposed))
+                    expected[("active", pending)] = (pending, identity)
+                captured = indexed.capture(expected)
+            before_changes = connection.total_changes
             if existing is None:
                 connection.execute(
                     "INSERT INTO bindings (id, pending_key, supersedes, record_json) VALUES (?, ?, ?, ?)",
@@ -534,6 +568,15 @@ def put(path: Path, value: Doc, *, lock_timeout: float = DEFAULT_LOCK_TIMEOUT) -
                 "ON CONFLICT(pending_key) DO UPDATE SET serial=excluded.serial, digest=excluded.digest",
                 (pending, capture["serial"], capture["digest"]),
             )
+            if indexed is not None:
+                source_writes = 3 if existing is None else 1
+                require(connection.total_changes == before_changes + source_writes, "unexpected registration writes")
+                changes = {key: execution_index.Change(captured[key], after) for key, after in expected.items()}
+                index_writes, _ = execution_index.maintain(connection, indexed, changes=changes, deadline=deadline)
+                require(
+                    connection.total_changes == before_changes + source_writes + index_writes,
+                    "unexpected execution index writes",
+                )
             busy_timeout(connection, deadline)
             connection.commit()
             if created:
@@ -560,17 +603,27 @@ def get(path: Path, identity: str, *, lock_timeout: float = DEFAULT_LOCK_TIMEOUT
         ):
             busy_timeout(connection, deadline)
             connection.execute("BEGIN")
-            records, active, watermarks = validate(connection, deadline=deadline)
+            indexed = None
+            if connection.execute("PRAGMA user_version").fetchone() == (INDEX_VERSION,):
+                from exacly import execution_index
+
+                indexed = execution_index.check(connection, deadline=deadline)
+                records, active, watermarks = indexed.snapshot
+            else:
+                records, active, watermarks = validate(connection, deadline=deadline)
             require(identity in records, "execution binding does not exist")
             binding = records[identity]
             pending = binding["pending_key"]
             successors = [value["id"] for value in records.values() if value["supersedes"] == identity]
-            return {
+            result = {
                 "binding": binding,
                 "active": active[pending] == identity,
                 "superseded_by": successors[0] if successors else None,
                 "state_watermark": watermarks[pending],
             }
+            if indexed is not None:
+                result["validation"] = indexed.facts
+            return result
     except StoreError:
         raise
     except sqlite3.Error as error:

@@ -73,6 +73,11 @@ SCHEMA: Doc = {
     ),
 }
 
+# This installed schema is constant. Check it once; every record still receives complete instance
+# validation with the currently registered format checkers and the identity checks below.
+jsonschema.Draft202012Validator.check_schema(SCHEMA)
+_RECORD_VALIDATOR = jsonschema.Draft202012Validator(SCHEMA)
+
 
 @dataclass(frozen=True)
 class Registration:
@@ -211,7 +216,7 @@ def record_identity(record: Doc) -> str:
 
 def validate_record(record: Any) -> Doc:
     try:
-        jsonschema.validate(record, SCHEMA, format_checker=jsonschema.FormatChecker())
+        _RECORD_VALIDATOR.evolve(format_checker=jsonschema.FormatChecker()).validate(record)
         normalized = planning.plain(record)
     except jsonschema.ValidationError as error:
         raise ValueError(f"invalid stored execution binding: {error.message}") from error

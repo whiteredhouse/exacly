@@ -125,6 +125,14 @@ SCHEMA = planning.fields(
         "digest": planning.DIGEST,
     }
 )
+LEGACY_SCHEMA = SCHEMA
+INDEXED_SCHEMA = copy.deepcopy(LEGACY_SCHEMA)
+INDEXED_SCHEMA["properties"]["schema_version"] = {"const": "0.2.0"}
+INDEXED_SCHEMA["properties"]["history_validation"] = planning.fields(
+    {"scope": {"const": "protected_view_at_stage_entry"}, "stage": TEXT, "facts": OBJECT}
+)
+INDEXED_SCHEMA["required"].append("history_validation")
+SCHEMA = {"anyOf": [LEGACY_SCHEMA, INDEXED_SCHEMA]}
 
 
 class CompletionInterruptedError(ValueError):
@@ -161,6 +169,12 @@ def _finish(report: Doc, status: str, code: str, reason: str, *, receipt: Doc | 
         report["claims"]["task_completion_recorded"] = True
     report["digest"] = planning.digest(report)
     return report
+
+
+def _history(report: Doc, facts: Doc | None, stage: str) -> None:
+    if facts is not None:
+        report["schema_version"] = "0.2.0"
+        report["history_validation"] = {"scope": "protected_view_at_stage_entry", "stage": stage, "facts": facts}
 
 
 @contextmanager
@@ -379,6 +393,7 @@ def complete(
         store.locked(ledger, write=False, deadline=budget) as (absolute, _),
         _database(absolute, write=False, deadline=budget) as journal,
     ):
+        _history(report, journal.validation, "pre_admission")
         envelope = journal.envelope(binding_id)
         mismatch = _contract(envelope, plan, action, readiness, chosen, target)
         if mismatch:
@@ -444,6 +459,7 @@ def complete(
         operation_locks.locked(ledger, snapshot, deadline=budget) as (absolute, parent_fd),
         _database(absolute, write=True, deadline=budget) as journal,
     ):
+        _history(report, journal.validation, "commit")
         envelope = journal.envelope(binding_id)
         mismatch = _contract(envelope, plan, action, readiness, chosen, target)
         if mismatch:
@@ -563,8 +579,10 @@ def show(ledger: Path, completion_id: str, *, lock_timeout: float = store.DEFAUL
         _database(absolute, write=False, deadline=budget) as journal,
     ):
         value = journal.get(completion_id)
+        validation = journal.validation
     intent = value["intent"]
     report = _report("show", intent["binding_id"], intent["request_digest"])
+    _history(report, validation, "show")
     report["completion_id"] = intent["id"]
     report["intent"] = copy.deepcopy(intent)
     status = "completed" if value["phase"] == "committed" else value["phase"]
@@ -592,8 +610,10 @@ def recover(
         _database(absolute, write=False, deadline=budget) as journal,
     ):
         value = journal.get(completion_id)
+        validation = journal.validation
     intent = value["intent"]
     report = _report("recover", intent["binding_id"], intent["request_digest"])
+    _history(report, validation, "recovery_preview")
     report["completion_id"] = intent["id"]
     report["intent"] = copy.deepcopy(intent)
     if str(_path(state_path)) != intent["request"]["state_path"]:
@@ -629,6 +649,7 @@ def recover(
         operation_locks.locked(ledger, snapshot, deadline=budget) as (absolute, parent_fd),
         _database(absolute, write=True, deadline=budget) as journal,
     ):
+        _history(report, journal.validation, "recovery_commit")
         value = journal.get(completion_id)
         if value["phase"] == "committed":
             return _finish(
@@ -686,6 +707,13 @@ def as_text(report: Doc) -> str:
     lines += [f"  {check['code']}: {check['reason']}" for check in report["checks"]]
     if report["readiness"] is not None:
         lines.append(f"Whole-policy readiness: {report['readiness']['result']}")
+    if report.get("history_validation") is not None:
+        view = report["history_validation"]
+        counts = view["facts"]["semantics"]
+        lines.append(
+            f"History at {view['stage']} entry: fresh terminal proofs {counts['fresh']}, "
+            f"reused {counts['reused']}; profile {view['facts']['profile']['digest']}."
+        )
     lines.append(
         "Local verification history only; external task closure, executor provenance, "
         "test honesty and acceptance coverage remain unverified."
