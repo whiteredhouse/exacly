@@ -2,7 +2,7 @@
 
 The `exacly` command and Python package work with an Exacly model, either a 0.1 product map or 0.2 config and state documents, as the [Exacly Specification](../spec/README.md) describes it.
 
-This reference describes **0.6.0rc2**, a release candidate for product context,
+This reference describes **0.6.0rc3**, a release candidate for product context,
 evidence-based verification and recoverable local task completion. The new
 commands run in an operator-controlled environment. Candidate isolation, task
 dispatch and executor supervision (REQ-025–027) remain proposed. Review the
@@ -11,8 +11,8 @@ explicit ledger-copy upgrades.
 
 - [`exacly validate`](#validate) checks the model and prints the section 11 validation report.
 - [`exacly refresh`](#refresh) writes state from what the model's bindings observe.
-- [`exacly evidence package`](#package-verification-evidence-unreleased) prepares a producer's manifest/JUnit evidence bundle (unreleased).
-- [`exacly evidence propose-policy github-actions`](#draft-a-producer-policy-unreleased) drafts a producer-policy candidate for independent review (unreleased).
+- [`exacly evidence package`](#package-verification-evidence) prepares a producer's manifest/JUnit evidence bundle.
+- [`exacly evidence propose-policy github-actions`](#draft-a-producer-policy) drafts a producer-policy candidate for independent review.
 - [`exacly admit github-actions`](#admit-github-actions-evidence) checks a live CI run against an approved producer policy before deriving verification state.
 - [`exacly show`, `trace`, `impact` and `gaps`](#questions) answer questions about the model, and [`exacly view`](#views) renders them for people.
 - [`exacly assess`](#assess-an-implementation-target) projects observations onto an explicit implementation and scope.
@@ -26,8 +26,8 @@ explicit ledger-copy upgrades.
 - [`exacly mcp`](#mcp-server) answers show, trace, impact and gaps questions for coding agents.
 
 ```sh
-uv tool install 'exacly==0.6.0rc2'
-uvx --from 'exacly==0.6.0rc2' exacly validate spec/exacly    # one-off run
+uv tool install 'exacly==0.6.0rc3'
+uvx --from 'exacly==0.6.0rc3' exacly validate spec/exacly    # one-off run
 ```
 
 The exact pin selects this prerelease; `uv tool install exacly` selects the latest
@@ -170,17 +170,14 @@ It writes one verification assessment per platform of each binding, with source 
 - **Details.** Each assessment carries `x-platform`, `x-release`, `x-builds`, `x-criteria` (each criterion's latest result) and, when the release has due criteria, `x-release-scope`. Its evidence is each observation's retained output with its digest. `exacly gaps` lists what the extension finds in them under "From extension observers": a release whose scope passed while the record is not verified, and observations that were not used.
 - **Validation.** When the model declares the extension, the validator checks each `manual-qa:observations` binding (`11.extension-binding`): `path`, and optionally `platforms`, nothing else. It also checks the `x-` fields on this source's assessments in state (`11.extension-assessment`), and `gaps` reports an assessment whose fields are not valid instead of reading them. The binding, assessment, target and observation schemas are `BINDING_SCHEMA`, `ASSESSMENT_SCHEMA`, `TARGET_SCHEMA` and `OBSERVATION_SCHEMA` in `exacly.manual_qa`. `observed_at` must be a timestamp with its offset, such as `2026-10-25T14:12:00Z`.
 
-## Package verification evidence (unreleased)
+## Package verification evidence
 
-`exacly evidence package` ships the existing producer helper as an installed
-command and the `exacly.evidence.package` Python API. This is an unreleased
-repository change; the published `0.6.0rc2` package does not include it. The
-consumer checks out its own project and runs its tests normally, without
-checking out Exacly's source or copying Exacly's Python helper.
+`exacly evidence package` provides the installed producer command and the
+`exacly.evidence.package` Python API from `0.6.0rc3`. The consumer checks out its
+own project and runs its tests normally, without checking out Exacly's source
+or copying Exacly's Python helper.
 
-The planned first package containing this command is `0.6.0rc3`. **The following
-RC3 commands are unavailable until that version is published.** Once published,
-run this exact-version invocation in the consumer's checked-out repository,
+Run this exact-version invocation in the consumer's checked-out repository,
 after a verification step writes a JUnit report:
 
 ```sh
@@ -197,7 +194,7 @@ environment variables. Set `EXACLY_TEST_OUTCOME` to the verification step's actu
 that `git rev-parse HEAD` matches the full `GITHUB_SHA`; it reads no GitHub token
 and makes no API calls.
 
-After RC3 is published, these producer steps can follow an existing test step
+These producer steps can follow an existing test step
 with `id: verification` that writes `reports/junit.xml`. They use the exact
 package version rather than the project's editable checkout:
 
@@ -245,7 +242,7 @@ establishing test honesty or acceptance coverage.
 
 ### Install from a reviewed hash lock
 
-Once RC3 is published, generate a lock for the producer runner's Python version
+Generate a lock for the producer runner's Python version
 and platform. The following targets Linux x86_64 with Python 3.12; adapt both
 `--python-platform` and `--python-version` for a different runner, and use that
 Python version when creating its virtual environment. The input pins Exacly exactly;
@@ -304,13 +301,11 @@ Each trust policy supplies its exact branch, workflow path, job ID and name, ver
 
 Exacly's own [producer proposal](../ci/evidence-producer.yaml) selects [the verification evidence workflow](../.github/workflows/verification-evidence.yml). This example runs on pushes to `main`, has one job named `Observe verification`, explicitly selects the pytest configuration with `-c pyproject.toml`, and packages `manifest.json` and `junit.xml` in an artifact named `exacly-evidence-RUN-ATTEMPT`. Other repositories supply their own contract. The packaging command checks the checkout and supported run metadata before producing the bundle; admission independently compares that metadata with GitHub responses and the approved policy.
 
-### Draft a producer policy (unreleased)
+### Draft a producer policy
 
 `exacly evidence propose-policy github-actions` exposes the existing
-`exacly.admission.propose_policy` API through the installed CLI. The command is
-an unreleased repository change, planned for `0.6.0rc3`; the published
-`0.6.0rc2` package does not include it. **The RC3 invocation below is unavailable
-until that version is published.** The Python API remains available in RC2.
+`exacly.admission.propose_policy` API through the installed CLI from `0.6.0rc3`.
+The Python API remains compatible with earlier releases.
 
 The trust policy names the repository by numeric ID and full name, the exact
 approved branch, `workflow` with its path, byte digest, job ID/name and step
@@ -337,7 +332,7 @@ selectors. Repository, model files, policy name/version and output destination
 are separate required flags. The CLI supplies no layout, model-file or selector
 defaults.
 
-After RC3 is published, set `EXACLY_PRODUCER_REVISION` to the full immutable SHA
+Set `EXACLY_PRODUCER_REVISION` to the full immutable SHA
 whose workflow, observer and model content you intend to review. Use a proposal
 reviewed for that revision, and provide a read-permission GitHub token in
 `GH_TOKEN`, falling back to `GITHUB_TOKEN`. There is no token command argument.
@@ -413,7 +408,7 @@ itself. Only `required` and `not_required` are accepted. The choice is useful fo
 private repositories whose GitHub plan does not provide branch protection.
 `propose_policy(..., branch_protection="not_required")` can prepare the explicit
 choice for review; omitting that argument preserves the existing policy shape.
-In the unreleased drafting CLI, append `--branch-protection not_required` to make
+In the drafting CLI, append `--branch-protection not_required` to make
 that choice explicit, or omit the flag to preserve the field's absence.
 Review and version the resulting policy before using it. A generated candidate
 is not approved merely because its content fingerprints are present.
@@ -442,10 +437,24 @@ evidence-bundle manifest remains `0.1.0`, independently of admission receipt
 versions. Existing policies without the new field retain their original content
 and digest.
 
-Existing version-4 ledgers retain their recorded validation profile. When
-upgrading from RC1, use the [explicit activation-copy refresh](#activate-an-operational-indexed-ledger)
-and select the reviewed copy before further writes. Neither a new package
-install nor this policy option refreshes a retained profile implicitly.
+When upgrading from RC2 to RC3, or from RC1, existing version-4 ledgers retain
+their recorded validation profile, which fingerprints installed code. RC3
+reports a recognized old profile as `known_stale` and freshly validates retained
+history for reads after checking required integrity baselines.
+Before further writes, run:
+
+```sh
+exacly executions activate --ledger SOURCE --out NEW_DIR
+```
+
+Review the refreshed copy and explicitly select
+`NEW_DIR/operational/ledger.sqlite3` as the canonical ledger. Activation preserves
+the source, performs no implicit cutover or completion recovery, and never
+reseals changed history. Versions 1 and 2 retain their existing validation
+behavior; version-3 audit still requires a matching profile. See the
+[activation procedure](#activate-an-operational-indexed-ledger) for supported
+sources and prepared completions. Package installation never refreshes a ledger
+implicitly.
 
 ### Admit an exact run attempt
 

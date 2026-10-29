@@ -1,6 +1,16 @@
 # Package release notes
 
-## Unreleased
+## 0.6.0rc3 — 2026-10-29
+
+This candidate ships the producer tools in the installed package: prepare an
+evidence bundle and draft a producer-policy candidate without copying Python
+helpers from Exacly's repository. Independent policy approval, live admission
+and explicit completion authority remain required. Candidate isolation, task
+dispatch and executor supervision (REQ-025–027) remain proposed.
+
+An operator reported a passing RC2 trial of admission, reconciliation,
+completion and offline replay. A consumer trial using RC3's installed packager
+and policy-drafting command remains before a stable release.
 
 - **Installed producer-policy drafting.** `exacly evidence propose-policy
   github-actions` exposes the existing `exacly.admission.propose_policy` core
@@ -29,19 +39,42 @@
   consumer package releases need not match. Permanent release checks exercise
   the built wheel and published exact-version CLI outside the checkout, and
   verify that the published RC2 consumer accepts a newly packaged bundle.
-- Producer guidance includes a planned exact RC3 invocation, clearly marked
-  unavailable until publication, and an installation recipe that locks and
-  checks hashes for the distribution and all runtime dependencies. Approved
-  workflow bytes describe installation instructions; they do not attest which
-  tool bytes actually executed.
+- Producer guidance includes exact RC3 invocations and an installation recipe
+  that locks and checks hashes for the distribution and all runtime dependencies.
+  Approved workflow bytes describe installation instructions; they do not attest
+  which tool bytes actually executed.
 - Exacly's own producer workflow uses the installed command. Its proposal pins
   the checkout's `python/src/exacly` subtree, including the CLI and packaging
   implementation; changes to that source require a reviewed policy refresh.
   The repository-only CI helper is removed; use the installed command or Python API.
 
 The evidence manifest remains `0.1.0`, admission receipts remain `0.2.0`, and
-admission and ledger contracts are unchanged. These commands are not included in
-the published `0.6.0rc2` package or tag.
+admission and ledger contracts are unchanged.
+
+### Upgrading from RC2
+
+Version-4 validation profiles fingerprint installed code, so RC3 recognizes a
+well-formed retained RC1 or RC2 profile as `known_stale`. Read-only operations
+and historical replay freshly validate the retained semantics after checking
+required integrity baselines. Before further writes, create a refreshed copy:
+
+```sh
+exacly executions activate --ledger SOURCE --out NEW_DIR
+```
+
+Review the copy and explicitly select
+`NEW_DIR/operational/ledger.sqlite3` as the canonical ledger. The source is
+unchanged; activation performs no implicit cutover or completion recovery and
+never reseals changed history. Required integrity errors remain errors.
+Versions 1 and 2 retain their existing validation behavior without a profile
+refresh; version-3 audit retains its matching-profile requirement.
+
+The packaged producer command replaces the removed repository-only helper, and
+Exacly's workflow and observer selectors now cover its CLI, shared format code,
+CI helpers and dependency inputs. These changes alter approved fingerprints.
+Regenerate a candidate producer policy for the selected revision and review it
+independently before admitting evidence under the changed workflow. Updating
+the package or generating a candidate does not approve or install that policy.
 
 ## 0.6.0rc2 — 2026-10-29
 
