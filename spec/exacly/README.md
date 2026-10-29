@@ -17,6 +17,7 @@ Exacly models itself, following the layout in section 13 of the specification. C
 - [`understanding.yaml`](understanding.yaml) covers answering questions about a model: the `exacly` command's show, trace, impact and gaps.
 - [`planning.yaml`](planning.yaml) covers target-specific verification plans.
 - [`admission.yaml`](admission.yaml) covers live GitHub evidence admission under an approved producer policy.
+- [`evidence-packaging.yaml`](evidence-packaging.yaml) proposes shipping the reusable evidence packager as a versioned CLI command.
 - [`reconciliation.yaml`](reconciliation.yaml) covers read-only completion previews.
 - [`executions.yaml`](executions.yaml) covers operator registrations and the private execution ledger.
 - [`execution-maintenance.yaml`](execution-maintenance.yaml) covers bounded access, diagnosis, backup and copy-only ledger recovery and upgrade.
@@ -32,6 +33,8 @@ The YAML records define requirements, implementers, dependencies and lifecycle. 
 - Run `exacly show RECORD`, `exacly trace RECORD` or `exacly gaps` from the repository root to inspect the local checkout. Preview a branch's model with `exacly view site --out reports/model-site`.
 
 Implementation and runtime references can be marked `planned`; observation bindings have no special planned mode. A binding with case patterns that select no executed tests produces `not_checked` and establishes no successful verification claim.
+
+REQ-030 and APP-017 propose `exacly evidence package --report junit.xml --out reports/evidence` as a replacement for copying the CI helper into adopting repositories. The roadmap covers shared format definitions and compatibility, unchanged JUnit bytes and manifest format 0.1.0, released-tool pinning and hash-locked installation guidance, reviewed observer-policy migration, and independent admission. The records and test bindings are proposed; the command is not implemented by this roadmap entry. See the [packaging contract](evidence-packaging.yaml).
 
 The [completion commands](../../python/README.md#complete-registered-verification-work) authorize local state publication for an existing registered task. The wider process still includes proposed dispatch and candidate execution; completing a local task does not run candidate code or establish an isolation boundary.
 

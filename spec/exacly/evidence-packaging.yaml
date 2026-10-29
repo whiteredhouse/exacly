@@ -1,0 +1,50 @@
+# Roadmap: ship the reusable evidence producer with the versioned Exacly package.
+# Proposed config only; the command and its future test bindings are not implemented.
+exacly: "0.2.0"
+
+records:
+  - id: REQ-030
+    type: Requirement
+    name: Package verification evidence through the versioned CLI
+    description: Repositories can produce an admission-compatible evidence bundle without copying Exacly's CI helper.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-29"
+    statement: >-
+      Provide exacly evidence package --report FILE --out DIRECTORY in the installed package
+      to retain a complete JUnit report and its versioned producer manifest, preserving the
+      independent approval, origin, applicability and integrity checks performed by admission.
+    acceptance_criteria:
+      - The installed command packages the existing manifest.json and junit.xml bundle into a new output directory without requiring adopters to copy ci/package_verification_evidence.py; the initial migration preserves manifest format 0.1.0.
+      - Packaging and admission share format definitions and compatibility tests while continuing to validate their own inputs; the manifest protocol version is independent of the Exacly package version, and supported compatible producer and consumer releases need not be identical.
+      - Preserve the supplied JUnit bytes exactly and calculate their digest without reserializing XML; retain bounded complete UTF-8 XML validation, reject unsupported declarations and invalid input, and never overwrite an existing output destination.
+      - Preserve the current checks of declared GitHub push context, checkout revision, repository, workflow, job, run, attempt and step outcome. The approved workflow invokes packaging only after success or failure, including failed or all-skipped reports, and the CLI rejects missing reports or unsupported declared outcomes; admission independently verifies actual step completion. Packaging success never becomes passed verification.
+      - Admission continues to check live GitHub origin and outcome metadata, approved workflow and observer fingerprints, artifact integrity and report digest consistency independently; neither the packager nor a matching manifest proves test honesty, acceptance coverage, executed tool bytes or completion authority.
+      - Migration guidance provides an exact released-tool-version invocation and a stronger installation option with reviewed distribution and dependency hashes; a workflow digest approves the installation instructions rather than attesting which bytes actually executed.
+      - When a producer runs the editable checkout, its observer selectors cover the relocated packager and relevant CLI, shared-format source and dependency inputs; workflow or observer changes require independent review of a new producer trust policy rather than silently retaining old approval.
+      - Installed-wheel CLI tests run outside the source checkout and cover producer-consumer compatibility, exact report bytes, failed and skipped results, invalid metadata and safe output handling; repository workflow tests cover the migrated command and fingerprint inputs.
+    verification_method: Future producer and installed CLI contract tests, admission compatibility tests and producer-workflow migration checks; proposed bindings establish no current verification.
+    observe:
+      tests:
+        cases:
+          - "python/tests/test_evidence_packaging.py::*"
+          - "python/tests/test_evidence_packaging_cli.py::*"
+          - "tests/test_evidence_workflow.py::*"
+
+  - id: APP-017
+    type: Application
+    name: Verification evidence packager
+    description: Planned reusable producer command and format helpers shipped with the Exacly package.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-29"
+    responsibility: Package retained verification reports and producer manifests under the supported format contract without admitting evidence or authorizing completion.
+    interfaces: [Planned exacly evidence package command, Planned exacly.evidence Python API]
+    implementation_ref: { locator: python/src/exacly/evidence.py, planned: true }
+
+relationships:
+  - { source: REQ-030, type: supports, target: PROC-002 }
+  - { source: APP-017, type: implements, target: REQ-030 }
+  - { source: PROC-002, type: uses, target: APP-017, conditions: Planned use after the packaged producer is implemented and independently approved for the selected workflow. }
