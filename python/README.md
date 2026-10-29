@@ -2,7 +2,7 @@
 
 The `exacly` command and Python package work with an Exacly model, either a 0.1 product map or 0.2 config and state documents, as the [Exacly Specification](../spec/README.md) describes it.
 
-This reference describes **0.6.0rc1**, a release candidate for product context,
+This reference describes **0.6.0rc2**, a release candidate for product context,
 evidence-based verification and recoverable local task completion. The new
 commands run in an operator-controlled environment. Candidate isolation, task
 dispatch and executor supervision (REQ-025–027) remain proposed. Review the
@@ -24,8 +24,8 @@ explicit ledger-copy upgrades.
 - [`exacly mcp`](#mcp-server) answers show, trace, impact and gaps questions for coding agents.
 
 ```sh
-uv tool install 'exacly==0.6.0rc1'
-uvx --from 'exacly==0.6.0rc1' exacly validate spec/exacly    # one-off run
+uv tool install 'exacly==0.6.0rc2'
+uvx --from 'exacly==0.6.0rc2' exacly validate spec/exacly    # one-off run
 ```
 
 The exact pin selects this prerelease; `uv tool install exacly` selects the latest
@@ -227,11 +227,11 @@ list.
 
 Review both the proposal and generated policy independently of the implementation being evaluated, then keep the approved policy in controlled storage outside model directories. A repository proposal is not an approved policy. Generating hashes from candidate content does not approve its workflow, observer paths or model. The helper prepares policy content; it grants no execution authority or approval.
 
-### Choose branch-protection requirements (unreleased)
+### Choose branch-protection requirements
 
-The following policy option and admission receipt version `0.2.0` are
-unreleased repository changes. The published `0.6.0rc1` package still requires
-branch protection and emits admission receipts in version `0.1.0`.
+The following policy option and admission receipt version `0.2.0` are available
+from `0.6.0rc2`. Earlier `0.6.0rc1` requires branch protection and emits admission
+receipts in version `0.1.0`.
 
 An omitted top-level `branch_protection` field requires GitHub to report the
 selected branch currently protected. Explicit `"branch_protection": "required"`
@@ -275,6 +275,11 @@ it does not contact GitHub or independently re-establish approval. The
 evidence-bundle manifest remains `0.1.0`, independently of admission receipt
 versions. Existing policies without the new field retain their original content
 and digest.
+
+Existing version-4 ledgers retain their recorded validation profile. When
+upgrading from RC1, use the [explicit activation-copy refresh](#activate-an-operational-indexed-ledger)
+and select the reviewed copy before further writes. Neither a new package
+install nor this policy option refreshes a retained profile implicitly.
 
 ### Admit an exact run attempt
 

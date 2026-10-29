@@ -113,12 +113,12 @@ uv tool install exacly
 exacly validate spec/examples/0.2/invoice-reminders
 ```
 
-The `0.6.0rc1` release candidate includes the verification planning, evidence
+The `0.6.0rc2` release candidate includes the verification planning, evidence
 admission and local completion commands described here. Select it explicitly
 for a one-off run:
 
 ```sh
-uvx --from 'exacly==0.6.0rc1' exacly validate spec/examples/0.2/invoice-reminders
+uvx --from 'exacly==0.6.0rc2' exacly validate spec/examples/0.2/invoice-reminders
 ```
 
 An unpinned install selects the latest stable release. See the
@@ -180,3 +180,4 @@ Each part of Exacly has its own version, tagged as `<part>-vX.Y.Z`, as release-p
 | 0.4.0: independent verification, explicit assessment targets and readiness policies | 0.1, 0.2 |
 | 0.5.0: incomplete execution of case-bound tests gives inconclusive verification | 0.1, 0.2 |
 | 0.6.0rc1 (preview): verification plans, live evidence admission, registered work, recoverable local completion and ledger maintenance | 0.1, 0.2 |
+| 0.6.0rc2 (preview): explicit producer branch-protection choice and admission receipt 0.2 | 0.1, 0.2 |

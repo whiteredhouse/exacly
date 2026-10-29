@@ -1,6 +1,11 @@
 # Package release notes
 
-## Unreleased
+## 0.6.0rc2 — 2026-10-29
+
+This candidate enables an explicit producer-policy choice for private
+repositories whose GitHub plan does not provide branch protection. It retains
+RC1's operator-controlled verification workflow; the real admission/completion
+pilot remains follow-up work before a stable release.
 
 - **Explicit branch-protection policy.** GitHub producer trust policies may set
   `branch_protection: not_required` to admit evidence from an unprotected branch,
@@ -20,11 +25,32 @@
   of branch rules. Reconciliation and completion use the same fresh-admission
   policy behavior. Retained `0.1.0` admission proof remains readable with its
   original protection-required meaning; it cannot authorize the new opt-out.
+- **Documentation corrections.** Includes the RC1 errata below: the complete
+  producer-policy model file list, runnable 0.1 example path, assessment subject
+  identities and current ledger-history/index descriptions. RC1's package and
+  tag remain unchanged.
 
-The evidence-bundle manifest remains `0.1.0`; immutable completion receipts and
-ledger formats are unchanged. Existing policies keep their original bytes and
-digests when `branch_protection` is absent. These changes are not included in the
-published `0.6.0rc1` package or tag.
+The evidence-bundle manifest remains `0.1.0`; verification plan and immutable
+completion receipt formats and ledger schemas are unchanged. Other report versions
+and ledger upgrade paths remain as documented under RC1 below. Existing policies
+keep their original bytes and digests when `branch_protection` is absent.
+
+### Upgrading from RC1
+
+JSON consumers must handle admission receipt `0.2.0`, including the explicit
+protection claim and selected mode. Retained `0.1.0` admission proofs remain
+readable with their original required-protection meaning. To opt out, review and
+version the policy and explicitly replace an existing execution binding; an old
+registered contract cannot silently acquire the new choice.
+
+Existing version-4 ledgers retain the RC1 validation profile. Before further
+writes, use `exacly executions activate --ledger SOURCE --out NEW_DIR` to create
+a refreshed copy, review it and explicitly select
+`NEW_DIR/operational/ledger.sqlite3` as the canonical ledger. This does not change
+the source or run completion recovery automatically. Required byte-integrity
+errors remain errors; activation does not reseal corrupted history. Versions 1
+and 2 need no profile refresh, and version-3 audit retains its matching-profile
+requirement.
 
 ## 0.6.0rc1 — 2026-10-29
 
