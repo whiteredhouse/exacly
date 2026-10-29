@@ -516,7 +516,7 @@ Inspection, backup and recovery support ledger schemas 1 and 2 without changing 
 
 Completion operations reuse full history validation only for repeated reads of the same unchanged protected database view. A new operation or a ledger mutation requires fresh validation; unexpected changes stop the operation. Validation results do not persist across commands or connections. Every fresh validation still checks all retained history, including unrelated and aborted intents, so its cost grows with that history.
 
-The [ledger-history scaling design](../docs/ledger-history-scaling.md) describes a proposed proof validation index and its integrity, retention, replay and audit guarantees. It adds no supported history format or command; current ledgers retain the full validation behavior above.
+The [ledger-history scaling design](../docs/ledger-history-scaling.md) describes the integrity, retention, replay and audit contract for future operational semantic reuse. The [conversion and audit commands](#create-and-audit-an-integrity-index-copy) establish an audit-only format; ordinary ledger commands retain the version-1/version-2 validation behavior above.
 
 For a supported interrupted SQLite DELETE-journal transaction, recover into a separate new directory:
 
@@ -549,6 +549,43 @@ exacly executions upgrade --ledger "$EXACLY_LEDGER_FILE" \
 The bundle contains the exact source copy at `raw/ledger.sqlite3`, a validated version-2 copy at `upgraded/ledger.sqlite3`, and `manifest.json`. Upgrade preserves binding identities, supersession history and watermarks, and leaves the source unchanged. It succeeds with exit 0; invalid sources, unsupported formats and operational errors return 2. The destination has the same private-path, no-overwrite and atomic-publication rules as backup and recovery.
 
 Review the bundle, then explicitly select `upgraded/ledger.sqlite3` as the canonical ledger for subsequent commands. Stop using the old path as an active authority. The manifest does not prove global freshness, and ordinary commands never migrate a ledger or perform this cutover automatically.
+
+### Create and audit an integrity-index copy
+
+`executions index` copies a clean version-2 ledger into a new private bundle and adds required integrity baselines and recorded terminal semantic verdicts. Version 3 is **audit-only**: keep the version-2 source as the working ledger. Registration, show, reconciliation, completion and ordinary maintenance do not support the version-3 copy. This command provides no operational cutover, semantic reuse or measured speedup.
+
+Preview the conversion without writing an output directory:
+
+```sh
+exacly executions index --ledger "$EXACLY_LEDGER_FILE" \
+  --out "$EXACLY_HISTORY_COPY_DIR" --dry-run --json
+```
+
+Create the copy after reviewing that plan:
+
+```sh
+exacly executions index --ledger "$EXACLY_LEDGER_FILE" \
+  --out "$EXACLY_HISTORY_COPY_DIR" --json
+```
+
+Both paths fully validate the selected version-2 source. Unresolved prepared intents block conversion, including dry-run; resolve them through the existing completion recovery procedure first. The destination must be a new private directory outside Git working trees, model folders and protected inputs, without source overlap or overwrite. The bundle contains the exact source at `raw/ledger.sqlite3`, the audit-only copy at `indexed/ledger.sqlite3`, and `manifest.json`. Historical records, proof bytes, identities, receipts and watermarks remain unchanged. Output files use mode `0600` and directories `0700`; a complete validated bundle is synchronized and published atomically. If final durability cannot be confirmed after publication, retain and inspect the complete output before retrying.
+
+Process termination can leave a private staging directory or an empty reserved destination before publication. These are incomplete artifacts without a success manifest. Inspect them and select a new destination for a retry; the command never removes or overwrites existing output.
+
+Audit the version-3 copy read-only:
+
+```sh
+exacly executions audit \
+  --ledger "$EXACLY_HISTORY_COPY_DIR/indexed/ledger.sqlite3" --json
+```
+
+Audit checks the exact retained row coverage and typed input baselines, relationships and installed validation profile, then freshly re-derives every retained semantic transition. A stored positive verdict never replaces those checks. Missing or altered baselines, changed retained bytes and inconsistent index associations fail without repair or resealing. An unsupported profile is reported as unsupported. Audit never fetches GitHub evidence, writes state, changes pending work or modifies the copy. Existing journal or WAL sidecars are diagnosed without implicit recovery; version-3 backup, recovery and operational writes remain future work.
+
+The audit-only format uses profile family `exacly-ledger-audit-v1` and transcript codec `typed-cells-v1`. The required integrity baseline covers the complete retained-row roster. Each terminal verdict separately binds its exact binding row, intent row and receipt row or explicit receipt absence, under the independently fingerprinted installed code, schemas, parser dependencies and runtime. Audit requires a matching installation; profile changes are explicit unsupported results. These dependency associations do not enable operational reuse or writers.
+
+History reports use their own schema version `0.1.0`, independent of ordinary maintenance reports. Dry-run reports `ready` and conversion reports `indexed`, both with exit 0. Audit exits 0 for `passed`, 1 for `corrupt`, `unsupported` or `recovery_required`, and 2 for invalid inputs or operational errors. Both commands accept `--lock-timeout SECONDS`, default 30; the finite nonnegative value bounds lock waiting rather than copying or whole-audit computation. Reports identify the checked scope and profile and declare `eligible_operational: false` and `automatic_cutover: false`.
+
+In Python, `exacly.history_maintenance.convert(ledger_path, output_directory, dry_run=False, lock_timeout=30)` and `audit(ledger_path, lock_timeout=30)` return these reports; `as_text(report)` renders them, and `SCHEMA` defines their format. Digests and recorded verdicts do not authenticate who produced historical evidence, prove that a coherent copy is globally latest or protect against a same-user rewrite of proof and index. All historical bytes remain retained; this foundation adds no archival, expiry or garbage collection.
 
 ## Preview verification reconciliation
 
