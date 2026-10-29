@@ -17,7 +17,7 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
-from exacly import admission, completion, planning, state_writer
+from exacly import admission, completion, history_maintenance, planning, state_writer
 from exacly import execution_store as store
 from test_completion_faults import FaultScenario, NoNetwork, prepare_case
 
@@ -101,5 +101,38 @@ def test_next_operation_rejects_corruption_of_an_unrelated_aborted_attempt(tmp_p
     state_bytes = case.state_path.read_bytes()
     with pytest.raises(store.StoreError):
         invoke()
+    assert case.ledger.read_bytes() == ledger_bytes
+    assert case.state_path.read_bytes() == state_bytes
+
+
+@pytest.mark.parametrize("version", [2, 4])
+def test_legacy_admission_proof_remains_readable_and_replays_offline(tmp_path: Path, version: int) -> None:
+    case = prepare_case(tmp_path)
+    live_admit = admission.admit
+
+    def original_receipt(*args: Any, **kwargs: Any) -> admission.AdmissionResult:
+        result = live_admit(*args, **kwargs)
+        assert result.receipt["status"] == "admitted"
+        result.receipt["schema_version"] = "0.1.0"
+        result.receipt["claims"].pop("branch_protection_verified")
+        result.receipt["origin"].pop("branch_protection")
+        result.receipt["digest"] = planning.digest(
+            {key: value for key, value in result.receipt.items() if key != "digest"}
+        )
+        return result
+
+    # Retain the exact original admission format, not a rewritten historical receipt.
+    with patch.object(admission, "admit", side_effect=original_receipt):
+        completed = case.complete()
+    assert completed["status"] == "completed"
+    original = copy.deepcopy(completed["receipt"])
+    if version == 4:
+        destination = tmp_path / "operational-operator"
+        history_maintenance.activate(case.ledger, destination)
+        case.ledger = destination / "operational" / "ledger.sqlite3"
+    ledger_bytes = case.ledger.read_bytes()
+    state_bytes = case.state_path.read_bytes()
+    assert case.complete(source=NoNetwork())["receipt"] == original
+    assert completion.show(case.ledger, original["id"])["receipt"] == original
     assert case.ledger.read_bytes() == ledger_bytes
     assert case.state_path.read_bytes() == state_bytes

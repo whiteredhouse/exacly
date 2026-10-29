@@ -70,6 +70,14 @@ def _require(value: Any, message: str) -> None:
         raise IsolationError(message)
 
 
+def _resolve(path: Path, *, strict: bool = False) -> Path:
+    try:
+        return path.resolve(strict=strict)
+    except RuntimeError as error:
+        # Python 3.12 reports symlink loops as RuntimeError rather than OSError.
+        raise IsolationError("cannot resolve isolation path: " + str(error)) from error
+
+
 def _hash(content: bytes) -> str:
     return "sha256:" + hashlib.sha256(content).hexdigest()
 
@@ -255,11 +263,11 @@ def _within(path: Path, parent: Path) -> bool:
 
 
 def _detached(root: Path) -> None:
-    resolved = root.resolve(strict=True)
+    resolved = _resolve(root, strict=True)
     _require(resolved == root, "runtime root must not traverse symlinks")
     broad = {"/", "/usr", "/etc", "/var", "/run", "/proc", "/sys", "/dev", "/tmp", "/home", "/root", "/opt"}
     _require(str(root) not in broad, "a detached runtime root is required")
-    for authority in (Path.home().resolve(), Path(__file__).resolve(), Path(sys.executable).resolve()):
+    for authority in (_resolve(Path.home()), _resolve(Path(__file__)), _resolve(Path(sys.executable))):
         _require(not _within(authority, root), "runtime root overlaps the operator runtime")
 
 
@@ -282,7 +290,7 @@ def _guest_python(root: Path, python: str) -> None:
 
 def _bubblewrap(runtime: Runtime) -> None:
     _require(
-        not _within(runtime.bubblewrap.resolve(strict=True), runtime.rootfs),
+        not _within(_resolve(runtime.bubblewrap, strict=True), runtime.rootfs),
         "Bubblewrap must be outside the candidate runtime",
     )
     info = runtime.bubblewrap.stat()
@@ -583,7 +591,7 @@ def run(
                 "snapshot file conflicts with a directory",
             )
         _require(isinstance(out, Path) and out.name not in ("", ".", ".."), "a new output directory is required")
-        parent = out.parent.resolve(strict=True)
+        parent = _resolve(out.parent, strict=True)
         destination = parent / out.name
         _require(not destination.exists() and not destination.is_symlink(), "output must be a new directory")
         _require(

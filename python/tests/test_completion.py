@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import datetime as dt
 import json
+import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -16,12 +17,14 @@ from exacly import (
     completion_store,
     execution_maintenance,
     executions,
+    history_maintenance,
     planning,
     query,
     state_writer,
 )
 from exacly import execution_store as store
 from exacly.refresh import Run, refresh
+from ledger_store_fixtures import initialize_legacy_ledger
 from test_admission import ATTEMPT, BASE, END, READINESS, RUN_ID, Source
 from test_applicability import WHEN, A, B
 from test_executions import OPENED, TASK, run
@@ -64,7 +67,8 @@ def prepare_scenario(
     source: Source | None = None,
     readiness: Doc | None = None,
     legacy: bool = False,
-    upgrade: bool = True,
+    upgrade: bool = False,
+    legacy_ledger: bool = False,
 ) -> CompletionScenario:
     source = source or Source()
     readiness = copy.deepcopy(READINESS if readiness is None else readiness)
@@ -91,6 +95,8 @@ def prepare_scenario(
     private = tmp_path / "original-operator"
     private.mkdir(mode=0o700)
     ledger = private / "ledger.sqlite3"
+    if legacy_ledger or upgrade:
+        initialize_legacy_ledger(ledger)
     plan = make_plan(source, readiness=readiness)
     binding = executions.register(
         ledger,
@@ -214,6 +220,52 @@ def test_completed_replay_is_historical_offline_and_never_touches_later_state(sc
     jsonschema.validate(recovered, completion.SCHEMA)
 
 
+@pytest.mark.parametrize("version", [2, 4])
+def test_explicit_protection_waiver_completes_and_replays_with_retained_proof(tmp_path: Path, version: int) -> None:
+    source = Source()
+    source.policy["branch_protection"] = "not_required"
+    source.pages[f"{BASE}/branches/main"]["protected"] = False
+    case = prepare_scenario(tmp_path, source=source)
+    if version == 4:
+        destination = tmp_path / "operational-operator"
+        history_maintenance.activate(case.ledger, destination)
+        case.ledger = destination / "operational" / "ledger.sqlite3"
+    before = case.state
+    report = case.complete()
+    assert report["status"] == "completed", report
+    assert report["admission"]["claims"]["branch_protection_verified"] is False
+    assert report["admission"]["policy"]["digest"] == planning.digest(source.policy)
+    assert case.state["serial"] == before["serial"] + 1
+    assert case.state["lineage"] == before["lineage"]
+    assert case.state["pending"] == [before["pending"][1]]
+    assert case.state["x-operator-note"] == before["x-operator-note"]
+    after = case.ledger.read_bytes(), case.state_path.read_bytes()
+    replay = case.complete(source=NoNetwork())
+    assert replay["status"] == "completed" and replay["receipt"] == report["receipt"]
+    assert (case.ledger.read_bytes(), case.state_path.read_bytes()) == after
+    assert completion.show(case.ledger, report["completion_id"])["receipt"] == report["receipt"]
+    assert execution_maintenance.inspect(case.ledger)["status"] == "clean"
+
+
+@pytest.mark.parametrize("failure", ["run_revision", "failed_tests"])
+def test_protection_waiver_does_not_bypass_other_completion_prerequisites(tmp_path: Path, failure: str) -> None:
+    source = Source()
+    source.policy["branch_protection"] = "not_required"
+    source.pages[f"{BASE}/branches/main"]["protected"] = False
+    case = prepare_scenario(tmp_path, source=source)
+    if failure == "run_revision":
+        source.run["head_sha"] = "c" * 40
+    else:
+        source.report = source.report.replace(b"</testcase>", b"<failure/></testcase>")
+        change_live_outcome(source, "failure")
+    before = case.ledger.read_bytes(), case.state_path.read_bytes()
+    report = case.complete()
+    assert report["status"] == "pending" and report["completion_id"] is None, report
+    assert report["admission"]["claims"]["branch_protection_verified"] is False
+    assert report["admission"]["status"] == ("rejected" if failure == "run_revision" else "admitted")
+    assert (case.ledger.read_bytes(), case.state_path.read_bytes()) == before
+
+
 def test_completed_binding_cannot_be_reused_for_different_evidence(scenario: CompletionScenario) -> None:
     scenario.complete()
     before = scenario.ledger.read_bytes(), scenario.state_path.read_bytes()
@@ -223,10 +275,26 @@ def test_completed_binding_cannot_be_reused_for_different_evidence(scenario: Com
 
 
 def test_completion_requires_explicit_v2_upgrade_without_initializing_or_migrating(tmp_path: Path) -> None:
-    case = prepare_scenario(tmp_path, upgrade=False)
+    case = prepare_scenario(tmp_path, legacy_ledger=True)
     before = case.ledger.read_bytes(), case.state_path.read_bytes()
     with pytest.raises(ValueError, match=r"upgrade|version|v2"):
         case.complete(source=NoNetwork())
+    assert (case.ledger.read_bytes(), case.state_path.read_bytes()) == before
+
+
+def test_fresh_registration_completes_and_replays_without_upgrading(tmp_path: Path) -> None:
+    case = prepare_scenario(tmp_path)
+    original = case.state
+    with sqlite3.connect(case.ledger) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone() == (store.COMPLETION_VERSION,)
+        assert connection.execute("SELECT count(*) FROM completion_intents").fetchone() == (0,)
+    result = case.complete()
+    assert case.state["serial"] == original["serial"] + 1
+    assert case.state["lineage"] == original["lineage"]
+    assert [entry["task"] for entry in case.state["pending"]] == [OTHER_TASK]
+    before = case.ledger.read_bytes(), case.state_path.read_bytes()
+    replay = case.complete(source=NoNetwork())
+    assert replay["receipt"] == result["receipt"]
     assert (case.ledger.read_bytes(), case.state_path.read_bytes()) == before
 
 
@@ -251,7 +319,7 @@ def test_insufficient_fresh_evidence_preserves_state_and_journal(scenario: Compl
     jsonschema.validate(report, completion.SCHEMA)
 
 
-@pytest.mark.parametrize("case", ["policy", "target", "pending", "watermark", "superseded"])
+@pytest.mark.parametrize("case", ["policy", "branch_protection", "target", "pending", "watermark", "superseded"])
 def test_stale_contracts_fail_before_live_admission(scenario: CompletionScenario, case: str) -> None:
     changes: Doc = {"source": NoNetwork()}
     state = scenario.state
@@ -259,6 +327,10 @@ def test_stale_contracts_fail_before_live_admission(scenario: CompletionScenario
         changed = copy.deepcopy(scenario.readiness)
         changed["version"] = "replacement"
         changes["readiness_policy"] = changed
+    elif case == "branch_protection":
+        changed = copy.deepcopy(scenario.source.policy)
+        changed["branch_protection"] = "not_required"
+        changes["trust_policy"] = changed
     elif case == "target":
         changes["output_target"] = selected("c" * 40)
     elif case == "pending":

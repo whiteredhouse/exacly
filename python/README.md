@@ -2,10 +2,10 @@
 
 The `exacly` command and Python package work with an Exacly model, either a 0.1 product map or 0.2 config and state documents, as the [Exacly Specification](../spec/README.md) describes it.
 
-This reference describes **0.6.0rc1**, a release candidate for product context,
-evidence-based verification and recoverable local task completion. The new
-commands run in an operator-controlled environment. That release excludes
-candidate isolation, task dispatch and executor supervision (REQ-025–027).
+This reference describes **0.6.0**, for product context, evidence-based
+verification and recoverable local task completion. Verification and completion
+run in an operator-controlled environment. That release excludes candidate
+isolation, task dispatch and executor supervision (REQ-025–027).
 The [isolation section](#isolate-a-candidate-command) describes additional
 unreleased functionality on main. Review the
 [release notes and upgrade paths](../CHANGELOG.md) for report-format changes and
@@ -13,6 +13,8 @@ explicit ledger-copy upgrades.
 
 - [`exacly validate`](#validate) checks the model and prints the section 11 validation report.
 - [`exacly refresh`](#refresh) writes state from what the model's bindings observe.
+- [`exacly evidence package`](#package-verification-evidence) prepares a producer's manifest/JUnit evidence bundle.
+- [`exacly evidence propose-policy github-actions`](#draft-a-producer-policy) drafts a producer-policy candidate for independent review.
 - [`exacly admit github-actions`](#admit-github-actions-evidence) checks a live CI run against an approved producer policy before deriving verification state.
 - [`exacly show`, `trace`, `impact` and `gaps`](#questions) answer questions about the model, and [`exacly view`](#views) renders them for people.
 - [`exacly assess`](#assess-an-implementation-target) projects observations onto an explicit implementation and scope.
@@ -27,12 +29,12 @@ explicit ledger-copy upgrades.
 - [`exacly mcp`](#mcp-server) answers show, trace, impact and gaps questions for coding agents.
 
 ```sh
-uv tool install 'exacly==0.6.0rc1'
-uvx --from 'exacly==0.6.0rc1' exacly validate spec/exacly    # one-off run
+uv tool install 'exacly==0.6.0'
+uvx --from 'exacly==0.6.0' exacly validate spec/exacly    # one-off run
 ```
 
-The exact pin selects this prerelease; `uv tool install exacly` selects the latest
-stable release instead. Python 3.12 or newer is required. Exacly is at 0.x and the
+The exact pin selects this release; `uv tool install exacly` selects the latest
+stable release. Python 3.12 or newer is required. Exacly is at 0.x and the
 specification is a Draft, so commands, output and the model may change in any
 release until 1.0. Pin the package version where a change would break you. To run
 the latest main instead, install
@@ -171,64 +173,296 @@ It writes one verification assessment per platform of each binding, with source 
 - **Details.** Each assessment carries `x-platform`, `x-release`, `x-builds`, `x-criteria` (each criterion's latest result) and, when the release has due criteria, `x-release-scope`. Its evidence is each observation's retained output with its digest. `exacly gaps` lists what the extension finds in them under "From extension observers": a release whose scope passed while the record is not verified, and observations that were not used.
 - **Validation.** When the model declares the extension, the validator checks each `manual-qa:observations` binding (`11.extension-binding`): `path`, and optionally `platforms`, nothing else. It also checks the `x-` fields on this source's assessments in state (`11.extension-assessment`), and `gaps` reports an assessment whose fields are not valid instead of reading them. The binding, assessment, target and observation schemas are `BINDING_SCHEMA`, `ASSESSMENT_SCHEMA`, `TARGET_SCHEMA` and `OBSERVATION_SCHEMA` in `exacly.manual_qa`. `observed_at` must be a timestamp with its offset, such as `2026-10-25T14:12:00Z`.
 
+## Package verification evidence
+
+`exacly evidence package` provides the installed producer command and the
+`exacly.evidence.package` Python API in `0.6.0`. The consumer checks out its
+own project and runs its tests normally, without checking out Exacly's source
+or copying Exacly's Python helper.
+
+Run this exact-version invocation in the consumer's checked-out repository,
+after a verification step writes a JUnit report:
+
+```sh
+uvx --from 'exacly==0.6.0' exacly evidence package --report reports/junit.xml --out reports/evidence
+```
+
+This pins Exacly's release; its runtime dependencies are still resolved by the
+installer. For a lock that includes distribution and dependency hashes, use the
+stronger installation option below.
+
+GitHub supplies the repository, run, attempt, SHA, job, push ref and workflow-ref
+environment variables. Set `EXACLY_TEST_OUTCOME` to the verification step's actual
+`success` or `failure` outcome. The command requires a push context and checks
+that `git rev-parse HEAD` matches the full `GITHUB_SHA`; it reads no GitHub token
+and makes no API calls.
+
+These producer steps can follow an existing test step
+with `id: verification` that writes `reports/junit.xml`. They use the exact
+package version rather than the project's editable checkout:
+
+```yaml
+- name: Package verification evidence
+  id: evidence
+  if: always() && (steps.verification.outcome == 'success' || steps.verification.outcome == 'failure')
+  env:
+    EXACLY_TEST_OUTCOME: ${{ steps.verification.outcome }}
+  run: uvx --from 'exacly==0.6.0' exacly evidence package --report reports/junit.xml --out reports/evidence
+- name: Upload verification evidence
+  if: always() && steps.evidence.outcome == 'success'
+  uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+  with:
+    name: example-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+    path: reports/evidence
+    if-no-files-found: error
+    retention-days: 30
+    include-hidden-files: false
+```
+
+The destination must be new. It receives exactly `manifest.json` (schema
+`0.1.0`) and `junit.xml`, preserving the report bytes. `--json` prints that same
+manifest instead of the text summary. Exit status is 0 when the bundle is
+prepared, 1 for invalid producer/report inputs or filesystem errors, and 2 for
+invalid command arguments.
+
+Completed failures and reports containing skipped cases are retained as
+observations. A successful step with failed cases is rejected as contradictory;
+cancelled or skipped verification steps cannot be packaged. Packaging neither
+derives verification state nor approves a policy or establishes evidence origin.
+Upload the bundle, then use [live admission](#admit-github-actions-evidence) to
+check it against GitHub and an independently approved policy. The installed API
+has the same behavior: `exacly.evidence.package(report, out, *, environ=None,
+checkout=None)`.
+
+Packaging and admission share manifest-format definitions and compatibility
+tests while independently validating their inputs. Manifest `0.1.0` is versioned
+separately from Exacly's package: compatible producer and consumer releases need
+not be identical. Permanent release checks run the built wheel and the published
+exact-version CLI outside the source checkout, exercise valid and invalid
+packaging cases, and pass a newly packaged bundle to a previously published
+consumer. Those checks guard installation and format compatibility, without
+establishing test honesty or acceptance coverage.
+
+### Install from a reviewed hash lock
+
+Generate a lock for the producer runner's Python version
+and platform. The following targets Linux x86_64 with Python 3.12; adapt both
+`--python-platform` and `--python-version` for a different runner, and use that
+Python version when creating its virtual environment. The input pins Exacly exactly;
+`uv pip compile` resolves and pins all runtime dependencies and records actual
+index distribution hashes:
+
+```sh
+printf '%s\n' 'exacly==0.6.0' > requirements-evidence.in
+uv pip compile requirements-evidence.in --python-version 3.12 --python-platform x86_64-unknown-linux-gnu --generate-hashes --output-file requirements-evidence.txt
+```
+
+Review the resolved versions and distribution hashes, then commit both files.
+Keep lock generation separate from the producer job. In CI, create a dedicated
+virtual environment and install only wheels from that reviewed lock, requiring
+hashes for every dependency:
+
+```sh
+uv venv --python 3.12 .venv-evidence
+uv pip install --python .venv-evidence/bin/python --require-hashes --only-binary :all: -r requirements-evidence.txt
+```
+
+After the existing test step, use this executable in the packaging step above,
+with the same outcome environment and condition:
+
+```sh
+.venv-evidence/bin/exacly evidence package --report reports/junit.xml --out reports/evidence
+```
+
+The reviewed hash lock constrains installed Exacly and dependency distributions.
+It does not attest the interpreter, installer, runner or bytes actually executed.
+A workflow digest approves the installation instructions, rather than proving
+that the runner followed them or that tests were honest. Pin and review the
+lock, workflow, relevant runner setup and observation inputs in the producer
+trust policy.
+
+Exacly's own [workflow](../.github/workflows/verification-evidence.yml) exercises
+the editable checkout through `uv run --locked`. Its
+[producer proposal](../ci/evidence-producer.yaml) pins the checkout's
+`python/src/exacly` subtree, covering the CLI, packager, shared format definitions
+and imports, the `ci` helper subtree and the release workflow exercised by tests,
+alongside `pyproject.toml` and `uv.lock`. A change to those inputs
+changes the observer fingerprints and needs an independently reviewed policy
+refresh. Other projects using a published packager should select their own
+observation inputs, including a distribution hash lock when used.
+
+Migrating a producer changes its workflow bytes, so regenerate and independently
+review the candidate policy before admitting evidence from the changed workflow.
+Use the installed `exacly evidence package` command or `exacly.evidence.package`
+API; the repository-only CI helper has been removed.
+
 ## Admit GitHub Actions evidence
 
 `exacly admit github-actions` reads a live GitHub Actions run and artifact through authenticated GitHub APIs, checks them against an independently approved trust policy, and derives fresh verification state from the accepted JUnit report. Admission requires conforming 0.2 config; approved model inputs cannot contain observed state. It accepts neither caller-authored state nor offline run metadata as evidence of origin.
 
-Each trust policy supplies its exact protected branch, workflow path, job ID and name, verification/package/upload step names, artifact name prefix and observer paths. The library supplies no repository layout or producer defaults. The supported producer contract remains one job in a push workflow on the approved branch.
+Each trust policy supplies its exact branch, workflow path, job ID and name, verification/package/upload step names, artifact name prefix and observer paths. Branch protection is required by default. The library supplies no repository layout or producer defaults. The supported producer contract remains one job in a push workflow on the approved branch.
 
-Exacly's own [producer proposal](../ci/evidence-producer.yaml) selects [the verification evidence workflow](../.github/workflows/verification-evidence.yml). This example runs on pushes to `main`, has one job named `Observe verification`, explicitly selects the pytest configuration with `-c pyproject.toml`, and packages `manifest.json` and `junit.xml` in an artifact named `exacly-evidence-RUN-ATTEMPT`. Other repositories supply their own contract. The packaging helper checks the checkout and supported run metadata before producing the bundle; admission independently compares that metadata with GitHub responses and the approved policy.
+Exacly's own [producer proposal](../ci/evidence-producer.yaml) selects [the verification evidence workflow](../.github/workflows/verification-evidence.yml). This example runs on pushes to `main`, has one job named `Observe verification`, explicitly selects the pytest configuration with `-c pyproject.toml`, and packages `manifest.json` and `junit.xml` in an artifact named `exacly-evidence-RUN-ATTEMPT`. Other repositories supply their own contract. The packaging command checks the checkout and supported run metadata before producing the bundle; admission independently compares that metadata with GitHub responses and the approved policy.
 
-### Approve a producer policy
+### Draft a producer policy
 
-The trust policy names the repository by numeric ID and full name, the exact approved branch, `workflow` with its path, byte digest, job ID/name and step names, `artifact.name_prefix`, `observer` with approved paths and digest, and the approved model revision, file list and config digest. The model revision and selected implementation revision must be full Git commit SHAs. The implementation may be a newer revision whose approved workflow and observer fingerprint still match.
+`exacly evidence propose-policy github-actions` exposes the existing
+`exacly.admission.propose_policy` API through the installed CLI in `0.6.0`.
+The Python API remains compatible with earlier releases.
 
-Observer paths are literal, safe repository-relative file or directory selectors, with no glob patterns. Each selector pins that file or directory subtree. An explicitly selected absent path pins its absence, so adding it later changes the fingerprint; removing or changing selected content also changes it. Reviewers must check that the selectors cover the observer's execution inputs, including applicable configuration and ancestor test hooks. Selectors identify Git content and absence; they do not discover a complete runtime dependency closure or prove test honesty.
+The trust policy names the repository by numeric ID and full name, the exact
+approved branch, `workflow` with its path, byte digest, job ID/name and step
+names, `artifact.name_prefix`, `observer` with approved paths and digest, and the
+approved model revision, file list and config digest. Model and implementation
+revisions are full Git commit SHAs. An implementation may be a newer revision
+whose approved workflow and observer fingerprint still match.
 
-Prepare a candidate policy from an already reviewed commit containing the producer workflow. Run from a checkout of that revision to read its producer proposal, set `EXACLY_APPROVED_REVISION` to its full SHA and provide a read-permission GitHub token through `GH_TOKEN`:
+Observer paths are literal, safe repository-relative file or directory
+selectors, with no glob patterns. Each selector pins that file or directory
+subtree. An explicitly selected absent path pins its absence, so adding it later
+changes the fingerprint; removing or changing selected content also changes it.
+Reviewers must check that selectors cover the observer's execution inputs,
+including applicable configuration and ancestor test hooks. Selectors identify
+Git content and absence; they do not discover a complete runtime dependency
+closure or prove test honesty.
 
-```python
-import json
-import os
-from pathlib import Path
+Prepare a local YAML or JSON producer proposal containing exactly `producer`
+and `observer_paths`, as in Exacly's
+[proposal](../ci/evidence-producer.yaml). `producer` explicitly supplies `branch`,
+`workflow` with `path`, `job_id`, `job_name` and `steps` (`verification`, `package`,
+`upload`), and `artifact.name_prefix`; `observer_paths` supplies the literal
+selectors. Repository, model files, policy name/version and output destination
+are separate required flags. The CLI supplies no layout, model-file or selector
+defaults.
 
-import yaml
+Set `EXACLY_PRODUCER_REVISION` to the full immutable SHA
+whose workflow, observer and model content you intend to review. Use a proposal
+reviewed for that revision, and provide a read-permission GitHub token in
+`GH_TOKEN`, falling back to `GITHUB_TOKEN`. There is no token command argument.
+For Exacly's current complete model, run:
 
-from exacly.admission import propose_policy
-from exacly.github_evidence import GitHubClient
-
-source = GitHubClient(os.environ["GH_TOKEN"])
-proposal = yaml.safe_load(Path("ci/evidence-producer.yaml").read_text())
-candidate = propose_policy(
-    source,
-    "whiteredhouse/exacly",
-    os.environ["EXACLY_APPROVED_REVISION"],
-    [
-        "spec/exacly/model.yaml",
-        "spec/exacly/validation.yaml",
-        "spec/exacly/observation.yaml",
-        "spec/exacly/understanding.yaml",
-        "spec/exacly/planning.yaml",
-        "spec/exacly/admission.yaml",
-        "spec/exacly/reconciliation.yaml",
-        "spec/exacly/executions.yaml",
-        "spec/exacly/execution-maintenance.yaml",
-        "spec/exacly/ledger-history.yaml",
-        "spec/exacly/automation.yaml",
-    ],
-    producer=proposal["producer"],
-    observer_paths=proposal["observer_paths"],
-)
-Path("admission-policy.candidate.json").write_text(json.dumps(candidate, indent=2) + "\n")
+```sh
+uvx --from 'exacly==0.6.0' exacly evidence propose-policy github-actions \
+  --repository whiteredhouse/exacly \
+  --revision "$EXACLY_PRODUCER_REVISION" \
+  --proposal ci/evidence-producer.yaml \
+  --model-file spec/exacly/model.yaml \
+  --model-file spec/exacly/validation.yaml \
+  --model-file spec/exacly/observation.yaml \
+  --model-file spec/exacly/understanding.yaml \
+  --model-file spec/exacly/planning.yaml \
+  --model-file spec/exacly/admission.yaml \
+  --model-file spec/exacly/evidence-packaging.yaml \
+  --model-file spec/exacly/reconciliation.yaml \
+  --model-file spec/exacly/executions.yaml \
+  --model-file spec/exacly/execution-maintenance.yaml \
+  --model-file spec/exacly/ledger-history.yaml \
+  --model-file spec/exacly/automation.yaml \
+  --name github-verification \
+  --version 1 \
+  --out admission-policy.candidate.json
 ```
 
-The file list must contain the complete approved config at that revision. Include
-new config documents when the model grows, and leave observed state out of this
-list.
+The command reads the selected workflow, observer tree and model files from
+GitHub at that exact revision and reuses `exacly.admission.propose_policy` to
+validate the producer contract and compute fingerprints. The repeated
+`--model-file` flags must identify the complete approved config at that revision.
+Include new config documents when the model grows, and leave observed state out
+of the list. Other repositories supply their own repository, proposal and model
+paths.
 
-`producer` must explicitly supply `branch`, `workflow` with `path`, `job_id`, `job_name` and `steps` (`verification`, `package`, `upload`), and `artifact.name_prefix`. `observer_paths` is also required. The helper computes the workflow, observer and model fingerprints from the selected revision.
+`--out` must name a new file outside the declared model folders. Existing output
+and aliases of inputs are refused. If a declared model file is at the repository
+root, write the candidate outside the local working directory, which is treated
+as the model folder. Candidate JSON is deterministic; `--json`
+prints the same bytes written to the file instead of the text summary. Exit
+status is 0 when the candidate is written and 2 for invalid inputs, GitHub errors
+or output errors. Omit `--branch-protection` to leave that field absent and retain
+the protection-required default, or explicitly choose `required` or
+`not_required` as described below.
 
-Review both the proposal and generated policy independently of the implementation being evaluated, then keep the approved policy in controlled storage outside model directories. A repository proposal is not an approved policy. Generating hashes from candidate content does not approve its workflow, observer paths or model. The helper prepares policy content; it grants no execution authority or approval.
+Review both the proposal and generated policy independently of the
+implementation being evaluated, then keep the approved policy in controlled
+storage outside model directories. Repository proposals and generated
+fingerprints do not approve the workflow, observer inputs or model. Drafting
+only performs the selected GitHub reads and creates a local candidate: it does
+not approve or install a policy, admit evidence, register bindings or authorize
+completion.
+
+### Choose branch-protection requirements
+
+The following policy option is available in `0.6.0`. Admission receipts use
+version `0.2.0`, including the explicit branch-protection claims below.
+
+An omitted top-level `branch_protection` field requires GitHub to report the
+selected branch currently protected. Explicit `"branch_protection": "required"`
+has the same requirement. For an independently reviewed policy that permits an
+unprotected branch, set:
+
+```json
+{
+  "branch_protection": "not_required"
+}
+```
+
+This is the field to add to the complete trust policy, not a complete policy by
+itself. Only `required` and `not_required` are accepted. The choice is useful for
+private repositories whose GitHub plan does not provide branch protection.
+`propose_policy(..., branch_protection="not_required")` can prepare the explicit
+choice for review; omitting that argument preserves the existing policy shape.
+In the drafting CLI, append `--branch-protection not_required` to make
+that choice explicit, or omit the flag to preserve the field's absence.
+Review and version the resulting policy before using it. A generated candidate
+is not approved merely because its content fingerprints are present.
+
+The opt-out leaves exact branch identity, approved commit/workflow/observer/model
+content, single-job provenance, artifact digests and all other admission checks
+in place. Admission still reads the branch from GitHub; missing access or a
+failed API request is not an implicit opt-out. Reconciliation and completion
+re-run admission under the same trust policy, so no additional command-line flag
+is needed. Changing the choice changes the policy digest and requires a matching
+registration; it cannot silently relax an existing registered contract.
+
+New receipts contain `claims.branch_protection_verified`. It becomes true only
+after a required live protection check succeeds. With `not_required`, it stays
+false even when GitHub reports the branch protected, and an admitted receipt has
+`origin.branch_protection_checked_at: null`. Under the required policy, that field
+records the actual check time. Admitted receipts also record the selected mode
+in `origin.branch_protection`. The check establishes neither historical
+protection nor the strength of the branch's rules.
+
+Retained version-`0.1.0` admission proof remains readable by completion history
+validation with its original protection-required meaning; it cannot authorize
+the new opt-out. Offline history validation checks retained receipt consistency;
+it does not contact GitHub or independently re-establish approval. The
+evidence-bundle manifest remains `0.1.0`, independently of admission receipt
+versions. Existing policies without the new field retain their original content
+and digest.
+
+Existing version-4 ledgers retain their recorded validation profile, which
+fingerprints code, schemas, installed dependency artifacts and runtime. The
+profile remains current while those inputs remain identical. Exacly's version
+metadata and README changes alone do not require activation. Recreating or
+changing the environment can change fingerprinted dependency artifacts, such as
+generated launcher paths, even when package versions match; matching version
+numbers alone do not establish profile equality.
+
+Changed validation inputs can produce a recognized `known_stale` profile. Reads
+and offline replay freshly validate retained history after checking required
+integrity baselines. Before further writes under a stale profile, run:
+
+```sh
+exacly executions activate --ledger SOURCE --out NEW_DIR
+```
+
+Review the refreshed copy and explicitly select
+`NEW_DIR/operational/ledger.sqlite3` as the canonical ledger. Activation preserves
+the source, performs no implicit cutover or completion recovery, and never
+reseals changed history. Versions 1 and 2 retain their existing validation
+behavior; version-3 audit still requires a matching profile. See the
+[activation procedure](#activate-an-operational-indexed-ledger) for supported
+sources and prepared completions. Package installation never refreshes a ledger
+implicitly.
 
 ### Admit an exact run attempt
 
@@ -257,17 +491,17 @@ exacly admit github-actions --trust-policy trusted/github-verification.json \
   --date 2026-10-28 --out reports/admission-run --json
 ```
 
-`--date` supplies the UTC evaluation date for model conformance and expiry checks. A producer job completed after that UTC date is rejected. The live branch-protection check records its actual timestamp separately from the receipt's `as_of` date.
+`--date` supplies the UTC evaluation date for model conformance and expiry checks. A producer job completed after that UTC date is rejected. When protection is required, the live branch-protection check records its actual timestamp separately from the receipt's `as_of` date.
 
 The command reads `GH_TOKEN`, falling back to `GITHUB_TOKEN`; it has no command-line token option. The token needs read access to the repository content, workflow runs, jobs and artifacts used by admission.
 
-Admission checks the repository identity, current protection of the approved branch, a push run on that exact branch for the selected implementation SHA and attempt, the configured workflow and single observation job, matching workflow and observer fingerprints, and one uniquely named artifact created during the job. The artifact name is the approved prefix followed by the run ID and attempt. Admission verifies the API's archive digest, the strict manifest and report digest, and the ZIP contents. Approved model files are fetched at their full revision through GitHub and checked against the policy's config digest before refresh derives state with that model and implementation identity.
+Admission checks the repository identity, the approved branch's protection requirement, a push run on that exact branch for the selected implementation SHA and attempt, the configured workflow and single observation job, matching workflow and observer fingerprints, and one uniquely named artifact created during the job. The artifact name is the approved prefix followed by the run ID and attempt. Admission verifies the API's archive digest, the strict manifest and report digest, and the ZIP contents. Approved model files are fetched at their full revision through GitHub and checked against the policy's config digest before refresh derives state with that model and implementation identity.
 
-GitHub's artifact metadata does not directly identify its producing job or attempt. The receipt therefore records that association as an inference from the approved single-job producer contract, exact artifact name and job timing. Current branch protection is an admission precondition; its `branch_protection_checked_at` timestamp does not prove historical protection at the evaluation date or when the run occurred.
+GitHub's artifact metadata does not directly identify its producing job or attempt. The receipt therefore records that association as an inference from the approved single-job producer contract, exact artifact name and job timing. When current branch protection is required, `branch_protection_checked_at` does not prove historical protection at the evaluation date or when the run occurred, and the check does not evaluate how restrictive the rules are.
 
 A completed failed verification step can supply evidence of failure. If its report contains positive assessments despite the step failing, admission downgrades those positives to `inconclusive`. A skipped or cancelled verification step, or a missing report, is rejected.
 
-For an admission decision, the new output directory contains `receipt.json`. An admitted result also retains `archive.zip`, `junit.xml` and freshly derived `state.json`; a rejected result saves no report or state. Output is written atomically to a new directory. Exit status is 0 for admitted, 1 for rejected, and 2 for invalid inputs or output errors.
+For an admission decision, the new output directory contains `receipt.json`. An admitted result also retains `archive.zip`, `junit.xml` and freshly derived `state.json`; a rejected result saves no report or state. Output is written atomically to a new directory with POSIX mode `0700`; every retained file is created with mode `0600`, independently of the caller's umask. Existing output paths are refused. Exit status is 0 for admitted, 1 for rejected, and 2 for invalid inputs or output errors.
 
 The receipt establishes only the checked evidence origin and target applicability. It records `test_honesty_verified: false`, `coverage_verified: false` and `self_authenticating: false`: a trusted producer can run weak or misleading checks, and a copied or edited receipt is not independently authenticated. Changes to acceptance coverage still need review. Retain admission output in protected storage or revalidate the live source before using it for a later decision. This command does not sign receipts, dispatch work or close pending tasks.
 
@@ -498,7 +732,7 @@ The versioned binding captures namespace, context and lineage; canonical Require
 
 The ledger is an explicitly selected private SQLite database using POSIX ownership, permissions and file locks, with file mode `0600`. It is not discovered from a repository and does not import JSON binding files. Directory ownership and permissions protect its storage boundary, but they do not isolate candidate code running as the same operating-system user. Run registration separately from code that is not authorized to change these bindings.
 
-Registration initializes new ledgers in schema version 1. Existing operational ledgers in versions 1, 2 and 4 retain their format; version 3 remains audit-only, and normal reads and registration never upgrade or activate a ledger. [Completion](#complete-registered-verification-work) supports version 2 through the explicit [copy-only upgrade](#upgrade-a-ledger-for-completion), or version 4 through separate [indexed activation](#activate-an-operational-indexed-ledger).
+Registration initializes new ledgers in completion-ready schema version 2. A new ledger can proceed directly to [completion](#complete-registered-verification-work) with the reviewed inputs and fresh admitted evidence; no initial upgrade or activation is required. Existing operational ledgers in versions 1, 2 and 4 retain their format; version 3 remains audit-only, and normal reads and registration never upgrade or activate an existing ledger. Existing version-1 ledgers require the explicit [copy-only upgrade](#upgrade-a-ledger-for-completion) before completion. Version 4 remains available through separate [indexed activation](#activate-an-operational-indexed-ledger).
 
 Repeating a registration for the same pending entry and contract is idempotent and returns the original record, including its first `as_of`, `registered_at` and historical state snapshot. A different contract for an already active pending key conflicts unless `--supersedes` names its exact current binding ID. Explicit supersession atomically appends a replacement and leaves the original immutable record visible as inactive. A concurrent change to the active binding makes that replacement fail rather than silently overwrite history.
 
@@ -566,7 +800,7 @@ Version-1/version-2 maintenance retains report schema `0.2.0`. Version-4 mainten
 
 ### Upgrade a ledger for completion
 
-Completion supports schema version 2 or explicitly activated version 4. Start from a clean version-1 ledger by upgrading it into a new version-2 copy:
+Completion supports schema version 2 or explicitly activated version 4. New ledgers created by `0.6.0` registration already use version 2 and skip this step. For an existing clean version-1 ledger, upgrade it into a new version-2 copy:
 
 ```sh
 exacly executions upgrade --ledger "$EXACLY_LEDGER_FILE" \
@@ -737,12 +971,27 @@ The text and JSON reports describe the same result. `completed` exits 0; `pendin
 
 Repeat the exact completed request, including its original evaluation date, run and attempt, to obtain the original durable receipt without HTTP, another task removal or a serial increment. A different request cannot reuse that completed binding or pending identity. A replayed receipt records historical completion; it does not assert that the current state file remains unchanged or that evidence is still current.
 
-Inspect a retained completion offline:
+The original `--state` destination is also part of that request. Replay requires
+the same normalized absolute destination: Exacly resolves the parent directory
+and retains the filename. Relative and absolute spellings can identify the same
+destination, but moving or copying the state file to another destination changes
+the request even when its bytes are identical. Keep the original destination
+when replaying a completion. Ledger backup, upgrade and activation preserve the
+recorded state destination; they do not rebind it to another location.
+
+Historical replay validates retained ledger proof without reading or rewriting
+the current state contents. The state file can have changed or been removed;
+the replay request must still name the original destination. To inspect a
+retained completion offline without supplying a state path, use:
 
 ```sh
 exacly completions show --ledger "$EXACLY_LEDGER_FILE" \
   --completion "$EXACLY_COMPLETION_ID" --json
 ```
+
+The report includes the retained destination in `intent.request.state_path`
+and, for a completed operation, `receipt.state.path`. Use that absolute path
+for replay if your working directory has changed.
 
 To resolve a prepared completion after interruption, use the same state destination:
 

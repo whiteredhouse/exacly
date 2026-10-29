@@ -27,15 +27,18 @@ import jsonschema
 import yaml
 
 from exacly import planning, query
+from exacly._evidence_format import MANIFEST_LIMIT as MANIFEST_LIMIT
+from exacly._evidence_format import MANIFEST_SCHEMA as MANIFEST_SCHEMA
+from exacly._evidence_format import MANIFEST_VERSION
+from exacly._evidence_format import REPORT_LIMIT as REPORT_LIMIT
 from exacly.applicability import Target
 from exacly.core import is_state
 from exacly.github_evidence import ARCHIVE_LIMIT, GitHubError, json_object, no_constant
 from exacly.refresh import Run, read_junit, refresh
 
 Doc = dict[str, Any]
-VERSION = "0.1.0"
-REPORT_LIMIT = 8 * 1024 * 1024
-MANIFEST_LIMIT = 64 * 1024
+VERSION = MANIFEST_VERSION
+RECEIPT_VERSION = "0.2.0"
 SHA = {"type": "string", "pattern": "^[0-9a-f]{40}$"}
 TEXT = {"type": "string", "pattern": r"\S"}
 JOB_KEY = {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"}
@@ -60,6 +63,7 @@ POLICY_SCHEMA: Doc = planning.fields(
             }
         ),
         "branch": TEXT,
+        "branch_protection": {"enum": ["required", "not_required"]},
         "workflow": planning.fields({**WORKFLOW_PRODUCER_SCHEMA["properties"], "digest": planning.DIGEST}),
         "artifact": ARTIFACT_SCHEMA,
         "observer": planning.fields(
@@ -75,21 +79,8 @@ POLICY_SCHEMA: Doc = planning.fields(
                 "digest": planning.DIGEST,
             }
         ),
-    }
-)
-MANIFEST_SCHEMA: Doc = planning.fields(
-    {
-        "schema_version": {"const": VERSION},
-        "repository_id": {"type": "integer", "minimum": 1},
-        "repository": {"type": "string"},
-        "run_id": {"type": "integer", "minimum": 1},
-        "run_attempt": {"type": "integer", "minimum": 1},
-        "workflow_path": TEXT,
-        "job": JOB_KEY,
-        "implementation_revision": SHA,
-        "report_digest": planning.DIGEST,
-        "check_outcome": {"enum": ["success", "failure"]},
-    }
+    },
+    optional=("branch_protection",),
 )
 
 
@@ -458,8 +449,11 @@ def propose_policy(
     observer_paths: list[str],
     name: str = "github-verification",
     version: str = "1",
+    branch_protection: str | None = None,
 ) -> Doc:
     """Prepare explicit producer/model fingerprints for independent approval; grant no trust."""
+    if branch_protection is not None and branch_protection not in ("required", "not_required"):
+        raise ValueError("branch protection must be required or not_required")
     contract = validate_producer(producer)
     selectors = validate_observer_paths(observer_paths)
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository) or not re.fullmatch(r"[0-9a-f]{40}", revision):
@@ -487,6 +481,8 @@ def propose_policy(
         "observer": {"paths": selectors, "digest": observer_digest(entries, selectors)},
         "model": {"revision": revision, "files": model_files, "digest": config_digest(documents)},
     }
+    if branch_protection is not None:
+        candidate["branch_protection"] = branch_protection
     return validate_policy(candidate)
 
 
@@ -540,19 +536,21 @@ def admit(source: Source, policy_doc: Any, target: Target, run_id: int, attempt:
     job_key, job_name = selected_workflow["job_id"], selected_workflow["job_name"]
     base = f"/repos/{repository}"
     receipt: Doc = {
-        "schema_version": VERSION,
+        "schema_version": RECEIPT_VERSION,
         "status": "rejected",
         "policy": {"name": chosen["name"], "version": chosen["version"], "digest": planning.digest(chosen)},
         "target": selection,
         "as_of": date.isoformat(),
         "claims": {
             "scope": "origin_and_target_applicability",
+            "branch_protection_verified": False,
             "test_honesty_verified": False,
             "coverage_verified": False,
             "self_authenticating": False,
         },
         "checks": [],
     }
+    protection_checked_at: str | None = None
     stage = "repository"
     try:
         info = source.get_json(base)
@@ -563,13 +561,17 @@ def admit(source: Source, policy_doc: Any, target: Target, run_id: int, attempt:
             "repository identity mismatch",
         )
         branch = source.get_json(f"{base}/branches/{quote(selected_branch, safe='')}")
-        require(
-            branch.get("name") == selected_branch and branch.get("protected") is True,
-            "selected branch is not currently protected",
-        )
-        receipt["checks"].append(
-            {"code": stage, "passed": True, "reason": "repository matched and selected branch is currently protected"}
-        )
+        require(branch.get("name") == selected_branch, "selected branch identity does not match")
+        if chosen.get("branch_protection", "required") == "required":
+            require(branch.get("protected") is True, "selected branch is not currently protected")
+            protection_checked_at = dt.datetime.now(dt.UTC).isoformat()
+            receipt["claims"]["branch_protection_verified"] = True
+            repository_reason = "repository matched and selected branch is currently protected"
+        else:
+            repository_reason = (
+                "repository and branch matched; branch protection is not required by the approved policy"
+            )
+        receipt["checks"].append({"code": stage, "passed": True, "reason": repository_reason})
         stage = "run"
         run = source.get_json(f"{base}/actions/runs/{run_id}/attempts/{attempt}")
         require(
@@ -749,7 +751,8 @@ def admit(source: Source, policy_doc: Any, target: Target, run_id: int, attempt:
             "archive_digest": sha256(archive),
             "report_digest": sha256(report),
             "association": "approved_single_job_workflow_contract",
-            "branch_protection_checked_at": dt.datetime.now(dt.UTC).isoformat(),
+            "branch_protection": chosen.get("branch_protection", "required"),
+            "branch_protection_checked_at": protection_checked_at,
         }
         receipt["state_digest"] = planning.digest(observed)
         receipt["checks"].append(
@@ -773,6 +776,9 @@ def admit(source: Source, policy_doc: Any, target: Target, run_id: int, attempt:
 
 def as_text(receipt: Doc) -> str:
     lines = [f"GitHub evidence admission: {receipt['status']}", f"Receipt: {receipt['digest']}"]
+    if "branch_protection_verified" in receipt["claims"]:
+        protection = "verified" if receipt["claims"]["branch_protection_verified"] else "not verified"
+        lines.append(f"Branch protection: {protection}")
     lines += [
         f"  {check['code']}: {'accepted' if check['passed'] else 'rejected'} — {check['reason']}"
         for check in receipt["checks"]

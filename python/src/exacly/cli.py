@@ -3,6 +3,8 @@
 exacly validate PATH... [--revision REV] [--date YYYY-MM-DD] [--json]
 exacly refresh PATH... --context CONTEXT --state FILE [--junit FILE...] [--distribution] [run options]
 exacly observe manual-qa PATH... --target FILE --state FILE [--revision REV] [--root DIR]
+exacly evidence package --report FILE --out NEWDIR [--json]
+exacly evidence propose-policy github-actions --repository OWNER/REPO --revision SHA --proposal FILE ...
 exacly admit github-actions --trust-policy FILE --target FILE --run ID --attempt N --date YYYY-MM-DD --out DIR
 exacly reconcile github-actions --dry-run --plan FILE --action ID --policy FILE --trust-policy FILE --target FILE ...
 exacly complete github-actions --plan FILE --action ID --policy FILE --trust-policy FILE --target FILE ...
@@ -40,7 +42,7 @@ from collections.abc import Callable, Iterable
 from fnmatch import fnmatchcase
 from importlib import metadata
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NoReturn
 
 import jsonschema
 import yaml
@@ -661,7 +663,10 @@ def isolation_document(path: Path, limit: int) -> Any:
         encoded = stream.read(limit + 1)
     if len(encoded) > limit:
         raise ValueError(f"{path} exceeds the permitted JSON document size")
-    return json.loads(encoded.decode("utf-8"), object_pairs_hook=unique, parse_constant=invalid_constant)
+    try:
+        return json.loads(encoded.decode("utf-8"), object_pairs_hook=unique, parse_constant=invalid_constant)
+    except RecursionError as error:
+        raise ValueError(f"{path} exceeds the permitted JSON nesting depth") from error
 
 
 def isolation_inputs(path: Path | None) -> dict[str, bytes]:
@@ -732,6 +737,52 @@ class LazyGitHubSource:
         return str(error).replace(self._token, "[redacted]") if self._token else str(error)
 
 
+def redact_tokens(message: str, tokens: Iterable[str | None]) -> str:
+    """Keep both GitHub credential variables out of even local input and output diagnostics."""
+    for token in sorted({token for token in tokens if token and token.strip()}, key=len, reverse=True):
+        message = message.replace(token, "[redacted]")
+    return message
+
+
+def protect_policy_candidate(out: Path, proposal: Path, model_files: list[str]) -> None:
+    """A candidate is a new file outside explicit remote-model parents and the local proposal input."""
+    if os.path.lexists(out):
+        raise ValueError("--out must be a new file, not an existing path or symlink")
+    try:
+        destinations = (out.resolve(), out.parent.resolve() / out.name)
+        protected = (proposal.resolve(), proposal.parent.resolve() / proposal.name)
+        if any(destination in protected for destination in destinations):
+            raise ValueError("--out cannot overwrite the proposal input or its alias")
+        folders = [Path(name).parent.resolve() for name in model_files]
+        if any(destination.is_relative_to(folder) for destination in destinations for folder in folders):
+            raise ValueError("--out must be outside the declared model folders")
+        parent = out.parent.resolve()
+        while not parent.exists():
+            parent = parent.parent
+        if not parent.is_dir():
+            raise ValueError("--out parent must be a directory")
+    except RuntimeError as error:
+        raise ValueError(f"--out or its protected input paths cannot be resolved: {error}") from error
+
+
+def write_policy_candidate(out: Path, proposal: Path, model_files: list[str], text: str) -> None:
+    """Publish a closed, private candidate file atomically without replacing any concurrent output."""
+    protect_policy_candidate(out, proposal, model_files)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", prefix=f".{out.name}-", dir=out.parent, delete=False
+        ) as file:
+            temporary = Path(file.name)
+            file.write(text)
+        protect_policy_candidate(out, proposal, model_files)
+        os.link(temporary, out)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
 def write_admission(out: Path, inputs: Iterable[Path], trust_policy: dict[str, Any], result: AdmissionResult) -> None:
     """Publish one complete admission bundle in a new directory, preserving every input.
 
@@ -759,16 +810,20 @@ def write_admission(out: Path, inputs: Iterable[Path], trust_policy: dict[str, A
     out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=f".{out.name}-", dir=out.parent) as temporary:
         folder = Path(temporary)
-        folder.joinpath("receipt.json").write_text(
-            json.dumps(result.receipt, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8"
-        )
+        folder.chmod(0o700)
+
+        def write(name: str, data: bytes) -> None:
+            path = folder / name
+            with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as file:
+                path.chmod(0o600)
+                file.write(data)
+
+        write("receipt.json", (json.dumps(result.receipt, indent=2, sort_keys=True, default=str) + "\n").encode())
         if result.receipt["status"] == "admitted":
             assert result.archive is not None and result.report is not None and result.state is not None
-            folder.joinpath("archive.zip").write_bytes(result.archive)
-            folder.joinpath("junit.xml").write_bytes(result.report)
-            folder.joinpath("state.json").write_text(
-                json.dumps(result.state, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8"
-            )
+            write("archive.zip", result.archive)
+            write("junit.xml", result.report)
+            write("state.json", (json.dumps(result.state, indent=2, sort_keys=True, default=str) + "\n").encode())
         # Recheck immediately before publication so an ordinary repeat invocation never replaces a bundle.
         if os.path.lexists(out):
             raise ValueError("--out must be a new directory, not an existing path or symlink")
@@ -892,7 +947,14 @@ def exacly_main(argv: list[str] | None = None) -> int:
         return main(argv[1:]) if argv[0] == "validate" else refresh_main(argv[1:])
     if argv and argv[0] == "observe":
         return observe_main(argv[1:])
-    parser = argparse.ArgumentParser(
+    github_tokens = (os.environ.get("GH_TOKEN"), os.environ.get("GITHUB_TOKEN"))
+
+    class PolicyDraftParser(argparse.ArgumentParser):
+        def error(self, message: str) -> NoReturn:
+            super().error(redact_tokens(message, github_tokens))
+
+    parser_class = PolicyDraftParser if argv[:2] == ["evidence", "propose-policy"] else argparse.ArgumentParser
+    parser = parser_class(
         prog="exacly",
         description="Validate an Exacly model, write its state, and ask it about its records.",
     )
@@ -940,6 +1002,37 @@ def exacly_main(argv: list[str] | None = None) -> int:
     )
     isolate.add_argument("--json", action="store_true", help="print the invocation report as JSON")
     isolate.add_argument("candidate", nargs=argparse.REMAINDER, metavar="COMMAND", help="candidate argv after --")
+    evidence_parser = commands.add_parser("evidence", help="prepare verification evidence for admission")
+    evidence_commands = evidence_parser.add_subparsers(dest="evidence_command", required=True)
+    package = evidence_commands.add_parser("package", help="prepare a verification report and its producer manifest")
+    package.add_argument("--report", required=True, type=Path, help="complete JUnit XML report from the producer")
+    package.add_argument("--out", required=True, type=Path, help="new evidence bundle directory")
+    package.add_argument("--json", action="store_true", help="print the producer manifest as JSON")
+    propose = evidence_commands.add_parser(
+        "propose-policy", help="draft a trust-policy candidate for independent review"
+    )
+    proposal_sources = propose.add_subparsers(dest="proposal_source", required=True)
+    github_proposal = proposal_sources.add_parser(
+        "github-actions", help="fingerprint an explicit GitHub Actions producer"
+    )
+    github_proposal.add_argument("--repository", required=True, help="exact OWNER/REPO to read")
+    github_proposal.add_argument("--revision", required=True, help="full immutable 40-character Git commit SHA")
+    github_proposal.add_argument(
+        "--proposal", required=True, type=Path, help="YAML/JSON producer and observer_paths proposal"
+    )
+    github_proposal.add_argument(
+        "--model-file",
+        required=True,
+        action="append",
+        help="literal repository-relative model YAML/JSON file; repeatable",
+    )
+    github_proposal.add_argument("--name", required=True, help="explicit candidate policy name")
+    github_proposal.add_argument("--version", required=True, help="explicit candidate policy version")
+    github_proposal.add_argument(
+        "--out", required=True, type=Path, help="new candidate JSON file outside model folders"
+    )
+    github_proposal.add_argument("--branch-protection", choices=("required", "not_required"))
+    github_proposal.add_argument("--json", action="store_true", help="print the exact saved candidate policy JSON")
     execution_parser = commands.add_parser(
         "executions", help="register and inspect explicit task/action/output bindings"
     )
@@ -1139,7 +1232,7 @@ def exacly_main(argv: list[str] | None = None) -> int:
             identity_report = {
                 "schema_version": "0.1.0",
                 "operation": "inspect-rootfs",
-                "rootfs": str(args.rootfs.resolve()),
+                "rootfs": str(args.rootfs),
                 "digest": digest,
                 "scope": "content_identity",
             }
@@ -1181,6 +1274,67 @@ def exacly_main(argv: list[str] | None = None) -> int:
             return 2
         print(rendered)
         return 0 if report["status"] == "completed" else 1
+    if args.command == "evidence" and args.evidence_command == "propose-policy":
+        from exacly import admission, github_evidence
+
+        try:
+            proposal = read(args.proposal)
+            if not isinstance(proposal, dict) or set(proposal) != {"producer", "observer_paths"}:
+                raise ValueError("--proposal must contain exactly producer and observer_paths")
+            if not args.name.strip() or not args.version.strip():
+                raise ValueError("--name and --version must be nonblank")
+            if not all(
+                admission.safe_path(path) and not any(char in path for char in "*?[]") for path in args.model_file
+            ):
+                raise ValueError("--model-file must name a safe literal repository-relative config file")
+            github_evidence.api_path(f"/repos/{args.repository}")
+            protect_policy_candidate(args.out, args.proposal, args.model_file)
+            candidate = admission.propose_policy(
+                LazyGitHubSource(),
+                args.repository,
+                args.revision,
+                args.model_file,
+                producer=proposal["producer"],
+                observer_paths=proposal["observer_paths"],
+                name=args.name,
+                version=args.version,
+                branch_protection=args.branch_protection,
+            )
+            saved = json.dumps(candidate, indent=2, sort_keys=True) + "\n"
+            write_policy_candidate(args.out, args.proposal, args.model_file, saved)
+        except (
+            query.QueryError,
+            ValueError,
+            TypeError,
+            OSError,
+            GitHubCredentialsError,
+            admission.Rejected,
+            github_evidence.GitHubError,
+            yaml.YAMLError,
+        ) as error:
+            print(f"exacly evidence propose-policy: {redact_tokens(str(error), github_tokens)}", file=sys.stderr)
+            return 2
+        print(
+            saved
+            if args.json
+            else f"Saved candidate policy to {args.out}; it requires independent review before approval.",
+            end="" if args.json else "\n",
+        )
+        return 0
+    if args.command == "evidence" and args.evidence_command == "package":
+        from exacly import evidence
+
+        try:
+            manifest = evidence.package(args.report, args.out)
+        except (evidence.EvidenceError, OSError) as error:
+            print(f"exacly evidence package: {error}", file=sys.stderr)
+            return 1
+        print(
+            json.dumps(manifest, indent=2, sort_keys=True)
+            if args.json
+            else f"Prepared verification evidence in {args.out}"
+        )
+        return 0
     if args.command == "executions":
         if args.execution_command in {"index", "activate", "audit"}:
             from exacly import history_maintenance

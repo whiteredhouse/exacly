@@ -158,7 +158,7 @@ def build(
     if tasks < 1 or depth < 1:
         raise ValueError("tasks and supersession depth must be positive")
     producer = source(cases, requirements)
-    scenario = prepare_scenario(root, source=producer, upgrade=not bindings_only)
+    scenario = prepare_scenario(root, source=producer, legacy_ledger=bindings_only)
     initial = scenario.state
     initial["lineage"] = uuid.uuid5(uuid.NAMESPACE_URL, "exacly:controlled-ledger-history").hex
     initial["pending"] = [pending(index) for index in range(tasks)] if backlog or bindings_only else [pending(0)]

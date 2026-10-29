@@ -28,6 +28,7 @@ Doc = dict[str, Any]
 APPLICATION_ID = 0x4558434C  # EXCL
 USER_VERSION = 1
 COMPLETION_VERSION = 2
+INITIAL_VERSION = COMPLETION_VERSION
 INDEX_VERSION = 4
 MAX_USER_VERSION = INDEX_VERSION
 DEFAULT_LOCK_TIMEOUT = 30.0
@@ -473,6 +474,9 @@ def configure(connection: sqlite3.Connection, *, deadline: Deadline | None = Non
     if deadline is not None:
         busy_timeout(connection, deadline)
     version = connection.execute("PRAGMA user_version").fetchone()[0]
+    # Configure an empty database for its intended format before beginning initialization.
+    if version == 0:
+        version = INITIAL_VERSION
     synchronous = "EXTRA" if version in (COMPLETION_VERSION, INDEX_VERSION) else "FULL"
     for statement in ("PRAGMA journal_mode=DELETE", f"PRAGMA synchronous={synchronous}", "PRAGMA foreign_keys=ON"):
         if deadline is not None:
@@ -491,12 +495,14 @@ def put(path: Path, value: Doc, *, lock_timeout: float = DEFAULT_LOCK_TIMEOUT) -
         ):
             indexed = None
             if created:
+                from exacly import completion_store
+
                 configure(connection, deadline=deadline)
                 busy_timeout(connection, deadline)
                 connection.execute("BEGIN IMMEDIATE")
                 connection.execute(f"PRAGMA application_id={APPLICATION_ID}")
-                connection.execute(f"PRAGMA user_version={USER_VERSION}")
-                for statement in SCHEMA.values():
+                connection.execute(f"PRAGMA user_version={INITIAL_VERSION}")
+                for statement in {**SCHEMA, **completion_store.SCHEMA}.values():
                     connection.execute(statement)
                 records: dict[str, Doc] = {}
                 active: dict[str, str] = {}

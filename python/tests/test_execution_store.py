@@ -20,6 +20,7 @@ from typing import Any
 
 import pytest
 from exacly import execution_store as store
+from ledger_store_fixtures import initialize_legacy_ledger
 
 Doc = dict[str, Any]
 
@@ -86,10 +87,77 @@ def test_creation_and_reads_are_private_canonical_and_have_no_sidecars(path: Pat
     assert files(path.parent) == before
     with sqlite3.connect(path) as connection:
         assert connection.execute("PRAGMA application_id").fetchone() == (store.APPLICATION_ID,)
-        assert connection.execute("PRAGMA user_version").fetchone() == (1,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (store.COMPLETION_VERSION,)
         assert connection.execute("PRAGMA journal_mode").fetchone() == ("delete",)
+        assert connection.execute("SELECT count(*) FROM completion_intents").fetchone() == (0,)
+        assert connection.execute("SELECT count(*) FROM completion_receipts").fetchone() == (0,)
         text = connection.execute("SELECT record_json FROM bindings").fetchone()[0]
     assert text == json.dumps(original, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+
+
+def test_fresh_schema_and_registration_commit_together_with_extra_synchronization(
+    path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original_connect = sqlite3.connect
+    commits: list[tuple[int, int, int, int]] = []
+
+    class ObservedCommit(sqlite3.Connection):
+        def commit(self) -> None:
+            commits.append(
+                (
+                    self.execute("PRAGMA user_version").fetchone()[0],
+                    self.execute("PRAGMA synchronous").fetchone()[0],
+                    self.execute("SELECT count(*) FROM bindings").fetchone()[0],
+                    self.execute("SELECT count(*) FROM completion_intents").fetchone()[0],
+                )
+            )
+            super().commit()
+
+    def connect(*args: Any, **kwargs: Any) -> sqlite3.Connection:
+        return original_connect(*args, **kwargs, factory=ObservedCommit)
+
+    monkeypatch.setattr(sqlite3, "connect", connect)
+    store.put(path, binding())
+    assert commits == [(store.COMPLETION_VERSION, 3, 1, 0)]
+
+
+@pytest.mark.parametrize("statement", ["CREATE TABLE completion_intents", "CREATE TABLE completion_receipts"])
+def test_incomplete_completion_schema_is_never_published(
+    path: Path, monkeypatch: pytest.MonkeyPatch, statement: str
+) -> None:
+    original_connect = sqlite3.connect
+
+    class FailedInitialization(sqlite3.Connection):
+        def execute(self, sql: str, parameters: Any = (), /) -> sqlite3.Cursor:
+            if sql.startswith(statement):
+                assert self.in_transaction
+                raise sqlite3.OperationalError("injected completion schema failure")
+            return super().execute(sql, parameters)
+
+    def connect(*args: Any, **kwargs: Any) -> sqlite3.Connection:
+        return original_connect(*args, **kwargs, factory=FailedInitialization)
+
+    monkeypatch.setattr(sqlite3, "connect", connect)
+    with pytest.raises(store.StoreError, match="registration failed"):
+        store.put(path, binding())
+    assert files(path.parent) == {}
+
+
+@pytest.mark.parametrize("version", [store.USER_VERSION, store.COMPLETION_VERSION])
+def test_registration_preserves_existing_legacy_and_completion_formats(path: Path, version: int) -> None:
+    if version == store.USER_VERSION:
+        initialize_legacy_ledger(path)
+    first = binding()
+    store.put(path, first)
+    before = path.read_bytes()
+    assert store.get(path, first["id"])["binding"] == first
+    assert path.read_bytes() == before
+    next_binding = binding("second", serial=2, state="state2", supersedes=first["id"])
+    store.put(path, next_binding)
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone() == (version,)
+        assert connection.execute("SELECT count(*) FROM bindings").fetchone() == (2,)
+    assert store.get(path, next_binding["id"])["active"] is True
 
 
 def test_idempotency_returns_original_and_advances_only_the_watermark(path: Path) -> None:
@@ -235,6 +303,9 @@ def test_simultaneous_fresh_idempotent_registrations_return_the_first_record(pat
     assert result[0] in [first, second]
     assert store.get(path, first["id"])["binding"] == result[0]
     assert set(files(path.parent)) == {path.name}
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone() == (store.COMPLETION_VERSION,)
+        assert connection.execute("SELECT count(*) FROM completion_intents").fetchone() == (0,)
 
 
 @pytest.mark.parametrize("supersession", [False, True])
@@ -301,7 +372,7 @@ def test_reads_and_writes_reject_unknown_or_corrupt_stores_without_touching_file
     else:
         store.put(path, binding())
         changes = {
-            "newer": "PRAGMA user_version=2",
+            "newer": f"PRAGMA user_version={store.MAX_USER_VERSION + 1}",
             "wrong_app": "PRAGMA application_id=123",
             "extra_table": "CREATE TABLE extra (id TEXT)",
             "trigger": "CREATE TRIGGER surprise BEFORE INSERT ON bindings BEGIN SELECT RAISE(ABORT, 'unexpected'); END",

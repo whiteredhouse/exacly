@@ -16,7 +16,8 @@ Exacly models itself, following the layout in section 13 of the specification. C
 - [`observation.yaml`](observation.yaml) covers state observation, publication and the measurement definition it supports.
 - [`understanding.yaml`](understanding.yaml) covers answering questions about a model: the `exacly` command's show, trace, impact and gaps.
 - [`planning.yaml`](planning.yaml) covers target-specific verification plans.
-- [`admission.yaml`](admission.yaml) covers live GitHub evidence admission under an approved producer policy.
+- [`admission.yaml`](admission.yaml) covers drafting producer-policy candidates and live GitHub evidence admission under an independently approved policy.
+- [`evidence-packaging.yaml`](evidence-packaging.yaml) covers the installed evidence producer and its shared manifest-format contract.
 - [`reconciliation.yaml`](reconciliation.yaml) covers read-only completion previews.
 - [`executions.yaml`](executions.yaml) covers operator registrations and the private execution ledger.
 - [`execution-maintenance.yaml`](execution-maintenance.yaml) covers bounded access, diagnosis, backup and copy-only ledger recovery and upgrade.
@@ -26,6 +27,27 @@ Exacly models itself, following the layout in section 13 of the specification. C
 ## Automation roadmap
 
 The YAML records define requirements, implementers, dependencies and lifecycle. Their observation bindings connect them to verification evidence in state. Consult the records for current definitions and lifecycle, and observed state for what has been verified or released.
+
+REQ-030 and APP-017 are active for the implemented `exacly evidence package`
+command and `exacly.evidence` API, included in `0.6.0`. Active lifecycle
+describes the current contract; observed verification and release state remain
+separate. The package and admission share manifest `0.1.0` definitions, without
+making packaging an admission or completion decision. See the [producer and installation
+guidance](../../python/README.md#package-verification-evidence).
+
+REQ-019 and APP-008 also cover the installed `exacly evidence propose-policy
+github-actions` command for drafting a candidate from explicit producer and
+model inputs. This command is included in `0.6.0` and reuses the existing
+`exacly.admission.propose_policy` API. Drafting grants no approval or execution
+authority. See the [candidate-policy guidance](../../python/README.md#draft-a-producer-policy)
+for the independent review and controlled storage steps.
+
+The `0.6.0` contract for REQ-021 creates new registration ledgers in
+completion-ready schema version 2. Existing ledgers keep their format,
+version-1 upgrade remains explicit, and version-4 activation remains a separate
+choice. REQ-019 also requires admission bundles to use POSIX `0700` directories
+and `0600` files, independently of the caller's umask. These are current
+contracts; verification and release claims still come from observed state.
 
 - Browse the [published model and observations](https://whiteredhouse.github.io/exacly/project/) for the checked baseline on main. Branch proposals appear there after merge and successful CI publication.
 - Read [`automation.yaml`](automation.yaml) for the automation contracts and process steps, the [local Bubblewrap backend contract](../../docs/candidate-isolation.md#linux-bubblewrap-v1-backend-contract) for the current isolation implementation, and the dated [plan/apply research](../../docs/automated-plan-apply-research.md) for the original design.

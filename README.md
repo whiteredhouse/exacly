@@ -77,7 +77,7 @@ Exacly borrows the plan and apply loop from infrastructure as code, and the spec
 | **Register work** | Bind an existing pending task to a reviewed verification plan and output target in an operator-controlled ledger. | [`exacly executions register`](python/README.md#register-execution-bindings), with explicit [ledger diagnosis, backup and recovery](python/README.md#maintain-an-execution-ledger); task dispatch remains planned |
 | **Apply** | Dispatch an authorized plan action as traceable work for a person, agent or workflow. | [Proposed automation](spec/exacly/README.md#automation-roadmap) |
 | **Reconcile** | Check whether a selected plan action's verification goal is satisfied by fresh admitted evidence, optionally checking its registered pending-task binding. | [`exacly reconcile github-actions --dry-run`](python/README.md#preview-verification-reconciliation), read-only preview |
-| **Complete** | Complete one registered local verification task from fresh admitted evidence and merged current state, retaining a recoverable intent and completion receipt. | [`exacly complete github-actions`](python/README.md#complete-registered-verification-work), with explicit local authorization and [copy-only ledger upgrade](python/README.md#upgrade-a-ledger-for-completion) |
+| **Complete** | Complete one registered local verification task from fresh admitted evidence and merged current state, retaining a recoverable intent and completion receipt. | [`exacly complete github-actions`](python/README.md#complete-registered-verification-work), with explicit local authorization; new ledgers are completion-ready, and existing version-1 ledgers need a [copy-only upgrade](python/README.md#upgrade-a-ledger-for-completion) |
 
 See [Exacly's model](spec/exacly/README.md) for record lifecycles, traceability and observed verification and delivery.
 
@@ -113,17 +113,18 @@ uv tool install exacly
 exacly validate spec/examples/0.2/invoice-reminders
 ```
 
-The `0.6.0rc1` release candidate includes the verification planning, evidence
-admission and local completion commands described here. Select it explicitly
-for a one-off run:
+Version `0.6.0` adds verification planning, installed evidence packaging and
+producer-policy drafting, live evidence admission and recoverable local
+completion. New ledgers are completion-ready, and admission files are private.
+Select the version explicitly for a one-off run:
 
 ```sh
-uvx --from 'exacly==0.6.0rc1' exacly validate spec/examples/0.2/invoice-reminders
+uvx --from 'exacly==0.6.0' exacly validate spec/examples/0.2/invoice-reminders
 ```
 
 An unpinned install selects the latest stable release. See the
-[candidate release notes and upgrade paths](CHANGELOG.md) before using existing
-ledger files or consuming JSON reports with the candidate.
+[release notes and upgrade paths](CHANGELOG.md) before using existing ledger
+files or consuming JSON reports with this version.
 
 In your own project, keep config in `spec/exacly/` and pass the commit it was validated at with `--revision "$(git rev-parse HEAD)"`.
 
@@ -181,4 +182,4 @@ Each part of Exacly has its own version, tagged as `<part>-vX.Y.Z`, as release-p
 | 0.3.0: assessment sources, combined results, lists of bindings, the manual-qa extension | 0.1, 0.2 |
 | 0.4.0: independent verification, explicit assessment targets and readiness policies | 0.1, 0.2 |
 | 0.5.0: incomplete execution of case-bound tests gives inconclusive verification | 0.1, 0.2 |
-| 0.6.0rc1 (preview): verification plans, live evidence admission, registered work, recoverable local completion and ledger maintenance | 0.1, 0.2 |
+| 0.6.0: operator-controlled verification work, installed producer tools and recoverable local completion | 0.1, 0.2 |

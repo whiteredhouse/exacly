@@ -121,6 +121,7 @@ _INDEX_FIELDS: dict[str, tuple[tuple[str, str, int, bool], ...]] = {
     ),
 }
 _REQUIRED_MODULES = (
+    "_evidence_format",
     "admission",
     "applicability",
     "completion",

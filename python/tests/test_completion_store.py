@@ -310,6 +310,68 @@ def test_admitted_state_must_match_its_retained_receipt_digest(prepared: tuple[F
     assert case.ledger.read_bytes() == before
 
 
+@pytest.mark.parametrize(
+    "change",
+    [
+        "unknown_version",
+        "missing_claim",
+        "false_required_claim",
+        "numeric_claim",
+        "unknown_mode",
+        "missing_mode",
+        "waived_mode_verified",
+        "waived_mode_timestamped",
+        "missing_timestamp",
+        "null_required_timestamp",
+        "invalid_timestamp",
+        "legacy_opt_out",
+    ],
+)
+def test_inconsistent_retained_protection_metadata_is_rejected_after_rehash(
+    prepared: tuple[FaultScenario, Doc], change: str
+) -> None:
+    case, retained = prepared
+    proposed = proof(retained)
+    admitted = proposed["admission_receipt"]
+    origin, claims = admitted["origin"], admitted["claims"]
+    if change == "unknown_version":
+        admitted["schema_version"] = "999.0.0"
+    elif change == "missing_claim":
+        claims.pop("branch_protection_verified")
+    elif change == "false_required_claim":
+        claims["branch_protection_verified"] = False
+    elif change == "numeric_claim":
+        claims["branch_protection_verified"] = 1
+    elif change == "unknown_mode":
+        origin["branch_protection"] = "ignore_errors"
+    elif change == "missing_mode":
+        origin.pop("branch_protection")
+    elif change == "waived_mode_verified":
+        origin.update(branch_protection="not_required", branch_protection_checked_at=None)
+    elif change == "waived_mode_timestamped":
+        origin["branch_protection"] = "not_required"
+        claims["branch_protection_verified"] = False
+    elif change == "missing_timestamp":
+        origin.pop("branch_protection_checked_at")
+    elif change == "null_required_timestamp":
+        origin["branch_protection_checked_at"] = None
+    elif change == "invalid_timestamp":
+        origin["branch_protection_checked_at"] = "2026-10-29"
+    else:
+        admitted["schema_version"] = "0.1.0"
+        claims.pop("branch_protection_verified")
+        origin["branch_protection"] = "not_required"
+    admitted["digest"] = planning.digest({key: value for key, value in admitted.items() if key != "digest"})
+    state_bytes = case.state_path.read_bytes()
+    with database(case) as connection:
+        completion_store.abort(connection, retained["intent"]["id"])
+        ledger_bytes = case.ledger.read_bytes()
+        with pytest.raises(store.StoreError):
+            completion_store.prepare(connection, intent(retained), **proposed)
+    assert case.ledger.read_bytes() == ledger_bytes
+    assert case.state_path.read_bytes() == state_bytes
+
+
 def test_failed_finalize_transaction_leaves_the_original_prepared_intent(
     prepared: tuple[FaultScenario, Doc], monkeypatch: pytest.MonkeyPatch
 ) -> None:

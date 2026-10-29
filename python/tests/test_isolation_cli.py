@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -179,6 +180,51 @@ def test_json_document_reads_are_bounded_before_decode_or_launch(
     assert "document size" in captured.err and not captured.out and not backend["run"] and not output.exists()
 
 
+@pytest.mark.parametrize("target", ["policy", "inputs"])
+def test_deep_json_has_a_clean_cli_error_without_candidate_execution(tmp_path: Path, target: str) -> None:
+    policy = tmp_path / "runtime-policy.json"
+    snapshots = tmp_path / "inputs.json"
+    output = tmp_path / "output"
+    marker = tmp_path / "candidate-ran"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema_version": "0.1.0",
+                "backend": "linux-bubblewrap-v1",
+                "rootfs": str(tmp_path / "runtime"),
+                "rootfs_digest": DIGEST,
+                "python": "/usr/bin/python3",
+                "bubblewrap": "/usr/bin/bwrap",
+            }
+        )
+    )
+    snapshots.write_text('{"schema_version":"0.1.0","files":{}}')
+    selected = policy if target == "policy" else snapshots
+    nested = b"[" * 20_000 + b"0" + b"]" * 20_000
+    selected.write_bytes(nested)
+    command = [
+        sys.executable,
+        "-m",
+        "exacly",
+        "isolate",
+        "--runtime-policy",
+        str(policy),
+        "--inputs",
+        str(snapshots),
+        "--out",
+        str(output),
+        "--",
+        "/usr/bin/python3",
+        "-c",
+        f"from pathlib import Path; Path({str(marker)!r}).write_text('ran')",
+    ]
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    assert result.returncode == 2
+    assert "JSON nesting depth" in result.stderr and "Traceback" not in result.stderr and not result.stdout
+    assert not output.exists() and not marker.exists() and selected.read_bytes() == nested
+    assert list(tmp_path.glob(".exacly-isolation-*")) == []
+
+
 def test_policy_duplicate_keys_are_rejected_before_backend_parsing(
     tmp_path: Path, backend: Doc, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -271,6 +317,50 @@ def test_rootfs_inspection_error_is_clean(
     assert exacly_main(["isolation", "inspect", "--rootfs", str(tmp_path / "missing")]) == 2
     captured = capsys.readouterr()
     assert "exacly isolation: root filesystem unavailable" in captured.err and not captured.out
+
+
+@pytest.mark.parametrize("looped", ["inspection", "rootfs", "bubblewrap", "output-parent"])
+def test_symlink_loops_fail_cleanly_before_candidate_execution(tmp_path: Path, looped: str) -> None:
+    root = tmp_path / "runtime"
+    root.mkdir()
+    digest = isolation.rootfs_digest(root)
+    loop = tmp_path / "loop"
+    loop.symlink_to(loop.name)
+    output = tmp_path / "output"
+    marker = tmp_path / "candidate-ran"
+    policy = tmp_path / "runtime-policy.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema_version": "0.1.0",
+                "backend": "linux-bubblewrap-v1",
+                "rootfs": str(loop if looped == "rootfs" else root),
+                "rootfs_digest": digest,
+                "python": "/usr/bin/python3",
+                "bubblewrap": str(loop) if looped == "bubblewrap" else "/usr/bin/bwrap",
+            }
+        )
+    )
+    if looped == "inspection":
+        command = ["isolation", "inspect", "--rootfs", str(loop), "--json"]
+    else:
+        command = [
+            "isolate",
+            "--runtime-policy",
+            str(policy),
+            "--out",
+            str(loop / "output" if looped == "output-parent" else output),
+            "--json",
+            "--",
+            "/usr/bin/python3",
+            "-c",
+            f"from pathlib import Path; Path({str(marker)!r}).write_text('ran')",
+        ]
+    result = subprocess.run([sys.executable, "-m", "exacly", *command], capture_output=True, text=True, check=False)
+    assert result.returncode == 2
+    assert "exacly isola" in result.stderr and "Traceback" not in result.stderr and not result.stdout
+    assert not output.exists() and not marker.exists()
+    assert list(tmp_path.glob(".exacly-isolation-*")) == []
 
 
 @pytest.mark.parametrize("command", [["--help"], ["isolate", "--help"], ["isolation", "inspect", "--help"]])

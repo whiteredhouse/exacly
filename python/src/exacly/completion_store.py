@@ -151,6 +151,46 @@ def _request(value: Any, binding: Doc) -> Doc:
     return normalized
 
 
+def _admission_protection(receipt: Doc) -> None:
+    """Check the versioned retained claim, without pretending to recheck GitHub offline.
+
+    Historical receipts precede the explicit policy choice and attest the original required
+    protection contract. New receipts retain the selected mode alongside its checked claim.
+    The protected receipt's policy digest remains bound to registration; the full policy and
+    current branch protection are checked by live admission rather than reconstructed here.
+    """
+    claims = receipt.get("claims")
+    origin = receipt.get("origin")
+    store.require(isinstance(claims, dict) and isinstance(origin, dict), "invalid retained admission claims")
+    origin = cast(Doc, origin)
+    expected: Doc = {
+        "scope": "origin_and_target_applicability",
+        "test_honesty_verified": False,
+        "coverage_verified": False,
+        "self_authenticating": False,
+    }
+    version = receipt.get("schema_version")
+    if version == "0.1.0":
+        store.require("branch_protection" not in origin, "legacy admission cannot opt out of branch protection")
+    else:
+        store.require(version == "0.2.0", "unsupported retained admission receipt version")
+        mode = origin.get("branch_protection")
+        store.require(mode in ("required", "not_required"), "invalid retained branch-protection mode")
+        expected["branch_protection_verified"] = mode == "required"
+    # JSON comparison preserves boolean types: a forged 0/1 is not the claimed false/true.
+    store.require(
+        store.canonical(claims) == store.canonical(expected), "retained admission protection claim is inconsistent"
+    )
+    store.require("branch_protection_checked_at" in origin, "retained branch-protection timestamp is missing")
+    if version == "0.2.0" and origin["branch_protection"] == "not_required":
+        store.require(
+            origin["branch_protection_checked_at"] is None,
+            "opt-out admission cannot claim a branch-protection check",
+        )
+    else:
+        admission.timestamp(origin["branch_protection_checked_at"])
+
+
 def _checked_payload(envelope: Doc, binding: Doc) -> tuple[Doc, Doc, Doc]:
     """Validate retained hashes, evidence, approved goal and the exact pending transition."""
     import datetime as dt
@@ -196,6 +236,7 @@ def _checked_payload(envelope: Doc, binding: Doc) -> tuple[Doc, Doc, Doc]:
     )
     admitted = envelope["admission_receipt"]
     _digest_document(admitted)
+    _admission_protection(admitted)
     origin = admitted.get("origin", {})
     store.require(
         admitted.get("status") == "admitted"
