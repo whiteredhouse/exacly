@@ -8,6 +8,21 @@ The supported boundary protects operator files, environment, processes and contr
 
 Use Linux with kernel PID file descriptors and `Seccomp_filters` reporting in `/proc/self/status`, Python exposing `os.memfd_create`, `os.pidfd_open` and `signal.pidfd_send_signal`, Bubblewrap 0.8 or later, the system `libseccomp2` library and permission to create user, mount, PID, network, IPC and UTS namespaces. These kernel interfaces are available together in upstream Linux 5.9 or later; the launcher checks the actual required features. The required `--disable-userns`, `--assert-userns-disabled`, `--info-fd` and `--seccomp` features must be available. If the host forbids a required namespace or other protection, the launcher fails before starting the candidate. It never retries on the host.
 
+On Ubuntu 24.04, AppArmor can deny unprivileged user namespace construction even when Bubblewrap has every required feature. With `kernel.apparmor_restrict_unprivileged_userns=1`, the selected executable needs a suitable host AppArmor profile. This is an operator-managed host prerequisite; Exacly never installs a profile, changes a sysctl or relaxes a failed launch automatically.
+
+The repository supplies a reviewed [Bubblewrap profile template](../ci/apparmor/exacly-bwrap) attached to `/usr/bin/bwrap`. It follows Ubuntu's `flags=(unconfined)` plus `userns` pattern to permit namespace construction by that trusted tool. It grants no additional host capabilities. Candidate confinement still comes from the launcher's required namespaces, read-only mounts, dropped capabilities, `NoNewPrivs`, disabled nested user namespaces and fixed syscall filter, all checked for each launch.
+
+For the disposable Ubuntu 24.04 CI host, the explicit administrator [setup script](../ci/setup_isolation_runtime.sh) installs AppArmor, Bubblewrap and libseccomp2, then loads this exact template with `apparmor_parser --replace`. It requires AppArmor enforcement to be enabled and the existing user namespace restriction to be `1`, and verifies that both remain unchanged. It stops when it finds a known vendor Bubblewrap profile so the administrator can review that existing attachment rather than load a conflicting one. On an administered host with an existing profile, review and adapt that policy through the host's normal administration process.
+
+From a reviewed repository checkout on the matching CI host, run the explicit setup and then the [runtime preflight](../ci/check_isolation_runtime.py):
+
+```sh
+sh ci/setup_isolation_runtime.sh
+/usr/bin/python3 ci/check_isolation_runtime.py
+```
+
+The setup uses administrator privileges; the diagnostic preflight runs trusted system probes and reports kernel, AppArmor and namespace details. It fails before the full test suite when strict Bubblewrap construction is unavailable. Passing this host preflight does not replace the candidate launch's own verification gate or the real denial tests.
+
 Prepare a detached root filesystem using reviewed operating-system packages or a reviewed image build. Supply the guest Python interpreter and the standard library and shared libraries it needs, including `ctypes` and libc for the trusted denial probes. The libseccomp library is used on the host to compile the filter and is not required inside the guest runtime. The selected interpreter path must name a regular executable file inside the root filesystem, with plain directory ancestors; select the actual versioned binary or create the regular interpreter file while building the runtime instead of selecting a symbolic link. The trusted bootstrap runs that interpreter with `-I -S`, so the runtime must work without user site packages or inherited Python configuration. Keep this runtime separate from operator storage; it must contain only files approved for candidate access.
 
 The launcher accepts regular files, directories and symbolic links within the reviewed runtime tree; it rejects hard links, privileged setuid/setgid files and unsupported nodes such as devices, sockets and FIFOs. It copies runtime content into private staging and verifies the copy's digest against the reviewed policy. The command does not mount host `/usr`, `/lib`, home directories, workspaces or runtime-management sockets. A root filesystem digest identifies reviewed content; computing a digest does not approve that content or authenticate its supplier.
@@ -111,7 +126,9 @@ report = run(
 
 ## Verify the supported platform
 
-The repository's real integration suites are [`test_execution_isolation.py`](../python/tests/test_execution_isolation.py) and [`test_isolation_syscalls.py`](../python/tests/test_isolation_syscalls.py). CI installs Bubblewrap and libseccomp2 on Ubuntu 24.04 before running the ordinary test and model checks. These cases fail when the required runtime is unavailable; skipped or mocked namespace checks cannot establish successful verification of REQ-025.
+The repository's real integration suites are [`test_execution_isolation.py`](../python/tests/test_execution_isolation.py) and [`test_isolation_syscalls.py`](../python/tests/test_isolation_syscalls.py). CI applies the reviewed Ubuntu 24.04 [host setup](../ci/setup_isolation_runtime.sh) and requires the [runtime preflight](../ci/check_isolation_runtime.py) to pass before running the ordinary test and model checks. These cases fail when the required runtime is unavailable; skipped or mocked namespace checks cannot establish successful verification of REQ-025.
+
+The repository's [evidence producer proposal](../ci/evidence-producer.yaml) includes the host setup script, AppArmor template and preflight helper in its observer fingerprint scope. Review those bytes at the approved revision when generating a producer trust policy; changing them changes that fingerprint. Select the workflow and observer paths explicitly in your own reviewed producer proposal.
 
 The tests use [`isolation_fixtures.py`](../python/tests/isolation_fixtures.py) to construct a detached runtime from an explicitly selected system Python interpreter, its standard library and library dependencies. This is a controlled test fixture, not an automatic approval or production root filesystem builder. Real candidate processes and descendants attempt host file, process, descriptor and socket access, while permitted immutable input and regular output exchange are also checked.
 

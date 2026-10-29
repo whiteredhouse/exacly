@@ -1,0 +1,8 @@
+# Permit only the trusted system Bubblewrap constructor to create user namespaces on the
+# Ubuntu 24.04 CI host. Candidate isolation is enforced independently by namespaces,
+# read-only mounts, dropped capabilities, NoNewPrivs and the fixed seccomp policy.
+abi <abi/4.0>,
+
+profile exacly-bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+}

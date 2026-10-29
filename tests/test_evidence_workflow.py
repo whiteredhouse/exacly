@@ -71,7 +71,7 @@ def test_workflow_checks_out_the_run_revision_without_persisting_credentials() -
     install = next(step for step in steps if step.get("name") == "Install locked dependencies")
     assert install["run"] == "uv sync --locked"
     runtime = next(step for step in steps if step.get("name") == "Install the Linux isolation test runtime")
-    assert "sudo apt-get install --yes bubblewrap libseccomp2" in runtime["run"]
+    assert runtime["run"] == "sh ci/setup_isolation_runtime.sh"
     boundary = next(step for step in steps if step.get("name") == "Check the Linux isolation test runtime")
     assert boundary["run"] == "/usr/bin/python3 ci/check_isolation_runtime.py"
     assert steps.index(checkout) < steps.index(runtime) < steps.index(boundary) < steps.index(install)
@@ -82,6 +82,37 @@ def test_workflow_checks_out_the_run_revision_without_persisting_credentials() -
         check["run"]
         == "uv run --locked pytest -c pyproject.toml spec/tests python/tests tests --junitxml=reports/junit.xml"
     )
+
+
+def test_ci_namespace_permission_is_scoped_to_system_bubblewrap_and_preserves_global_restrictions() -> None:
+    setup = (ROOT / "ci/setup_isolation_runtime.sh").read_text()
+    privileged = [line for line in setup.splitlines() if line.startswith("sudo ")]
+    assert privileged == [
+        "sudo apt-get update",
+        "sudo apt-get install --yes apparmor bubblewrap libseccomp2",
+        'sudo install -m 0644 "$isolation_setup_dir/apparmor/exacly-bwrap" /etc/apparmor.d/exacly-bwrap',
+        "sudo apparmor_parser --replace /etc/apparmor.d/exacly-bwrap",
+    ]
+    assert 'test "$isolation_restriction" = 1' in setup
+    assert 'test "$isolation_enforcement" = Y' in setup
+    assert 'test "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)" = "$isolation_restriction"' in setup
+    assert 'test "$(cat /sys/module/apparmor/parameters/enabled)" = "$isolation_enforcement"' in setup
+    profile = (ROOT / "ci/apparmor/exacly-bwrap").read_text()
+    assert re.search(r"profile exacly-bwrap /usr/bin/bwrap flags=\(unconfined\) \{\s*userns,\s*\}", profile)
+    assert "capability" not in profile
+
+
+@pytest.mark.parametrize(
+    "path", ["ci/check_isolation_runtime.py", "ci/setup_isolation_runtime.sh", "ci/apparmor/exacly-bwrap"]
+)
+def test_producer_approval_fingerprint_covers_runtime_setup_and_policy(path: str) -> None:
+    profile = yaml.safe_load((ROOT / "ci/evidence-producer.yaml").read_text())
+    selectors = admission.validate_observer_paths(profile["observer_paths"])
+    assert path in selectors
+    entries = [{"path": path, "type": "blob", "mode": "100644", "sha": "a" * 40}]
+    approved = admission.observer_digest(entries, selectors)
+    entries[0]["sha"] = "b" * 40
+    assert admission.observer_digest(entries, selectors) != approved
 
 
 def test_completed_failures_are_packaged_and_each_attempt_has_one_artifact_name() -> None:

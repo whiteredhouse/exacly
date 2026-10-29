@@ -19,6 +19,9 @@ observer_paths:
   - .github/workflows/verification-evidence.yml
   - ci/evidence-producer.yaml
   - ci/package_verification_evidence.py
+  - ci/check_isolation_runtime.py
+  - ci/setup_isolation_runtime.sh
+  - ci/apparmor/exacly-bwrap
   - pyproject.toml
   - uv.lock
   - mise.toml
