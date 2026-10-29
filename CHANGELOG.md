@@ -1,5 +1,74 @@
 # Package release notes
 
+## 0.6.0rc4 — 2026-10-29
+
+This candidate removes the initial ledger upgrade from new verification work
+and makes every retained admission file private. The installed producer tools,
+independent policy review, live admission and explicit local completion
+authority retain their existing scope. Candidate isolation, task dispatch and
+executor supervision (REQ-025–027) remain proposed.
+
+An operator reported a passing RC3 end-to-end trial using the released packager
+in [AgentiScale push run 40942314921](https://github.com/whiteredhouse/agentiscale/actions/runs/40942314921),
+attempt 1 at commit `62d948dff21882ee861af779c15ad6638c41da68`. The reported
+checks covered admission, bound reconciliation, nine negative cases without
+state or ledger changes, completion of only the intended task, and offline
+replay with the same receipt and zero socket calls. The operator also reported
+RC2 ledger replay before and after activation. A focused consumer trial of RC4's
+fresh-ledger path and file permissions remains before stable. Branch
+protection, test honesty and acceptance coverage remain unverified in that
+trial.
+
+- **Completion-ready new ledgers.** Registration atomically initializes a new
+  execution ledger in schema version 2, including binding and completion
+  tables. A new ledger can proceed to completion with reviewed inputs and
+  fresh admitted evidence without an initial upgrade or activation. Existing
+  version-1, version-2 and version-4 ledgers keep their formats; version 3
+  remains audit-only. Version 4 remains an explicit indexed activation choice.
+- **Private admission files.** Admitted and rejected evidence bundles use
+  POSIX `0700` output directories. Each retained receipt, archive, JUnit report
+  and state file is created with mode `0600`, independently of the caller's
+  umask. Bundles still publish atomically to a new directory and refuse an
+  existing output path. Receipt contents and admission trust checks are
+  unchanged.
+
+The evidence manifest remains `0.1.0`, admission receipts remain `0.2.0`, and
+immutable binding records and completion receipts retain their existing
+formats. The changed initial SQLite schema applies only when registration
+creates a new ledger.
+
+### Upgrading from RC3
+
+An existing version-1 ledger still needs the explicit copy-only
+`exacly executions upgrade` before completion. New RC4 ledgers already use
+version 2: remove an unconditional post-registration upgrade from fresh-ledger
+setup. Use `exacly executions inspect --ledger FILE` to check an existing
+ledger's format; `upgrade` continues to require a clean version-1 source.
+Registration never migrates an existing ledger.
+
+Version-4 validation profiles fingerprint installed code, so a recognized
+retained RC3, RC2 or RC1 profile becomes `known_stale`. Read-only operations and
+offline historical replay freshly validate retained semantics after checking
+required integrity baselines. Before further operational writes, create a
+refreshed copy:
+
+```sh
+exacly executions activate --ledger SOURCE --out NEW_DIR
+```
+
+Review the copy and explicitly select
+`NEW_DIR/operational/ledger.sqlite3` as the canonical ledger. Activation leaves
+the source unchanged, performs no implicit cutover or completion recovery and
+never reseals changed history. Required integrity errors remain errors.
+Versions 1 and 2 retain their existing validation behavior; version-3 audit
+retains its matching-profile requirement.
+
+Changed CLI, ledger and approved model content can change producer-policy
+fingerprints. Regenerate a candidate for the selected revision and review it
+independently before admitting evidence under changed workflow or observer
+inputs. Installing RC4 does not approve or install a policy or change existing
+admission bundles' permissions.
+
 ## 0.6.0rc3 — 2026-10-29
 
 This candidate ships the producer tools in the installed package: prepare an

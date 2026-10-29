@@ -226,7 +226,7 @@ def test_indexing_rejects_v1_and_already_indexed_sources_without_writing(
 
     root = tmp_path / "v1"
     root.mkdir(mode=0o700)
-    original = prepare_scenario(root, upgrade=False).ledger
+    original = prepare_scenario(root, legacy_ledger=True).ledger
     original_before = snapshot(original.parent)
     for dry_run in (False, True):
         with pytest.raises(store.StoreError, match="version 2"):

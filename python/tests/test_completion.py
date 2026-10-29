@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import datetime as dt
 import json
+import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,7 @@ from exacly import (
 )
 from exacly import execution_store as store
 from exacly.refresh import Run, refresh
+from ledger_store_fixtures import initialize_legacy_ledger
 from test_admission import ATTEMPT, BASE, END, READINESS, RUN_ID, Source
 from test_applicability import WHEN, A, B
 from test_executions import OPENED, TASK, run
@@ -65,7 +67,8 @@ def prepare_scenario(
     source: Source | None = None,
     readiness: Doc | None = None,
     legacy: bool = False,
-    upgrade: bool = True,
+    upgrade: bool = False,
+    legacy_ledger: bool = False,
 ) -> CompletionScenario:
     source = source or Source()
     readiness = copy.deepcopy(READINESS if readiness is None else readiness)
@@ -92,6 +95,8 @@ def prepare_scenario(
     private = tmp_path / "original-operator"
     private.mkdir(mode=0o700)
     ledger = private / "ledger.sqlite3"
+    if legacy_ledger or upgrade:
+        initialize_legacy_ledger(ledger)
     plan = make_plan(source, readiness=readiness)
     binding = executions.register(
         ledger,
@@ -270,10 +275,26 @@ def test_completed_binding_cannot_be_reused_for_different_evidence(scenario: Com
 
 
 def test_completion_requires_explicit_v2_upgrade_without_initializing_or_migrating(tmp_path: Path) -> None:
-    case = prepare_scenario(tmp_path, upgrade=False)
+    case = prepare_scenario(tmp_path, legacy_ledger=True)
     before = case.ledger.read_bytes(), case.state_path.read_bytes()
     with pytest.raises(ValueError, match=r"upgrade|version|v2"):
         case.complete(source=NoNetwork())
+    assert (case.ledger.read_bytes(), case.state_path.read_bytes()) == before
+
+
+def test_fresh_registration_completes_and_replays_without_upgrading(tmp_path: Path) -> None:
+    case = prepare_scenario(tmp_path)
+    original = case.state
+    with sqlite3.connect(case.ledger) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone() == (store.COMPLETION_VERSION,)
+        assert connection.execute("SELECT count(*) FROM completion_intents").fetchone() == (0,)
+    result = case.complete()
+    assert case.state["serial"] == original["serial"] + 1
+    assert case.state["lineage"] == original["lineage"]
+    assert [entry["task"] for entry in case.state["pending"]] == [OTHER_TASK]
+    before = case.ledger.read_bytes(), case.state_path.read_bytes()
+    replay = case.complete(source=NoNetwork())
+    assert replay["receipt"] == result["receipt"]
     assert (case.ledger.read_bytes(), case.state_path.read_bytes()) == before
 
 

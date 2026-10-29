@@ -2,7 +2,7 @@
 
 The `exacly` command and Python package work with an Exacly model, either a 0.1 product map or 0.2 config and state documents, as the [Exacly Specification](../spec/README.md) describes it.
 
-This reference describes **0.6.0rc3**, a release candidate for product context,
+This reference describes **0.6.0rc4**, a release candidate for product context,
 evidence-based verification and recoverable local task completion. The new
 commands run in an operator-controlled environment. Candidate isolation, task
 dispatch and executor supervision (REQ-025–027) remain proposed. Review the
@@ -26,8 +26,8 @@ explicit ledger-copy upgrades.
 - [`exacly mcp`](#mcp-server) answers show, trace, impact and gaps questions for coding agents.
 
 ```sh
-uv tool install 'exacly==0.6.0rc3'
-uvx --from 'exacly==0.6.0rc3' exacly validate spec/exacly    # one-off run
+uv tool install 'exacly==0.6.0rc4'
+uvx --from 'exacly==0.6.0rc4' exacly validate spec/exacly    # one-off run
 ```
 
 The exact pin selects this prerelease; `uv tool install exacly` selects the latest
@@ -181,7 +181,7 @@ Run this exact-version invocation in the consumer's checked-out repository,
 after a verification step writes a JUnit report:
 
 ```sh
-uvx --from 'exacly==0.6.0rc3' exacly evidence package --report reports/junit.xml --out reports/evidence
+uvx --from 'exacly==0.6.0rc4' exacly evidence package --report reports/junit.xml --out reports/evidence
 ```
 
 This pins Exacly's release; its runtime dependencies are still resolved by the
@@ -204,7 +204,7 @@ package version rather than the project's editable checkout:
   if: always() && (steps.verification.outcome == 'success' || steps.verification.outcome == 'failure')
   env:
     EXACLY_TEST_OUTCOME: ${{ steps.verification.outcome }}
-  run: uvx --from 'exacly==0.6.0rc3' exacly evidence package --report reports/junit.xml --out reports/evidence
+  run: uvx --from 'exacly==0.6.0rc4' exacly evidence package --report reports/junit.xml --out reports/evidence
 - name: Upload verification evidence
   if: always() && steps.evidence.outcome == 'success'
   uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -250,7 +250,7 @@ Python version when creating its virtual environment. The input pins Exacly exac
 index distribution hashes:
 
 ```sh
-printf '%s\n' 'exacly==0.6.0rc3' > requirements-evidence.in
+printf '%s\n' 'exacly==0.6.0rc4' > requirements-evidence.in
 uv pip compile requirements-evidence.in --python-version 3.12 --python-platform x86_64-unknown-linux-gnu --generate-hashes --output-file requirements-evidence.txt
 ```
 
@@ -339,7 +339,7 @@ reviewed for that revision, and provide a read-permission GitHub token in
 For Exacly's current complete model, run:
 
 ```sh
-uvx --from 'exacly==0.6.0rc3' exacly evidence propose-policy github-actions \
+uvx --from 'exacly==0.6.0rc4' exacly evidence propose-policy github-actions \
   --repository whiteredhouse/exacly \
   --revision "$EXACLY_PRODUCER_REVISION" \
   --proposal ci/evidence-producer.yaml \
@@ -437,10 +437,10 @@ evidence-bundle manifest remains `0.1.0`, independently of admission receipt
 versions. Existing policies without the new field retain their original content
 and digest.
 
-When upgrading from RC2 to RC3, or from RC1, existing version-4 ledgers retain
-their recorded validation profile, which fingerprints installed code. RC3
+When upgrading from RC3, RC2 or RC1 to RC4, existing version-4 ledgers retain
+their recorded validation profile, which fingerprints installed code. RC4
 reports a recognized old profile as `known_stale` and freshly validates retained
-history for reads after checking required integrity baselines.
+history for reads and offline replay after checking required integrity baselines.
 Before further writes, run:
 
 ```sh
@@ -493,7 +493,7 @@ GitHub's artifact metadata does not directly identify its producing job or attem
 
 A completed failed verification step can supply evidence of failure. If its report contains positive assessments despite the step failing, admission downgrades those positives to `inconclusive`. A skipped or cancelled verification step, or a missing report, is rejected.
 
-For an admission decision, the new output directory contains `receipt.json`. An admitted result also retains `archive.zip`, `junit.xml` and freshly derived `state.json`; a rejected result saves no report or state. Output is written atomically to a new directory. Exit status is 0 for admitted, 1 for rejected, and 2 for invalid inputs or output errors.
+For an admission decision, the new output directory contains `receipt.json`. An admitted result also retains `archive.zip`, `junit.xml` and freshly derived `state.json`; a rejected result saves no report or state. Output is written atomically to a new directory with POSIX mode `0700`; every retained file is created with mode `0600`, independently of the caller's umask. Existing output paths are refused. Exit status is 0 for admitted, 1 for rejected, and 2 for invalid inputs or output errors.
 
 The receipt establishes only the checked evidence origin and target applicability. It records `test_honesty_verified: false`, `coverage_verified: false` and `self_authenticating: false`: a trusted producer can run weak or misleading checks, and a copied or edited receipt is not independently authenticated. Changes to acceptance coverage still need review. Retain admission output in protected storage or revalidate the live source before using it for a later decision. This command does not sign receipts, dispatch work or close pending tasks.
 
@@ -720,7 +720,7 @@ The versioned binding captures namespace, context and lineage; canonical Require
 
 The ledger is an explicitly selected private SQLite database using POSIX ownership, permissions and file locks, with file mode `0600`. It is not discovered from a repository and does not import JSON binding files. Directory ownership and permissions protect its storage boundary, but they do not isolate candidate code running as the same operating-system user. Run registration separately from code that is not authorized to change these bindings.
 
-Registration initializes new ledgers in schema version 1. Existing operational ledgers in versions 1, 2 and 4 retain their format; version 3 remains audit-only, and normal reads and registration never upgrade or activate a ledger. [Completion](#complete-registered-verification-work) supports version 2 through the explicit [copy-only upgrade](#upgrade-a-ledger-for-completion), or version 4 through separate [indexed activation](#activate-an-operational-indexed-ledger).
+Registration initializes new ledgers in completion-ready schema version 2. A new ledger can proceed directly to [completion](#complete-registered-verification-work) with the reviewed inputs and fresh admitted evidence; no initial upgrade or activation is required. Existing operational ledgers in versions 1, 2 and 4 retain their format; version 3 remains audit-only, and normal reads and registration never upgrade or activate an existing ledger. Existing version-1 ledgers require the explicit [copy-only upgrade](#upgrade-a-ledger-for-completion) before completion. Version 4 remains available through separate [indexed activation](#activate-an-operational-indexed-ledger).
 
 Repeating a registration for the same pending entry and contract is idempotent and returns the original record, including its first `as_of`, `registered_at` and historical state snapshot. A different contract for an already active pending key conflicts unless `--supersedes` names its exact current binding ID. Explicit supersession atomically appends a replacement and leaves the original immutable record visible as inactive. A concurrent change to the active binding makes that replacement fail rather than silently overwrite history.
 
@@ -788,7 +788,7 @@ Version-1/version-2 maintenance retains report schema `0.2.0`. Version-4 mainten
 
 ### Upgrade a ledger for completion
 
-Completion supports schema version 2 or explicitly activated version 4. Start from a clean version-1 ledger by upgrading it into a new version-2 copy:
+Completion supports schema version 2 or explicitly activated version 4. New ledgers created by RC4 registration already use version 2 and skip this step. For an existing clean version-1 ledger, upgrade it into a new version-2 copy:
 
 ```sh
 exacly executions upgrade --ledger "$EXACLY_LEDGER_FILE" \

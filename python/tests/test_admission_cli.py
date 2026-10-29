@@ -2,6 +2,8 @@
 
 import datetime as dt
 import json
+import os
+import stat
 from pathlib import Path
 from typing import Any
 
@@ -95,6 +97,48 @@ def test_rejection_saves_only_receipt_and_returns_one(
     assert not shown.err
     assert {path.name for path in output.iterdir()} == {"receipt.json"}
     assert json.loads(output.joinpath("receipt.json").read_text()) == backend["result"].receipt
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission bits")
+@pytest.mark.parametrize("umask", [0o000, 0o022, 0o077, 0o777])
+@pytest.mark.parametrize("status", ["admitted", "rejected"])
+def test_admission_bundle_files_are_private_from_creation_regardless_of_umask(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    backend: dict[str, Any],
+    umask: int,
+    status: str,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    args, _, _, output = invocation(tmp_path)
+    output.parent.mkdir()
+    backend["result"].receipt["status"] = status
+    expected = {"receipt.json", "archive.zip", "junit.xml", "state.json"} if status == "admitted" else {"receipt.json"}
+    created: set[str] = set()
+    original_open = os.open
+
+    def check_creation(path: Any, flags: int, mode: int = 0o777, **kwargs: Any) -> int:
+        fd = original_open(path, flags, mode, **kwargs)
+        if isinstance(path, Path) and path.name in expected:
+            info = os.fstat(fd)
+            assert flags & os.O_EXCL
+            assert mode == 0o600
+            assert not stat.S_IMODE(info.st_mode) & 0o077
+            assert info.st_size == 0
+            assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
+            created.add(path.name)
+        return fd
+
+    monkeypatch.setattr(os, "open", check_creation)
+    previous_umask = os.umask(umask)
+    try:
+        assert exacly_main(args) == (0 if status == "admitted" else 1)
+    finally:
+        os.umask(previous_umask)
+    assert created == expected
+    assert stat.S_IMODE(output.stat().st_mode) == 0o700
+    assert {path.name for path in output.iterdir()} == expected
+    assert all(stat.S_IMODE(path.stat().st_mode) == 0o600 for path in output.iterdir())
 
 
 @pytest.mark.parametrize("opt_out", [False, True])
@@ -412,14 +456,14 @@ def test_partial_staging_failure_cleans_up_without_publishing_or_exposing_creden
     monkeypatch.chdir(tmp_path)
     args, policy, target, output = invocation(tmp_path)
     before = {path: path.read_bytes() for path in (policy, target)}
-    original = Path.write_bytes
+    original = os.open
 
-    def fail_archive(path: Path, data: bytes) -> int:
-        if path.name == "archive.zip":
+    def fail_archive(path: Any, flags: int, mode: int = 0o777, **kwargs: Any) -> int:
+        if isinstance(path, Path) and path.name == "archive.zip":
             raise OSError(f"cannot save archive {TOKEN}")
-        return original(path, data)
+        return original(path, flags, mode, **kwargs)
 
-    monkeypatch.setattr(Path, "write_bytes", fail_archive)
+    monkeypatch.setattr(os, "open", fail_archive)
     assert exacly_main(args) == 2
     captured = capsys.readouterr()
     assert "cannot save archive" in captured.err
@@ -435,15 +479,15 @@ def test_a_directory_created_while_staging_is_preserved(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     _, policy, target, output = invocation(tmp_path)
-    original = Path.write_bytes
+    original = os.open
 
-    def create_destination(path: Path, data: bytes) -> int:
-        result = original(path, data)
-        if path.name == "junit.xml":
+    def create_destination(path: Any, flags: int, mode: int = 0o777, **kwargs: Any) -> int:
+        result = original(path, flags, mode, **kwargs)
+        if isinstance(path, Path) and path.name == "junit.xml":
             output.mkdir()
         return result
 
-    monkeypatch.setattr(Path, "write_bytes", create_destination)
+    monkeypatch.setattr(os, "open", create_destination)
     with pytest.raises(ValueError, match="new directory"):
         write_admission(output, [policy, target], TRUST_POLICY, backend["result"])
     assert output.is_dir()

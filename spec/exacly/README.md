@@ -42,6 +42,13 @@ model inputs. This command is included in `0.6.0rc3` and reuses the existing
 authority. See the [candidate-policy guidance](../../python/README.md#draft-a-producer-policy)
 for the independent review and controlled storage steps.
 
+RC4 updates REQ-021 so new registration ledgers use completion-ready schema
+version 2. Existing ledgers keep their format, version-1 upgrade remains
+explicit, and version-4 activation remains a separate choice. REQ-019 also
+requires admission bundles to use POSIX `0700` directories and `0600` files,
+independently of the caller's umask. These are current contracts; verification
+and release claims still come from observed state.
+
 - Browse the [published model and observations](https://whiteredhouse.github.io/exacly/project/) for the checked baseline on main. Branch proposals appear there after merge and successful CI publication.
 - Read [`automation.yaml`](automation.yaml) for the automation contracts, process steps and isolation preconditions, informed by the dated [plan/apply research](../../docs/automated-plan-apply-research.md).
 - Run `exacly show RECORD`, `exacly trace RECORD` or `exacly gaps` from the repository root to inspect the local checkout. Preview a branch's model with `exacly view site --out reports/model-site`.
