@@ -172,7 +172,7 @@ It writes one verification assessment per platform of each binding, with source 
 
 `exacly admit github-actions` reads a live GitHub Actions run and artifact through authenticated GitHub APIs, checks them against an independently approved trust policy, and derives fresh verification state from the accepted JUnit report. Admission requires conforming 0.2 config; approved model inputs cannot contain observed state. It accepts neither caller-authored state nor offline run metadata as evidence of origin.
 
-Each trust policy supplies its exact protected branch, workflow path, job ID and name, verification/package/upload step names, artifact name prefix and observer paths. The library supplies no repository layout or producer defaults. The supported producer contract remains one job in a push workflow on the approved branch.
+Each trust policy supplies its exact branch, workflow path, job ID and name, verification/package/upload step names, artifact name prefix and observer paths. Branch protection is required by default. The library supplies no repository layout or producer defaults. The supported producer contract remains one job in a push workflow on the approved branch.
 
 Exacly's own [producer proposal](../ci/evidence-producer.yaml) selects [the verification evidence workflow](../.github/workflows/verification-evidence.yml). This example runs on pushes to `main`, has one job named `Observe verification`, explicitly selects the pytest configuration with `-c pyproject.toml`, and packages `manifest.json` and `junit.xml` in an artifact named `exacly-evidence-RUN-ATTEMPT`. Other repositories supply their own contract. The packaging helper checks the checkout and supported run metadata before producing the bundle; admission independently compares that metadata with GitHub responses and the approved policy.
 
@@ -227,6 +227,55 @@ list.
 
 Review both the proposal and generated policy independently of the implementation being evaluated, then keep the approved policy in controlled storage outside model directories. A repository proposal is not an approved policy. Generating hashes from candidate content does not approve its workflow, observer paths or model. The helper prepares policy content; it grants no execution authority or approval.
 
+### Choose branch-protection requirements (unreleased)
+
+The following policy option and admission receipt version `0.2.0` are
+unreleased repository changes. The published `0.6.0rc1` package still requires
+branch protection and emits admission receipts in version `0.1.0`.
+
+An omitted top-level `branch_protection` field requires GitHub to report the
+selected branch currently protected. Explicit `"branch_protection": "required"`
+has the same requirement. For an independently reviewed policy that permits an
+unprotected branch, set:
+
+```json
+{
+  "branch_protection": "not_required"
+}
+```
+
+This is the field to add to the complete trust policy, not a complete policy by
+itself. Only `required` and `not_required` are accepted. The choice is useful for
+private repositories whose GitHub plan does not provide branch protection.
+`propose_policy(..., branch_protection="not_required")` can prepare the explicit
+choice for review; omitting that argument preserves the existing policy shape.
+Review and version the resulting policy before using it. A generated candidate
+is not approved merely because its content fingerprints are present.
+
+The opt-out leaves exact branch identity, approved commit/workflow/observer/model
+content, single-job provenance, artifact digests and all other admission checks
+in place. Admission still reads the branch from GitHub; missing access or a
+failed API request is not an implicit opt-out. Reconciliation and completion
+re-run admission under the same trust policy, so no additional command-line flag
+is needed. Changing the choice changes the policy digest and requires a matching
+registration; it cannot silently relax an existing registered contract.
+
+New receipts contain `claims.branch_protection_verified`. It becomes true only
+after a required live protection check succeeds. With `not_required`, it stays
+false even when GitHub reports the branch protected, and an admitted receipt has
+`origin.branch_protection_checked_at: null`. Under the required policy, that field
+records the actual check time. Admitted receipts also record the selected mode
+in `origin.branch_protection`. The check establishes neither historical
+protection nor the strength of the branch's rules.
+
+Retained version-`0.1.0` admission proof remains readable by completion history
+validation with its original protection-required meaning; it cannot authorize
+the new opt-out. Offline history validation checks retained receipt consistency;
+it does not contact GitHub or independently re-establish approval. The
+evidence-bundle manifest remains `0.1.0`, independently of admission receipt
+versions. Existing policies without the new field retain their original content
+and digest.
+
 ### Admit an exact run attempt
 
 The target selects a named context, the policy's approved `model_revision`, and the observed implementation `revision`. The context is independent of the producer branch; Exacly's example uses `main`. After approving the policy, set `EXACLY_IMPLEMENTATION_REVISION` to the full implementation SHA from the intended run and prepare the target:
@@ -254,13 +303,13 @@ exacly admit github-actions --trust-policy trusted/github-verification.json \
   --date 2026-10-28 --out reports/admission-run --json
 ```
 
-`--date` supplies the UTC evaluation date for model conformance and expiry checks. A producer job completed after that UTC date is rejected. The live branch-protection check records its actual timestamp separately from the receipt's `as_of` date.
+`--date` supplies the UTC evaluation date for model conformance and expiry checks. A producer job completed after that UTC date is rejected. When protection is required, the live branch-protection check records its actual timestamp separately from the receipt's `as_of` date.
 
 The command reads `GH_TOKEN`, falling back to `GITHUB_TOKEN`; it has no command-line token option. The token needs read access to the repository content, workflow runs, jobs and artifacts used by admission.
 
-Admission checks the repository identity, current protection of the approved branch, a push run on that exact branch for the selected implementation SHA and attempt, the configured workflow and single observation job, matching workflow and observer fingerprints, and one uniquely named artifact created during the job. The artifact name is the approved prefix followed by the run ID and attempt. Admission verifies the API's archive digest, the strict manifest and report digest, and the ZIP contents. Approved model files are fetched at their full revision through GitHub and checked against the policy's config digest before refresh derives state with that model and implementation identity.
+Admission checks the repository identity, the approved branch's protection requirement, a push run on that exact branch for the selected implementation SHA and attempt, the configured workflow and single observation job, matching workflow and observer fingerprints, and one uniquely named artifact created during the job. The artifact name is the approved prefix followed by the run ID and attempt. Admission verifies the API's archive digest, the strict manifest and report digest, and the ZIP contents. Approved model files are fetched at their full revision through GitHub and checked against the policy's config digest before refresh derives state with that model and implementation identity.
 
-GitHub's artifact metadata does not directly identify its producing job or attempt. The receipt therefore records that association as an inference from the approved single-job producer contract, exact artifact name and job timing. Current branch protection is an admission precondition; its `branch_protection_checked_at` timestamp does not prove historical protection at the evaluation date or when the run occurred.
+GitHub's artifact metadata does not directly identify its producing job or attempt. The receipt therefore records that association as an inference from the approved single-job producer contract, exact artifact name and job timing. When current branch protection is required, `branch_protection_checked_at` does not prove historical protection at the evaluation date or when the run occurred, and the check does not evaluate how restrictive the rules are.
 
 A completed failed verification step can supply evidence of failure. If its report contains positive assessments despite the step failing, admission downgrades those positives to `inconclusive`. A skipped or cancelled verification step, or a missing report, is rejected.
 

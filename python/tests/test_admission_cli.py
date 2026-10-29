@@ -97,6 +97,57 @@ def test_rejection_saves_only_receipt_and_returns_one(
     assert json.loads(output.joinpath("receipt.json").read_text()) == backend["result"].receipt
 
 
+@pytest.mark.parametrize("opt_out", [False, True])
+@pytest.mark.parametrize("json_output", [False, True])
+def test_live_admission_cli_retains_the_explicit_branch_protection_decision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    opt_out: bool,
+    json_output: bool,
+) -> None:
+    from exacly import github_evidence
+    from test_admission import ATTEMPT, BASE, RUN_ID, Source
+    from test_applicability import WHEN
+
+    source = Source()
+    source.pages[f"{BASE}/branches/main"]["protected"] = False
+    if opt_out:
+        source.policy["branch_protection"] = "not_required"
+    monkeypatch.setenv("GH_TOKEN", TOKEN)
+    monkeypatch.chdir(tmp_path)
+
+    def client(token: str) -> Source:
+        assert token == TOKEN
+        return source
+
+    monkeypatch.setattr(github_evidence, "GitHubClient", client)
+    args, policy, _, output = invocation(tmp_path)
+    policy.write_text(json.dumps(source.policy))
+    for field, value in (("--run", str(RUN_ID)), ("--attempt", str(ATTEMPT)), ("--date", WHEN.isoformat())):
+        args[args.index(field) + 1] = value
+    if json_output:
+        args.append("--json")
+    assert exacly_main(args) == (0 if opt_out else 1)
+    printed = capsys.readouterr()
+    assert not printed.err
+    receipt = json.loads(output.joinpath("receipt.json").read_text())
+    assert receipt["schema_version"] == "0.2.0"
+    assert receipt["claims"]["branch_protection_verified"] is False
+    assert receipt["status"] == ("admitted" if opt_out else "rejected")
+    if json_output:
+        assert json.loads(printed.out) == receipt
+    else:
+        assert "Branch protection: not verified" in printed.out
+    if opt_out:
+        assert receipt["origin"]["branch_protection"] == "not_required"
+        assert receipt["origin"]["branch_protection_checked_at"] is None
+        assert {path.name for path in output.iterdir()} == {"receipt.json", "archive.zip", "junit.xml", "state.json"}
+    else:
+        assert {path.name for path in output.iterdir()} == {"receipt.json"}
+        assert source.downloads == []
+
+
 @pytest.mark.parametrize("primary", [None, "", " \t"])
 def test_github_token_is_used_when_primary_token_is_missing_or_blank(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, backend: dict[str, Any], primary: str | None

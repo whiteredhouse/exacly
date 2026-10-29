@@ -16,6 +16,7 @@ from exacly import (
     completion_store,
     execution_maintenance,
     executions,
+    history_maintenance,
     planning,
     query,
     state_writer,
@@ -214,6 +215,52 @@ def test_completed_replay_is_historical_offline_and_never_touches_later_state(sc
     jsonschema.validate(recovered, completion.SCHEMA)
 
 
+@pytest.mark.parametrize("version", [2, 4])
+def test_explicit_protection_waiver_completes_and_replays_with_retained_proof(tmp_path: Path, version: int) -> None:
+    source = Source()
+    source.policy["branch_protection"] = "not_required"
+    source.pages[f"{BASE}/branches/main"]["protected"] = False
+    case = prepare_scenario(tmp_path, source=source)
+    if version == 4:
+        destination = tmp_path / "operational-operator"
+        history_maintenance.activate(case.ledger, destination)
+        case.ledger = destination / "operational" / "ledger.sqlite3"
+    before = case.state
+    report = case.complete()
+    assert report["status"] == "completed", report
+    assert report["admission"]["claims"]["branch_protection_verified"] is False
+    assert report["admission"]["policy"]["digest"] == planning.digest(source.policy)
+    assert case.state["serial"] == before["serial"] + 1
+    assert case.state["lineage"] == before["lineage"]
+    assert case.state["pending"] == [before["pending"][1]]
+    assert case.state["x-operator-note"] == before["x-operator-note"]
+    after = case.ledger.read_bytes(), case.state_path.read_bytes()
+    replay = case.complete(source=NoNetwork())
+    assert replay["status"] == "completed" and replay["receipt"] == report["receipt"]
+    assert (case.ledger.read_bytes(), case.state_path.read_bytes()) == after
+    assert completion.show(case.ledger, report["completion_id"])["receipt"] == report["receipt"]
+    assert execution_maintenance.inspect(case.ledger)["status"] == "clean"
+
+
+@pytest.mark.parametrize("failure", ["run_revision", "failed_tests"])
+def test_protection_waiver_does_not_bypass_other_completion_prerequisites(tmp_path: Path, failure: str) -> None:
+    source = Source()
+    source.policy["branch_protection"] = "not_required"
+    source.pages[f"{BASE}/branches/main"]["protected"] = False
+    case = prepare_scenario(tmp_path, source=source)
+    if failure == "run_revision":
+        source.run["head_sha"] = "c" * 40
+    else:
+        source.report = source.report.replace(b"</testcase>", b"<failure/></testcase>")
+        change_live_outcome(source, "failure")
+    before = case.ledger.read_bytes(), case.state_path.read_bytes()
+    report = case.complete()
+    assert report["status"] == "pending" and report["completion_id"] is None, report
+    assert report["admission"]["claims"]["branch_protection_verified"] is False
+    assert report["admission"]["status"] == ("rejected" if failure == "run_revision" else "admitted")
+    assert (case.ledger.read_bytes(), case.state_path.read_bytes()) == before
+
+
 def test_completed_binding_cannot_be_reused_for_different_evidence(scenario: CompletionScenario) -> None:
     scenario.complete()
     before = scenario.ledger.read_bytes(), scenario.state_path.read_bytes()
@@ -251,7 +298,7 @@ def test_insufficient_fresh_evidence_preserves_state_and_journal(scenario: Compl
     jsonschema.validate(report, completion.SCHEMA)
 
 
-@pytest.mark.parametrize("case", ["policy", "target", "pending", "watermark", "superseded"])
+@pytest.mark.parametrize("case", ["policy", "branch_protection", "target", "pending", "watermark", "superseded"])
 def test_stale_contracts_fail_before_live_admission(scenario: CompletionScenario, case: str) -> None:
     changes: Doc = {"source": NoNetwork()}
     state = scenario.state
@@ -259,6 +306,10 @@ def test_stale_contracts_fail_before_live_admission(scenario: CompletionScenario
         changed = copy.deepcopy(scenario.readiness)
         changed["version"] = "replacement"
         changes["readiness_policy"] = changed
+    elif case == "branch_protection":
+        changed = copy.deepcopy(scenario.source.policy)
+        changed["branch_protection"] = "not_required"
+        changes["trust_policy"] = changed
     elif case == "target":
         changes["output_target"] = selected("c" * 40)
     elif case == "pending":

@@ -284,6 +284,42 @@ def test_valid_bound_preview_is_read_only_and_still_requires_live_admission(scen
     assert scenario.ledger.read_bytes() == ledger_before
 
 
+@pytest.mark.parametrize("protection", [None, "required", "not_required"])
+def test_bound_preview_honors_the_registered_branch_protection_policy(
+    scenario: Scenario, protection: str | None
+) -> None:
+    scenario.source.pages[f"{BASE}/branches/main"]["protected"] = False
+    if protection is not None:
+        scenario.source.policy["branch_protection"] = protection
+    record = executions.register(scenario.ledger, scenario.request())
+    before = scenario.ledger.read_bytes(), copy.deepcopy(scenario.state)
+    report = scenario.preview(record["id"])
+    assert report["status"] == ("ready" if protection == "not_required" else "pending"), report
+    assert report["admission"]["status"] == ("admitted" if protection == "not_required" else "rejected")
+    assert report["admission"]["claims"]["branch_protection_verified"] is False
+    assert report["claims"]["registered_binding_verified"] is True
+    assert (scenario.ledger.read_bytes(), scenario.state) == before
+
+
+def test_waiving_protection_requires_explicit_binding_supersession(scenario: Scenario) -> None:
+    first = executions.register(scenario.ledger, scenario.request())
+    opted_out = copy.deepcopy(scenario.source.policy)
+    opted_out["branch_protection"] = "not_required"
+    before = scenario.ledger.read_bytes(), copy.deepcopy(scenario.state)
+    report = scenario.preview(first["id"], trust=opted_out)
+    assert report["status"] == "stale" and report["admission"] is None
+    assert scenario.source.calls == [] and scenario.source.downloads == []
+    assert (scenario.ledger.read_bytes(), scenario.state) == before
+    with pytest.raises(ValueError):
+        executions.register(scenario.ledger, scenario.request(trust_policy=opted_out))
+    replacement = executions.register(scenario.ledger, scenario.request(trust_policy=opted_out, supersedes=first["id"]))
+    assert replacement["contract"]["trust_policy"]["digest"] != first["contract"]["trust_policy"]["digest"]
+    assert executions.get(scenario.ledger, first["id"])["active"] is False
+    scenario.source.policy = opted_out
+    scenario.source.pages[f"{BASE}/branches/main"]["protected"] = False
+    assert scenario.preview(replacement["id"])["status"] == "ready"
+
+
 def test_supersession_during_live_admission_invalidates_the_preflight_binding(
     scenario: Scenario, monkeypatch: pytest.MonkeyPatch
 ) -> None:
