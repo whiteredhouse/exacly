@@ -2,9 +2,9 @@
 
 The `exacly` command and Python package work with an Exacly model, either a 0.1 product map or 0.2 config and state documents, as the [Exacly Specification](../spec/README.md) describes it.
 
-This reference describes **0.6.0rc4**, a release candidate for product context,
-evidence-based verification and recoverable local task completion. The new
-commands run in an operator-controlled environment. Candidate isolation, task
+This reference describes **0.6.0**, for product context, evidence-based
+verification and recoverable local task completion. Verification and completion
+run in an operator-controlled environment. Candidate isolation, task
 dispatch and executor supervision (REQ-025–027) remain proposed. Review the
 [release notes and upgrade paths](../CHANGELOG.md) for report-format changes and
 explicit ledger-copy upgrades.
@@ -26,12 +26,12 @@ explicit ledger-copy upgrades.
 - [`exacly mcp`](#mcp-server) answers show, trace, impact and gaps questions for coding agents.
 
 ```sh
-uv tool install 'exacly==0.6.0rc4'
-uvx --from 'exacly==0.6.0rc4' exacly validate spec/exacly    # one-off run
+uv tool install 'exacly==0.6.0'
+uvx --from 'exacly==0.6.0' exacly validate spec/exacly    # one-off run
 ```
 
-The exact pin selects this prerelease; `uv tool install exacly` selects the latest
-stable release instead. Python 3.12 or newer is required. Exacly is at 0.x and the
+The exact pin selects this release; `uv tool install exacly` selects the latest
+stable release. Python 3.12 or newer is required. Exacly is at 0.x and the
 specification is a Draft, so commands, output and the model may change in any
 release until 1.0. Pin the package version where a change would break you. To run
 the latest main instead, install
@@ -181,7 +181,7 @@ Run this exact-version invocation in the consumer's checked-out repository,
 after a verification step writes a JUnit report:
 
 ```sh
-uvx --from 'exacly==0.6.0rc4' exacly evidence package --report reports/junit.xml --out reports/evidence
+uvx --from 'exacly==0.6.0' exacly evidence package --report reports/junit.xml --out reports/evidence
 ```
 
 This pins Exacly's release; its runtime dependencies are still resolved by the
@@ -204,7 +204,7 @@ package version rather than the project's editable checkout:
   if: always() && (steps.verification.outcome == 'success' || steps.verification.outcome == 'failure')
   env:
     EXACLY_TEST_OUTCOME: ${{ steps.verification.outcome }}
-  run: uvx --from 'exacly==0.6.0rc4' exacly evidence package --report reports/junit.xml --out reports/evidence
+  run: uvx --from 'exacly==0.6.0' exacly evidence package --report reports/junit.xml --out reports/evidence
 - name: Upload verification evidence
   if: always() && steps.evidence.outcome == 'success'
   uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -250,7 +250,7 @@ Python version when creating its virtual environment. The input pins Exacly exac
 index distribution hashes:
 
 ```sh
-printf '%s\n' 'exacly==0.6.0rc4' > requirements-evidence.in
+printf '%s\n' 'exacly==0.6.0' > requirements-evidence.in
 uv pip compile requirements-evidence.in --python-version 3.12 --python-platform x86_64-unknown-linux-gnu --generate-hashes --output-file requirements-evidence.txt
 ```
 
@@ -339,7 +339,7 @@ reviewed for that revision, and provide a read-permission GitHub token in
 For Exacly's current complete model, run:
 
 ```sh
-uvx --from 'exacly==0.6.0rc4' exacly evidence propose-policy github-actions \
+uvx --from 'exacly==0.6.0' exacly evidence propose-policy github-actions \
   --repository whiteredhouse/exacly \
   --revision "$EXACLY_PRODUCER_REVISION" \
   --proposal ci/evidence-producer.yaml \
@@ -437,11 +437,19 @@ evidence-bundle manifest remains `0.1.0`, independently of admission receipt
 versions. Existing policies without the new field retain their original content
 and digest.
 
-When upgrading from RC3, RC2 or RC1 to RC4, existing version-4 ledgers retain
-their recorded validation profile, which fingerprints installed code. RC4
-reports a recognized old profile as `known_stale` and freshly validates retained
-history for reads and offline replay after checking required integrity baselines.
-Before further writes, run:
+Existing version-4 ledgers retain their recorded validation profile, which
+fingerprints code, schemas, parser dependencies and runtime. The `0.6.0` runtime
+and schemas match RC4: with the same installed dependency artifacts and runtime,
+the retained RC4 profile remains current. Exacly's version metadata and README
+changes alone do not require activation. Recreating or changing the environment
+can change fingerprinted dependency artifacts, such as generated launcher paths,
+even when package versions match; matching version numbers alone do not establish
+profile equality.
+
+Changed validation inputs, including the older RC1–RC3 code, can produce a
+recognized `known_stale` profile. Reads and offline replay freshly validate
+retained history after checking required integrity baselines. Before further
+writes under a stale profile, run:
 
 ```sh
 exacly executions activate --ledger SOURCE --out NEW_DIR
@@ -788,7 +796,7 @@ Version-1/version-2 maintenance retains report schema `0.2.0`. Version-4 mainten
 
 ### Upgrade a ledger for completion
 
-Completion supports schema version 2 or explicitly activated version 4. New ledgers created by RC4 registration already use version 2 and skip this step. For an existing clean version-1 ledger, upgrade it into a new version-2 copy:
+Completion supports schema version 2 or explicitly activated version 4. New ledgers created by `0.6.0` registration already use version 2 and skip this step. For an existing clean version-1 ledger, upgrade it into a new version-2 copy:
 
 ```sh
 exacly executions upgrade --ledger "$EXACLY_LEDGER_FILE" \
