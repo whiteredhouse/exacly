@@ -1,5 +1,22 @@
 # Package release notes
 
+## Unreleased
+
+- Clarify that exact completion replay requires the original normalized absolute
+  `--state` destination. Copying state to a different path changes the request,
+  even when its bytes match. Ledger copies and activation retain the recorded
+  destination. `exacly completions show` inspects history without a state path;
+  historical replay does not read or rewrite the current state contents. This
+  documents existing behavior without changing replay or receipt formats.
+- An operator reported a passing RC4 consumer trial using
+  [AgentiScale push run 40958071220](https://github.com/whiteredhouse/agentiscale/actions/runs/40958071220),
+  attempt 1 at `9bbdce9a7c9a298c24dd1add693345fbe4c843a6`: fresh v2
+  registration, admission, bound reconciliation and completion without an
+  initial upgrade or activation; private admission bundles under umasks `022`
+  and `000`; offline replay; and RC3 v1/v2/v4 compatibility. The corresponding
+  [Go run 40958071223](https://github.com/whiteredhouse/agentiscale/actions/runs/40958071223),
+  including its committed-state refresh job, also completed successfully.
+
 ## 0.6.0rc4 — 2026-10-29
 
 This candidate removes the initial ledger upgrade from new verification work
