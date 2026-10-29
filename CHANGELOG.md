@@ -1,30 +1,165 @@
 # Package release notes
 
-## Unreleased
+## 0.6.0rc1 — 2026-10-29
 
-- `exacly executions activate` explicitly creates an operational version-4 copy from supported version-2, version-3 or version-4 history, preserving the source and requiring manual canonical cutover. Normal version-4 operations check every retained byte and fresh global invariants while reusing only matching terminal semantics; prepared work stays fresh. Known stale profiles permit fresh read-only fallback and require explicit copy refresh before writes, including a preserved prepared intent in an existing version-4 source.
-- Version-4 registration, completion, abort and recovery maintain integrity baselines and affected semantic verdicts with their ledger transaction. Inspection, backup, recovery and explicit audit freshly validate all semantics. Activation and version-4 audit use history reports `0.2.0`; version-4 ordinary maintenance uses `0.3.0`, while legacy report contracts and immutable binding and receipt formats remain unchanged.
-- `exacly executions index` retains its explicit audit-only version-3 output with exact-byte baselines and terminal validation profiles. `--dry-run` validates the plan without output, and version-3 audit freshly re-derives all semantics. Version 3 remains ineligible for ordinary ledger commands or operational cutover; separate activation is required for version 4.
-- Publication failures retain their operation-specific diagnosis after directory-lock release, instead of being reported as lock-acquisition failures.
-- Development benchmarks cover independent completed-task history, supersession chains and larger retained proof. The [ledger-history scaling design](docs/ledger-history-scaling.md) records the baseline measurements and the profile-bound semantic-reuse contract with whole-history byte checks and explicit full audit; version-1/version-2 operational validation remains unchanged.
-- Completion ledger operations reuse full history validation within one unchanged protected database view, reducing repeated proof parsing and model evaluation during inspection, replay and recovery. Mutations require fresh validation, unexpected changes fail closed, and each new operation checks retained history again. Ledger and report formats are unchanged.
-- `exacly complete github-actions` explicitly completes one registered local pending verification item from fresh admitted evidence after evaluating the merged current state. It preserves unrelated observations and pending work, retains proof and a durable publication intent, and finalizes an immutable receipt; exact completed requests replay that receipt without HTTP or another state write. `exacly completions show` and `recover` inspect or resolve interrupted operations offline, distinguishing exact before-state, exact after-state and divergent state without blind replay.
-- Completion requires ledger schema version 2. `exacly executions upgrade` preserves a clean version-1 source and publishes raw and upgraded copies in a new private bundle for explicit operator cutover. Registration still creates version-1 stores by default; ordinary reads and writes never silently upgrade or recover a ledger. Existing maintenance supports both schemas and validates retained completion history. Candidate execution isolation, dispatch and external ticket closure remain outside local completion.
-- Maintenance JSON reports now use schema version `0.2.0`, adding operation `upgrade`, status `upgraded` and ledger `store.user_version: 2` to the closed report contract. JSON consumers must handle the new format; binding records and completion reports retain their independent `0.1.0` formats.
-- `exacly refresh` and `exacly observe manual-qa` publish state through a shared conditional atomic writer. They refuse to overwrite content changed since their observation began, preserve lineage and advance the serial once, and accept `--lock-timeout` (default 30 seconds). Conflicts require a fresh observation. On supported local POSIX filesystems, staged file synchronization, atomic replacement and directory synchronization prevent partial state documents; a failure after replacement explicitly reports uncertain durability and retains the new document.
-- Ledger commands and bound reconciliation previews accept a finite nonnegative `--lock-timeout`, defaulting to 30 seconds. Each ledger operation shares one monotonic budget across its directory and SQLite lock waits; preview reads before and after live admission have separate deadlines. Zero permits an immediate attempt; timeouts return an actionable error without changing ledger data.
-- `exacly executions inspect`, `backup` and `recover` explicitly diagnose and preserve operator-selected ledgers. Backup creates a consistent validated copy; supported DELETE-journal recovery preserves raw files and recovers only a new copy. Neither changes source database or journal files or recovers implicitly. Operators must select one canonical ledger after recovery; manifests do not prove global freshness.
-- `exacly executions register` explicitly binds existing pending verification work to a reviewed plan action, policies and output target in a private operator-selected SQLite ledger. Registrations are idempotent; explicit supersession preserves immutable history, and state watermarks reject rollback and same-serial divergence.
-- `exacly reconcile github-actions --dry-run` optionally checks a registered binding with `--ledger`, `--binding` and `--state` before fresh live admission. Bound previews are read-only and report the registration check separately; neither registration nor preview dispatches work, edits source state or closes tasks.
-- Reconciliation JSON reports now use schema version `0.2.0`, requiring `binding` and `claims.registered_binding_verified`; unbound calls remain supported with a null binding and false claim. JSON consumers must handle the new report version. Immutable execution registration records use their separate `0.1.0` format.
-- `exacly reconcile github-actions --dry-run` previews one saved plan action against freshly admitted live evidence for an output implementation. It distinguishes ready, pending and stale contracts, reports selected-action verification separately from whole-policy readiness, and preserves all inputs and pending work.
-- Reconciliation requires internally consistent plan/action/completion identity and unchanged readiness policy, model, criteria and bindings. Its report is advisory and unsigned; the command neither accepts saved admission state as live evidence nor dispatches work or closes tasks.
-- `exacly admit github-actions` checks an exact live GitHub run attempt and its verification artifact against an independently approved producer policy, then derives fresh state from the admitted JUnit report and conforming 0.2 config. The explicit evaluation date governs model conformance and expiry and excludes jobs completed after that UTC date. Decisions retain a receipt; admitted bundles also retain the archive, report and state.
-- Admission verifies producer and target metadata, workflow and observer fingerprints, and artifact/report digests. Policies explicitly supply the protected branch, workflow/job/step contract, artifact prefix and literal observer selectors, including selected absence; the library supplies no repository layout defaults. Receipts leave test honesty and acceptance coverage unverified and are not self-authenticating. Admission neither dispatches work nor closes pending tasks.
-- `exacly refresh --model-revision MODEL --revision IMPLEMENTATION` records verification against an explicitly identified model and implementation. The enclosing state's config revision follows the model; assessment context and evidence applicability follow the implementation. Omitting `--model-revision` preserves the existing single-revision behavior and retained observations keep their original identities.
-- Distribution refresh rejects distinct model and implementation revisions. The new identity option labels caller-supplied model files and results; it does not load Git revisions or authenticate evidence. GitHub's automatic source link follows the selected implementation revision, while an explicit `--source-url` remains unchanged.
-- `exacly plan --policy FILE --target FILE --date YYYY-MM-DD` proposes read-only work for Requirement verification prerequisites. It distinguishes investigation of a known failure, collection of missing evidence and missing observation configuration, while satisfied prerequisites generate no action.
-- Text and JSON views share a versioned plan with input fingerprints, stable action IDs and observable completion conditions. `--out` saves JSON outside model inputs. Planning does not dispatch work or establish evidence authenticity; readiness exit behavior remains on `gate`.
+This release candidate adds an operator-controlled verification workflow: plan
+work, admit GitHub evidence, register an existing task, and explicitly complete
+that task when applicable observations satisfy its goal. It remains a 0.x
+preview. Candidate isolation, task dispatch and bounded executors
+(REQ-025–027) are proposed work and are not included.
+
+### New commands and capabilities
+
+- **Plan verification work.** `exacly plan --policy FILE --target FILE --date
+  YYYY-MM-DD` proposes investigation, evidence collection or observation
+  configuration for unsatisfied Requirement verification prerequisites. Text,
+  `--json` and saved `--out` artifacts share stable action identities, input
+  fingerprints and observable completion conditions. Planning is read-only and
+  advisory; use `gate` for a readiness exit status.
+- **Admit live GitHub evidence.** `exacly admit github-actions` checks an exact
+  run attempt and verification artifact against an independently approved
+  producer policy, then derives fresh state from the admitted JUnit report and
+  conforming approved model. Policies explicitly identify the protected branch,
+  workflow/job/steps, artifact prefix and observer selectors, including selected
+  absence. Workflow and observer fingerprints, artifact/report digests and the
+  selected target are checked. The explicit evaluation date governs model
+  conformance and expiry and excludes jobs completed after that UTC date.
+  Decisions retain a receipt; admitted bundles also retain the archive, report
+  and derived state.
+- **Preview reconciliation.** `exacly reconcile github-actions --dry-run`
+  checks one saved plan action against fresh live admission, reporting `ready`,
+  `pending` or `stale` and selected-goal verification separately from whole-policy
+  readiness. It requires consistent plan/action identity and unchanged policies,
+  approved model, criteria and bindings. It accepts no saved admission state as
+  live evidence and preserves inputs and pending work. Optional all-or-none
+  `--ledger`, `--binding` and `--state` inputs additionally check an existing
+  registered pending-task binding before and after admission.
+- **Register and maintain work.** `exacly executions register` records an
+  explicit binding between an existing pending verification task, a reviewed
+  plan action, policies and an output target in a private operator-selected
+  SQLite ledger. Exact retries are idempotent; explicit supersession preserves
+  immutable history, and per-pending state watermarks reject rollback and
+  same-serial divergence. `executions show`, `inspect`, `backup` and `recover`
+  provide bounded reads, diagnosis and validated source-preserving copies.
+- **Complete existing verification work.** `exacly complete github-actions`
+  explicitly authorizes completion of one registered local task from fresh
+  admitted evidence evaluated against merged current state. It preserves
+  unrelated observations and pending work, retains applicable failures, removes
+  only the exact satisfied pending item, and advances state once. A durable
+  intent and immutable receipt make the SQLite/JSON publication protocol
+  recoverable; it is not one atomic transaction. Exact completed requests replay
+  their historical receipt without HTTP or another state write. `completions
+  show` inspects retained work, and offline `completions recover` aborts an
+  exact-before intent, finalizes its exact after-state, or reports a divergent
+  state conflict without overwrite.
+- **Audit or activate retained ledger history.** `executions index` creates an
+  audit-only version-3 copy with exact-byte baselines and terminal semantic
+  verdicts; `executions audit` freshly validates it. `executions activate`
+  separately creates an operational version-4 copy with installed validator
+  profiles and reusable matching terminal semantics. See the format and upgrade
+  tables below; ordinary commands never migrate, recover or activate implicitly.
+
+### Changed state publication and identity
+
+- `refresh --model-revision MODEL --revision IMPLEMENTATION` records distinct
+  model and implementation identities. The enclosing state follows the model;
+  assessment context, subject and evidence applicability follow the
+  implementation. Omitting `--model-revision` keeps the single-revision behavior
+  and existing observations retain their original identities. The option labels
+  supplied documents/results; it does not fetch revisions or authenticate them.
+  Distribution refresh requires matching model and implementation revisions.
+  GitHub's automatic source link follows the implementation; explicit
+  `--source-url` is unchanged.
+- `refresh` and `observe manual-qa` now publish through a shared conditional
+  atomic writer on supported local POSIX filesystems. They refuse publication if
+  the destination’s bytes or presence changed since observation began, preserve
+  lineage and advance the serial once. Conflicts require fresh observation.
+  Staged-file and directory synchronization prevent partial JSON publication; errors after replacement
+  retain the new document and report uncertain durability.
+- State writers, ledger commands and bound previews accept finite nonnegative
+  `--lock-timeout SECONDS` (default 30; zero permits an immediate attempt).
+  Each ledger operation shares its budget across directory and SQLite waits;
+  preview reads before and after admission have separate budgets. This does not
+  bound HTTP or whole-command computation/copy time. Publication errors keep
+  their operation-specific diagnosis after locks are released.
+- Completion operations reuse full retained-history validation within one
+  unchanged protected view, invalidating it after mutation or unexpected
+  changes. Every new view validates history again. Version-4 normal validation
+  checks every retained byte and fresh global invariants while reusing only
+  matching terminal semantics; prepared work and new evidence remain fresh.
+  Version-4 writes maintain baselines and affected verdicts in the same SQLite
+  transaction as their actual changes. Inspection, backup, recovery and explicit
+  audit freshly validate semantics. History remains retained and whole-history
+  byte work and storage continue growing; this adds no archival or deletion.
+  Controlled workload measurements and their limits are in the
+  [benchmark guide](benchmarks/README.md) and
+  [ledger-history design](docs/ledger-history-scaling.md).
+
+### Upgrading from 0.5.0 or a main-branch preview
+
+Existing 0.1 product maps and 0.2 config/state documents remain readable. This
+package release does not change the specification version. Keep target, policy,
+plan and output artifacts outside model folders. Older serialized observations
+are history; refresh them when current evidence is required rather than editing
+or relabeling them.
+
+The new workflow uses reviewed readiness and producer-trust policies in the
+operator's controlled runtime. A plan digest checks consistency, not approval.
+Admission and completion receipts are unsigned and do not establish test
+honesty, acceptance coverage, executor-to-output provenance or globally latest
+state. Local completion does not close external tickets, run candidate code,
+dispatch agents or authorize release. Same-user file permissions are not a
+candidate-code isolation boundary.
+
+#### JSON report compatibility
+
+The package, SQLite ledger and JSON report versions are independent. Consumers
+of main-branch preview artifacts must select the corresponding report schema;
+particularly, reconciliation `0.1.0` consumers must handle the new `0.2.0`
+required fields. Original immutable binding records and completion receipts keep
+their formats.
+
+| Artifact or operation | JSON `schema_version` in this release |
+| --- | --- |
+| Verification plans and GitHub admission receipts | `0.1.0` |
+| Reconciliation previews, bound or unbound | `0.2.0`; required `binding` and `claims.registered_binding_verified`. Unbound calls keep `binding: null` and the claim false. |
+| Immutable execution binding records and completion receipts | `0.1.0` |
+| Completion/show/recovery wrappers using a version-2 ledger | `0.1.0` |
+| Completion/show/recovery wrappers using a version-4 ledger | `0.2.0`, adding `history_validation` for the named protected view, not command-wide totals |
+| Ordinary version-1/version-2 ledger maintenance | `0.2.0`, including upgrade operation/status and the supported store versions |
+| Ordinary version-4 ledger maintenance | `0.3.0`, including profile, integrity coverage and fresh audit diagnostics |
+| Audit-only version-3 index conversion and audit | `0.1.0` |
+| Version-4 activation and audit | `0.2.0` |
+
+#### Ledger upgrade paths
+
+Registration still creates version-1 ledgers by default. Existing operational
+ledgers retain their format. Completion supports version 2 or an explicitly
+activated version 4; version 3 is never an operational ledger.
+
+| Starting ledger | Explicit path | Output to select after review |
+| --- | --- | --- |
+| Version 1 | `exacly executions upgrade --ledger SOURCE --out NEW_DIR` | `NEW_DIR/upgraded/ledger.sqlite3`, version 2 |
+| Clean version 2, audit copy only | `exacly executions index --ledger SOURCE --out NEW_DIR` | `NEW_DIR/indexed/ledger.sqlite3`, audit-only version 3; retain the source as operational authority |
+| Supported version 2, 3 or 4 | `exacly executions activate --ledger SOURCE --out NEW_DIR` | `NEW_DIR/operational/ledger.sqlite3`, version 4 |
+
+Copies preserve the source, include exact raw backups and a manifest, use private
+paths and refuse overlap or overwrite. Review the output before explicitly
+selecting one canonical operational ledger; do not use old and new copies as
+parallel active authorities. A version-1 source must first upgrade to version 2.
+Both index and activation support `--dry-run` without writing output. Initial
+activation from version 2 or 3 rejects unresolved prepared completions.
+
+A known stale version-4 profile with valid baselines permits fresh read-only
+fallback; writes require an explicit activation copy to refresh the profile.
+Missing optional terminal verdicts also fall back to fresh validation. Missing
+or corrupt required baselines remain errors. Version-3 audit retains its strict
+matching-profile requirement. An existing version-4 copy can be explicitly
+profile-refreshed with prepared work intact; activation neither admits evidence
+nor publishes state. After selecting the refreshed copy, use normal completion
+recovery against the actual state. Supported interrupted SQLite DELETE-journal
+recovery also produces a new validated copy and preserves the source database
+and journal; it does not repair or cut over in place.
 
 ## 0.5.0
 
