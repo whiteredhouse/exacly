@@ -360,6 +360,11 @@ def test_admitted_origin_preserves_success_and_failure_observations(outcome: str
     assert result.receipt["claims"]["test_honesty_verified"] is False
     assert result.receipt["claims"]["coverage_verified"] is False
     assert result.receipt["claims"]["self_authenticating"] is False
+    assert result.receipt["schema_version"] == "0.2.0"
+    assert source.manifest["schema_version"] == "0.1.0"
+    assert result.receipt["claims"]["branch_protection_verified"] is True
+    assert result.receipt["origin"]["branch_protection"] == "required"
+    assert admission.timestamp(result.receipt["origin"]["branch_protection_checked_at"])
     assert (source.policy, source.pages) == before
     assert source.downloads == [(REPOSITORY, ARTIFACT_ID)]
 
@@ -538,8 +543,12 @@ def test_admission_of_a_skipped_report_cannot_establish_verification() -> None:
 @pytest.mark.parametrize(
     "case", ["wrong_repository", "fork", "pull_request", "branch", "attempt", "incomplete", "cancelled"]
 )
-def test_untrusted_run_metadata_never_supplies_observations(case: str) -> None:
+@pytest.mark.parametrize("opt_out", [False, True])
+def test_untrusted_run_metadata_never_supplies_observations(case: str, opt_out: bool) -> None:
     source = Source()
+    if opt_out:
+        source.policy["branch_protection"] = "not_required"
+        source.pages[f"{BASE}/branches/main"]["protected"] = False
     if case == "wrong_repository":
         source.run["repository"]["id"] += 1
     elif case == "fork":
@@ -575,6 +584,124 @@ def test_an_unprotected_branch_cannot_supply_trusted_evidence() -> None:
     source = Source()
     source.pages[f"{BASE}/branches/main"]["protected"] = False
     rejected(admit(source))
+
+
+@pytest.mark.parametrize("mode", [None, "required"])
+@pytest.mark.parametrize("protected", [False, None, 1, "true"])
+def test_default_and_explicit_required_protection_fail_closed(mode: str | None, protected: Any) -> None:
+    source = Source()
+    if mode is not None:
+        source.policy["branch_protection"] = mode
+    source.pages[f"{BASE}/branches/main"]["protected"] = protected
+    before = copy.deepcopy(source.policy)
+    result = admit(source)
+    rejected(result)
+    assert result.receipt["claims"]["branch_protection_verified"] is False
+    assert source.downloads == []
+    assert source.policy == before
+
+
+def test_explicit_required_protection_and_omitted_policy_retain_their_own_digests() -> None:
+    source = Source()
+    original = copy.deepcopy(source.policy)
+    assert admission.validate_policy(original) == original
+    assert "branch_protection" not in admission.validate_policy(original)
+    implicit = admit(source)
+    source.policy["branch_protection"] = "required"
+    explicit = admit(source)
+    assert explicit.receipt["status"] == "admitted"
+    assert explicit.receipt["claims"]["branch_protection_verified"] is True
+    assert implicit.receipt["policy"]["digest"] != explicit.receipt["policy"]["digest"]
+
+
+@pytest.mark.parametrize("protected", [True, False, None, "unavailable"])
+def test_explicit_opt_out_is_visible_without_claiming_verified_protection(protected: Any) -> None:
+    source = Source()
+    source.policy["branch_protection"] = "not_required"
+    source.pages[f"{BASE}/branches/main"]["protected"] = protected
+    result = admit(source)
+    assert result.receipt["status"] == "admitted", result.receipt
+    assert result.receipt["claims"]["branch_protection_verified"] is False
+    assert result.receipt["origin"]["branch_protection"] == "not_required"
+    assert result.receipt["origin"]["branch_protection_checked_at"] is None
+    assert "not required by the approved policy" in result.receipt["checks"][0]["reason"]
+    assert any("/branches/main" in call for call in source.calls)
+    assert "Branch protection: not verified" in admission.as_text(result.receipt)
+    assert result.state["records"]["REQ-1"]["assessments"][0]["state"] == "passed"
+
+
+@pytest.mark.parametrize("mode", ["required", "not_required"])
+def test_branch_identity_is_still_required_under_either_protection_policy(mode: str) -> None:
+    source = Source()
+    source.policy["branch_protection"] = mode
+    source.pages[f"{BASE}/branches/main"]["name"] = "other"
+    result = admit(source)
+    rejected(result)
+    assert "branch identity" in result.receipt["checks"][-1]["reason"]
+    assert result.receipt["claims"]["branch_protection_verified"] is False
+
+
+@pytest.mark.parametrize("mode", [None, "required", "not_required"])
+def test_branch_api_failure_never_implies_permission_to_waive_protection(mode: str | None) -> None:
+    from exacly.github_evidence import GitHubError
+
+    class UnavailableBranch(Source):
+        def get_json(self, relative_path: str) -> dict[str, Any]:
+            if "/branches/" in relative_path:
+                raise GitHubError("GitHub branch lookup failed with HTTP 403")
+            return super().get_json(relative_path)
+
+    source = UnavailableBranch()
+    if mode is not None:
+        source.policy["branch_protection"] = mode
+    result = admit(source)
+    rejected(result)
+    assert "403" in result.receipt["checks"][-1]["reason"]
+    assert result.receipt["claims"]["branch_protection_verified"] is False
+    assert source.downloads == []
+
+
+@pytest.mark.parametrize("mode", [None, False, True, "optional", "", 0, {}, []])
+def test_invalid_branch_protection_policy_values_fail_before_source_access(mode: Any) -> None:
+    source = Source()
+    source.policy["branch_protection"] = mode
+    with pytest.raises(ValueError, match="invalid trust policy"):
+        admit(source)
+    assert source.calls == [] and source.downloads == []
+
+
+@pytest.mark.parametrize("mode", ["required", "not_required"])
+def test_policy_proposal_records_only_an_explicit_protection_choice(mode: str) -> None:
+    source = Source()
+    options: dict[str, Any] = {"producer": source.producer, "observer_paths": source.observer_paths}
+    candidate = admission.propose_policy(source, REPOSITORY, B, [source.model_file], branch_protection=mode, **options)
+    assert candidate["branch_protection"] == mode
+    implicit = admission.propose_policy(source, REPOSITORY, B, [source.model_file], **options)
+    assert "branch_protection" not in implicit
+
+
+def test_invalid_proposed_protection_choice_fails_before_source_access() -> None:
+    source = Source()
+    with pytest.raises(ValueError, match="branch protection"):
+        admission.propose_policy(
+            source,
+            REPOSITORY,
+            B,
+            [source.model_file],
+            producer=source.producer,
+            observer_paths=source.observer_paths,
+            branch_protection="optional",
+        )
+    assert source.calls == []
+
+
+def test_successful_protection_check_remains_visible_if_later_admission_fails() -> None:
+    source = Source()
+    source.run["head_sha"] = "c" * 40
+    result = admit(source)
+    rejected(result)
+    assert result.receipt["claims"]["branch_protection_verified"] is True
+    assert "Branch protection: verified" in admission.as_text(result.receipt)
 
 
 def test_malformed_authoritative_metadata_produces_a_rejected_receipt() -> None:
@@ -655,8 +782,12 @@ def test_completed_job_after_the_selected_date_cannot_supply_an_observation() ->
 
 
 @pytest.mark.parametrize("case", ["wrong_job", "duplicate_job", "missing_step", "skipped_step", "upload_failure"])
-def test_required_producer_job_and_steps_must_complete(case: str) -> None:
+@pytest.mark.parametrize("opt_out", [False, True])
+def test_required_producer_job_and_steps_must_complete(case: str, opt_out: bool) -> None:
     source = Source()
+    if opt_out:
+        source.policy["branch_protection"] = "not_required"
+        source.pages[f"{BASE}/branches/main"]["protected"] = False
     if case == "wrong_job":
         source.job["name"] = "Untrusted job"
     elif case == "duplicate_job":
@@ -673,8 +804,12 @@ def test_required_producer_job_and_steps_must_complete(case: str) -> None:
 
 
 @pytest.mark.parametrize("case", ["expired", "wrong_run", "wrong_revision", "outside_job", "duplicate", "digest"])
-def test_artifact_metadata_must_match_the_run_and_retained_bytes(case: str) -> None:
+@pytest.mark.parametrize("opt_out", [False, True])
+def test_artifact_metadata_must_match_the_run_and_retained_bytes(case: str, opt_out: bool) -> None:
     source = Source()
+    if opt_out:
+        source.policy["branch_protection"] = "not_required"
+        source.pages[f"{BASE}/branches/main"]["protected"] = False
     if case == "expired":
         source.artifact["expired"] = True
     elif case == "wrong_run":
@@ -708,8 +843,12 @@ def test_artifact_pagination_finds_the_expected_attempt_bundle() -> None:
 
 
 @pytest.mark.parametrize("case", ["workflow", "observer", "model", "truncated", "symlink"])
-def test_pinned_workflow_observer_and_model_content_are_required(case: str) -> None:
+@pytest.mark.parametrize("opt_out", [False, True])
+def test_pinned_workflow_observer_and_model_content_are_required(case: str, opt_out: bool) -> None:
     source = Source()
+    if opt_out:
+        source.policy["branch_protection"] = "not_required"
+        source.pages[f"{BASE}/branches/main"]["protected"] = False
     if case == "workflow":
         source.policy["workflow"]["digest"] = "sha256:" + "0" * 64
     elif case == "observer":
@@ -734,8 +873,12 @@ def test_an_approved_legacy_model_cannot_supply_split_identity_observations() ->
 
 
 @pytest.mark.parametrize("case", ["extra_job", "untrusted_event", "checkout_revision"])
-def test_approved_fingerprints_cannot_bypass_the_supported_workflow_profile(case: str) -> None:
+@pytest.mark.parametrize("opt_out", [False, True])
+def test_approved_fingerprints_cannot_bypass_the_supported_workflow_profile(case: str, opt_out: bool) -> None:
     source = Source()
+    if opt_out:
+        source.policy["branch_protection"] = "not_required"
+        source.pages[f"{BASE}/branches/main"]["protected"] = False
     workflow = yaml.safe_load(source.workflow)
     if case == "extra_job":
         workflow["jobs"]["other"] = {"runs-on": "ubuntu-latest", "steps": [{"run": "true"}]}
@@ -761,8 +904,12 @@ def test_approved_fingerprints_cannot_bypass_the_supported_workflow_profile(case
         ("extra", True),
     ],
 )
-def test_manifest_must_match_authoritative_metadata_and_report_bytes(field: str, value: Any) -> None:
+@pytest.mark.parametrize("opt_out", [False, True])
+def test_manifest_must_match_authoritative_metadata_and_report_bytes(field: str, value: Any, opt_out: bool) -> None:
     source = Source()
+    if opt_out:
+        source.policy["branch_protection"] = "not_required"
+        source.pages[f"{BASE}/branches/main"]["protected"] = False
     source.manifest[field] = value
     source.rebundle()
     rejected(admit(source))

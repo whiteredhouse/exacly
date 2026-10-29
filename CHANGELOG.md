@@ -1,5 +1,31 @@
 # Package release notes
 
+## Unreleased
+
+- **Explicit branch-protection policy.** GitHub producer trust policies may set
+  `branch_protection: not_required` to admit evidence from an unprotected branch,
+  including private repositories whose plan does not provide branch protection.
+  Omitting the field or setting `required` keeps the current protection
+  requirement. Exact branch identity, immutable commit/workflow/observer/model
+  checks and artifact provenance remain required; failed GitHub reads do not
+  trigger an implicit opt-out. The policy choice must be independently reviewed,
+  and changing it changes the trust-policy digest and registered contract.
+- **Visible admission scope.** New admission receipts use schema version
+  `0.2.0` and include `claims.branch_protection_verified`. It is true only after
+  the required live protection check succeeds. An opted-out admission records
+  false even if GitHub reports the branch protected, with
+  `origin.branch_protection_checked_at: null`; admitted receipts also record the
+  selected mode in `origin.branch_protection`. A required check records its
+  actual timestamp; neither case proves historical protection or the strength
+  of branch rules. Reconciliation and completion use the same fresh-admission
+  policy behavior. Retained `0.1.0` admission proof remains readable with its
+  original protection-required meaning; it cannot authorize the new opt-out.
+
+The evidence-bundle manifest remains `0.1.0`; immutable completion receipts and
+ledger formats are unchanged. Existing policies keep their original bytes and
+digests when `branch_protection` is absent. These changes are not included in the
+published `0.6.0rc1` package or tag.
+
 ## 0.6.0rc1 — 2026-10-29
 
 This release candidate adds an operator-controlled verification workflow: plan
