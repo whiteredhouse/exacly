@@ -29,7 +29,7 @@ jobs:
         if: always() && (steps.verification.outcome == 'success' || steps.verification.outcome == 'failure')
         env:
           EXACLY_TEST_OUTCOME: ${{ steps.verification.outcome }}
-        run: uv run --locked python ci/package_verification_evidence.py --report reports/junit.xml --out reports/evidence
+        run: uv run --locked exacly evidence package --report reports/junit.xml --out reports/evidence
       - name: Upload verification evidence
         if: always() && steps.evidence.outcome == 'success'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

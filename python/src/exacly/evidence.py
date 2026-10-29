@@ -6,20 +6,20 @@ independently approved policy before admitting this bundle.
 
 from __future__ import annotations
 
-import argparse
 import contextlib
 import hashlib
 import json
 import os
 import re
 import subprocess
-import sys
 import xml.etree.ElementTree as ET
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-MAX_REPORT_BYTES = 8 * 1024 * 1024
+from exacly._evidence_format import MANIFEST_VERSION, REPORT_LIMIT
+
+MAX_REPORT_BYTES = REPORT_LIMIT
 
 
 class EvidenceError(ValueError):
@@ -126,7 +126,7 @@ def package(
     ):
         raise EvidenceError("the verification outcome contradicts the report")
     manifest: dict[str, Any] = {
-        "schema_version": "0.1.0",
+        "schema_version": MANIFEST_VERSION,
         "repository_id": repository_id,
         "repository": repository,
         "run_id": run_id,
@@ -158,21 +158,3 @@ def package(
             out.rmdir()
         raise
     return manifest
-
-
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--report", required=True, type=Path)
-    parser.add_argument("--out", required=True, type=Path)
-    args = parser.parse_args(argv)
-    try:
-        package(args.report, args.out)
-    except (EvidenceError, OSError) as error:
-        print(f"verification evidence: {error}", file=sys.stderr)
-        return 1
-    print(f"Prepared verification evidence in {args.out}")
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

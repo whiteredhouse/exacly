@@ -110,6 +110,17 @@ def test_missing_required_installed_validation_code_fails_closed(installed: Path
     assert "profile" not in result
 
 
+def test_imported_evidence_schema_cannot_hide_missing_installed_source(installed: Path) -> None:
+    schema = installed / "exacly/_evidence_format.py"
+    result = run_profile(
+        installed,
+        f"from pathlib import Path\nfrom exacly import execution_history\nPath({str(schema)!r}).unlink()\n",
+    )
+    assert result.get("error_type") == "HistoryError", result
+    assert "_evidence_format.py" in result["message"]
+    assert "profile" not in result
+
+
 def test_imported_dependency_code_cannot_hide_behind_another_distributions_metadata(installed: Path) -> None:
     before = run_profile(installed)
     assert "profile" in before, before
