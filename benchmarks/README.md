@@ -33,7 +33,7 @@ Show and exact replay now derive each retained proof once. Exact-after-state rec
 
 ## Independent history and payload scaling
 
-[`ledger_history.py`](ledger_history.py) profiles full store validation using independently identified completed tasks, open bindings and supersession chains. It also measures model/state/schema work and separate retained-payload read/SHA256 and SQLite `quick_check` passes. The [design decision](../docs/ledger-history-scaling.md) interprets these measurements and specifies the proposed validation-index contract.
+[`ledger_history.py`](ledger_history.py) profiles full store validation using independently identified completed tasks, open bindings and supersession chains. It also measures model/state/schema work and separate retained-payload read/SHA256 and SQLite `quick_check` passes. The [design decision](../docs/ledger-history-scaling.md) interprets these measurements and specifies the implemented validation-index contract. The operational comparison below measures that implementation separately from this historical baseline.
 
 Run from the repository root with development dependencies installed. The six commands below reproduce the workloads in [`results/ledger_history_baseline.json`](results/ledger_history_baseline.json):
 
