@@ -17,8 +17,8 @@ producer:
 # Missing selectors pin absence; adding them later changes the observer fingerprint.
 # This workflow runs the checkout's installed CLI. Pin its complete source package,
 # including entrypoint imports and future modules, rather than only the packager.
-# Verification executes CI helpers, including the legacy entrypoint and wheel smoke
-# checks. Pin the complete ci subtree so new helpers and fixtures are covered too.
+# Verification executes CI helpers, including the installed-wheel smoke checks.
+# Pin the complete ci subtree so new helpers and fixtures are covered too.
 # Source-package and CI changes require review and regeneration of this policy.
 observer_paths:
   - .github/workflows/verification-evidence.yml

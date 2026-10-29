@@ -23,7 +23,7 @@
 - Exacly's own producer workflow uses the installed command. Its proposal pins
   the checkout's `python/src/exacly` subtree, including the CLI and packaging
   implementation; changes to that source require a reviewed policy refresh.
-  The old `ci/package_verification_evidence.py` path remains a thin wrapper.
+  The repository-only CI helper is removed; use the installed command or Python API.
 
 The evidence manifest remains `0.1.0`, admission receipts remain `0.2.0`, and
 admission and ledger contracts are unchanged. This command is not included in

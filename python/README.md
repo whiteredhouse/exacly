@@ -292,8 +292,8 @@ observation inputs, including a distribution hash lock when used.
 
 Migrating a producer changes its workflow bytes, so regenerate and independently
 review the candidate policy before admitting evidence from the changed workflow.
-The repository's old `ci/package_verification_evidence.py` path delegates to the
-packaged implementation for callers still using it.
+Use the installed `exacly evidence package` command or `exacly.evidence.package`
+API; the repository-only CI helper has been removed.
 
 ## Admit GitHub Actions evidence
 
@@ -301,7 +301,7 @@ packaged implementation for callers still using it.
 
 Each trust policy supplies its exact branch, workflow path, job ID and name, verification/package/upload step names, artifact name prefix and observer paths. Branch protection is required by default. The library supplies no repository layout or producer defaults. The supported producer contract remains one job in a push workflow on the approved branch.
 
-Exacly's own [producer proposal](../ci/evidence-producer.yaml) selects [the verification evidence workflow](../.github/workflows/verification-evidence.yml). This example runs on pushes to `main`, has one job named `Observe verification`, explicitly selects the pytest configuration with `-c pyproject.toml`, and packages `manifest.json` and `junit.xml` in an artifact named `exacly-evidence-RUN-ATTEMPT`. Other repositories supply their own contract. The packaging helper checks the checkout and supported run metadata before producing the bundle; admission independently compares that metadata with GitHub responses and the approved policy.
+Exacly's own [producer proposal](../ci/evidence-producer.yaml) selects [the verification evidence workflow](../.github/workflows/verification-evidence.yml). This example runs on pushes to `main`, has one job named `Observe verification`, explicitly selects the pytest configuration with `-c pyproject.toml`, and packages `manifest.json` and `junit.xml` in an artifact named `exacly-evidence-RUN-ATTEMPT`. Other repositories supply their own contract. The packaging command checks the checkout and supported run metadata before producing the bundle; admission independently compares that metadata with GitHub responses and the approved policy.
 
 ### Approve a producer policy
 

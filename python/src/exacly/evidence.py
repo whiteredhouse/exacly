@@ -6,14 +6,12 @@ independently approved policy before admitting this bundle.
 
 from __future__ import annotations
 
-import argparse
 import contextlib
 import hashlib
 import json
 import os
 import re
 import subprocess
-import sys
 import xml.etree.ElementTree as ET
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -160,21 +158,3 @@ def package(
             out.rmdir()
         raise
     return manifest
-
-
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--report", required=True, type=Path)
-    parser.add_argument("--out", required=True, type=Path)
-    args = parser.parse_args(argv)
-    try:
-        package(args.report, args.out)
-    except (EvidenceError, OSError) as error:
-        print(f"verification evidence: {error}", file=sys.stderr)
-        return 1
-    print(f"Prepared verification evidence in {args.out}")
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

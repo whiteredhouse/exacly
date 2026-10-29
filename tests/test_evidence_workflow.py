@@ -3,7 +3,6 @@
 import hashlib
 import json
 import re
-import runpy
 from pathlib import Path
 from typing import Any
 
@@ -56,7 +55,6 @@ def test_configured_example_matches_the_actual_producer_workflow() -> None:
         "python/src/exacly/_evidence_format.py",
         "python/src/exacly/__init__.py",
         "python/src/exacly/future_packaging_input.py",
-        "ci/package_verification_evidence.py",
         "ci/smoke.py",
         "ci/smoke_evidence.py",
         "ci/future/helper.py",
@@ -164,23 +162,6 @@ def test_bundle_preserves_report_and_records_only_producer_identity_and_integrit
         "check_outcome": "success",
     }
     assert json.loads((out / "manifest.json").read_text()) == manifest
-
-
-def test_legacy_script_entrypoint_still_packages_the_same_report(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    legacy = runpy.run_path(str(ROOT / "ci/package_verification_evidence.py"))
-    for key, value in environment().items():
-        monkeypatch.setenv(key, value)
-    monkeypatch.setattr(evidence, "checkout_revision", lambda: SHA)
-    source, out = tmp_path / "junit.xml", tmp_path / "evidence"
-    source.write_bytes(PASSING)
-    assert legacy["main"](["--report", str(source), "--out", str(out)]) == 0
-    manifest = json.loads((out / "manifest.json").read_text())
-    assert (out / "junit.xml").read_bytes() == PASSING
-    assert manifest["schema_version"] == "0.1.0"
-    assert manifest["report_digest"] == "sha256:" + hashlib.sha256(PASSING).hexdigest()
-    assert "Prepared verification evidence" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(
