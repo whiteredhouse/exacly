@@ -6,7 +6,7 @@ records:
   - id: REQ-019
     type: Requirement
     name: Admit verification evidence from an approved GitHub producer
-    description: Package producer evidence and establish a live verification report's checked origin and target before deriving state from it.
+    description: Establish the checked origin and target of a live verification report before deriving state from it.
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
@@ -34,28 +34,26 @@ records:
       - Exit status is 0 for admitted evidence, 1 for rejected evidence and 2 for invalid inputs or output errors.
       - Receipts limit their claim to checked origin and target applicability, explicitly leave test honesty and acceptance coverage unverified, and are not self-authenticating; admission neither signs receipts, dispatches work nor closes tasks.
       - The optional branch_protection field accepts only required or not_required and omission retains the required default without rewriting the approved policy or its digest; opt-out never bypasses exact branch identity, failed GitHub reads or other admission checks, and changing the choice changes the trust contract for registration, reconciliation and completion.
-      - The installed package exposes a GitHub Actions evidence-packaging command and reusable API, checking push metadata and the actual checkout before preserving report bytes and writing only a version-0.1 manifest and JUnit report into a new directory; packaging makes no admission or verification claim, retains completed failures and skipped cases, refuses invalid or contradictory inputs and existing outputs, and has no GitHub token or API dependency.
-    verification_method: Packaging and admission core, command, GitHub transport and producer-workflow tests in CI.
+    verification_method: Admission core, command, GitHub transport and producer-workflow tests in CI.
     observe:
       tests:
         cases:
           - "python/tests/test_admission.py::*"
           - "python/tests/test_admission_cli.py::*"
           - "python/tests/test_github_evidence.py::*"
-          - "python/tests/test_package_cli.py::*"
           - "tests/test_evidence_workflow.py::*"
 
   - id: APP-008
     type: Application
     name: GitHub verification evidence admission
-    description: Producer packaging in evidence_packaging.py and the live-source policy and receipt core in admission.py.
+    description: The live-source admission command and its shared policy and receipt core.
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-29"
-    responsibility: Prepare producer evidence without trust claims, then admit reports from an approved live GitHub producer and derive fresh state with an explainable receipt.
-    interfaces: [exacly package github-actions command, exacly.evidence_packaging Python API, exacly admit github-actions command, exacly.admission Python API]
-    implementation_ref: { locator: python/src/exacly }
+    last_reviewed_at: "2026-10-28"
+    responsibility: Admit verification reports from an approved live GitHub producer and derive fresh state with an explainable receipt.
+    interfaces: [exacly admit github-actions command, exacly.admission Python API]
+    implementation_ref: { locator: python/src/exacly/admission.py }
 
 relationships:
   - { source: REQ-019, type: supports, target: PROC-002 }

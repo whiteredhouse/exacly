@@ -63,7 +63,7 @@ def producer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[list[str]
         monkeypatch.setenv(key, value)
     monkeypatch.delenv("GH_TOKEN", raising=False)
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    return ["package", "github-actions", "--report", str(report), "--out", str(out)], report, out, revision
+    return ["evidence", "package", "--report", str(report), "--out", str(out)], report, out, revision
 
 
 def test_json_manifest_matches_the_bundle_and_is_consumable_by_admission(
@@ -152,7 +152,7 @@ def test_invalid_producer_inputs_return_one_without_creating_output(
     assert exacly_main(args) == 1
     printed = capsys.readouterr()
     assert not printed.out
-    assert printed.err.startswith("exacly package: ") and reason in printed.err
+    assert printed.err.startswith("exacly evidence package: ") and reason in printed.err
     assert not out.exists()
     assert report.read_bytes() == REPORT
 
@@ -190,7 +190,7 @@ def test_missing_report_returns_a_packaging_error_without_traceback(
     report.unlink()
     assert exacly_main(args) == 1
     printed = capsys.readouterr()
-    assert not printed.out and printed.err.startswith("exacly package: ")
+    assert not printed.out and printed.err.startswith("exacly evidence package: ")
     assert "Traceback" not in printed.err
     assert not out.exists()
 
@@ -198,13 +198,15 @@ def test_missing_report_returns_a_packaging_error_without_traceback(
 @pytest.mark.parametrize(
     "args",
     [
-        ["package"],
-        ["package", "github-actions"],
-        ["package", "github-actions", "--report", "junit.xml"],
-        ["package", "another-source", "--report", "junit.xml", "--out", "evidence"],
+        ["evidence"],
+        ["evidence", "package"],
+        ["evidence", "package", "--report", "junit.xml"],
+        ["evidence", "package", "github-actions", "--report", "junit.xml", "--out", "evidence"],
+        ["evidence", "another-command", "--report", "junit.xml", "--out", "evidence"],
+        ["package", "github-actions", "--report", "junit.xml", "--out", "evidence"],
     ],
 )
-def test_missing_arguments_and_unknown_sources_use_argument_error_exit_status(
+def test_missing_arguments_and_unknown_commands_use_argument_error_exit_status(
     capsys: pytest.CaptureFixture[str], args: list[str]
 ) -> None:
     with pytest.raises(SystemExit) as error:

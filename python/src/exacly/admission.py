@@ -27,16 +27,18 @@ import jsonschema
 import yaml
 
 from exacly import planning, query
+from exacly._evidence_format import MANIFEST_LIMIT as MANIFEST_LIMIT
+from exacly._evidence_format import MANIFEST_SCHEMA as MANIFEST_SCHEMA
+from exacly._evidence_format import MANIFEST_VERSION
+from exacly._evidence_format import REPORT_LIMIT as REPORT_LIMIT
 from exacly.applicability import Target
 from exacly.core import is_state
 from exacly.github_evidence import ARCHIVE_LIMIT, GitHubError, json_object, no_constant
 from exacly.refresh import Run, read_junit, refresh
 
 Doc = dict[str, Any]
-VERSION = "0.1.0"
+VERSION = MANIFEST_VERSION
 RECEIPT_VERSION = "0.2.0"
-REPORT_LIMIT = 8 * 1024 * 1024
-MANIFEST_LIMIT = 64 * 1024
 SHA = {"type": "string", "pattern": "^[0-9a-f]{40}$"}
 TEXT = {"type": "string", "pattern": r"\S"}
 JOB_KEY = {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"}
@@ -79,20 +81,6 @@ POLICY_SCHEMA: Doc = planning.fields(
         ),
     },
     optional=("branch_protection",),
-)
-MANIFEST_SCHEMA: Doc = planning.fields(
-    {
-        "schema_version": {"const": VERSION},
-        "repository_id": {"type": "integer", "minimum": 1},
-        "repository": {"type": "string"},
-        "run_id": {"type": "integer", "minimum": 1},
-        "run_attempt": {"type": "integer", "minimum": 1},
-        "workflow_path": TEXT,
-        "job": JOB_KEY,
-        "implementation_revision": SHA,
-        "report_digest": planning.DIGEST,
-        "check_outcome": {"enum": ["success", "failure"]},
-    }
 )
 
 

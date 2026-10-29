@@ -3,7 +3,7 @@
 exacly validate PATH... [--revision REV] [--date YYYY-MM-DD] [--json]
 exacly refresh PATH... --context CONTEXT --state FILE [--junit FILE...] [--distribution] [run options]
 exacly observe manual-qa PATH... --target FILE --state FILE [--revision REV] [--root DIR]
-exacly package github-actions --report FILE --out NEWDIR [--json]
+exacly evidence package --report FILE --out NEWDIR [--json]
 exacly admit github-actions --trust-policy FILE --target FILE --run ID --attempt N --date YYYY-MM-DD --out DIR
 exacly reconcile github-actions --dry-run --plan FILE --action ID --policy FILE --trust-policy FILE --target FILE ...
 exacly complete github-actions --plan FILE --action ID --policy FILE --trust-policy FILE --target FILE ...
@@ -848,8 +848,9 @@ def exacly_main(argv: list[str] | None = None) -> int:
     commands.add_parser("validate", help="validate the model and print the section 11 report")
     commands.add_parser("refresh", help="write state for one context from what the bindings observe")
     commands.add_parser("observe", help="write state from an extension source, such as manual-qa observations")
-    package = commands.add_parser("package", help="prepare a verification report and its producer manifest")
-    package.add_argument("source", choices=["github-actions"])
+    evidence_parser = commands.add_parser("evidence", help="prepare verification evidence for admission")
+    evidence_commands = evidence_parser.add_subparsers(dest="evidence_command", required=True)
+    package = evidence_commands.add_parser("package", help="prepare a verification report and its producer manifest")
     package.add_argument("--report", required=True, type=Path, help="complete JUnit XML report from the producer")
     package.add_argument("--out", required=True, type=Path, help="new evidence bundle directory")
     package.add_argument("--json", action="store_true", help="print the producer manifest as JSON")
@@ -1044,13 +1045,13 @@ def exacly_main(argv: list[str] | None = None) -> int:
     view.add_argument("--base", metavar="REV", help="plan: the Git revision the change is against (default: main)")
     view.add_argument("--out", type=Path, metavar="DIR", help="site: the folder to write (default: reports/site)")
     args = parser.parse_args(argv)
-    if args.command == "package":
-        from exacly import evidence_packaging
+    if args.command == "evidence" and args.evidence_command == "package":
+        from exacly import evidence
 
         try:
-            manifest = evidence_packaging.package(args.report, args.out)
-        except (evidence_packaging.EvidenceError, OSError) as error:
-            print(f"exacly package: {error}", file=sys.stderr)
+            manifest = evidence.package(args.report, args.out)
+        except (evidence.EvidenceError, OSError) as error:
+            print(f"exacly evidence package: {error}", file=sys.stderr)
             return 1
         print(
             json.dumps(manifest, indent=2, sort_keys=True)

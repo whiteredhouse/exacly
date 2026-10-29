@@ -19,7 +19,9 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-MAX_REPORT_BYTES = 8 * 1024 * 1024
+from exacly._evidence_format import MANIFEST_VERSION, REPORT_LIMIT
+
+MAX_REPORT_BYTES = REPORT_LIMIT
 
 
 class EvidenceError(ValueError):
@@ -126,7 +128,7 @@ def package(
     ):
         raise EvidenceError("the verification outcome contradicts the report")
     manifest: dict[str, Any] = {
-        "schema_version": "0.1.0",
+        "schema_version": MANIFEST_VERSION,
         "repository_id": repository_id,
         "repository": repository,
         "run_id": run_id,

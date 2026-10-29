@@ -11,7 +11,7 @@ explicit ledger-copy upgrades.
 
 - [`exacly validate`](#validate) checks the model and prints the section 11 validation report.
 - [`exacly refresh`](#refresh) writes state from what the model's bindings observe.
-- [`exacly package github-actions`](#package-github-actions-evidence-unreleased) prepares a producer's manifest/JUnit evidence bundle (unreleased).
+- [`exacly evidence package`](#package-verification-evidence-unreleased) prepares a producer's manifest/JUnit evidence bundle (unreleased).
 - [`exacly admit github-actions`](#admit-github-actions-evidence) checks a live CI run against an approved producer policy before deriving verification state.
 - [`exacly show`, `trace`, `impact` and `gaps`](#questions) answer questions about the model, and [`exacly view`](#views) renders them for people.
 - [`exacly assess`](#assess-an-implementation-target) projects observations onto an explicit implementation and scope.
@@ -169,20 +169,26 @@ It writes one verification assessment per platform of each binding, with source 
 - **Details.** Each assessment carries `x-platform`, `x-release`, `x-builds`, `x-criteria` (each criterion's latest result) and, when the release has due criteria, `x-release-scope`. Its evidence is each observation's retained output with its digest. `exacly gaps` lists what the extension finds in them under "From extension observers": a release whose scope passed while the record is not verified, and observations that were not used.
 - **Validation.** When the model declares the extension, the validator checks each `manual-qa:observations` binding (`11.extension-binding`): `path`, and optionally `platforms`, nothing else. It also checks the `x-` fields on this source's assessments in state (`11.extension-assessment`), and `gaps` reports an assessment whose fields are not valid instead of reading them. The binding, assessment, target and observation schemas are `BINDING_SCHEMA`, `ASSESSMENT_SCHEMA`, `TARGET_SCHEMA` and `OBSERVATION_SCHEMA` in `exacly.manual_qa`. `observed_at` must be a timestamp with its offset, such as `2026-10-25T14:12:00Z`.
 
-## Package GitHub Actions evidence (unreleased)
+## Package verification evidence (unreleased)
 
-`exacly package github-actions` ships the existing producer helper as an installed
-command and the `exacly.evidence_packaging.package` Python API. This is an
-unreleased repository change; the published `0.6.0rc2` package does not include
-it. The consumer checks out its own project and runs its tests normally, without
+`exacly evidence package` ships the existing producer helper as an installed
+command and the `exacly.evidence.package` Python API. This is an unreleased
+repository change; the published `0.6.0rc2` package does not include it. The
+consumer checks out its own project and runs its tests normally, without
 checking out Exacly's source or copying Exacly's Python helper.
 
-Run the command in that checked-out repository, after a verification step writes
-a JUnit report:
+The planned first package containing this command is `0.6.0rc3`. **The following
+RC3 commands are unavailable until that version is published.** Once published,
+run this exact-version invocation in the consumer's checked-out repository,
+after a verification step writes a JUnit report:
 
 ```sh
-exacly package github-actions --report reports/junit.xml --out reports/evidence
+uvx --from 'exacly==0.6.0rc3' exacly evidence package --report reports/junit.xml --out reports/evidence
 ```
+
+This pins Exacly's release; its runtime dependencies are still resolved by the
+installer. For a lock that includes distribution and dependency hashes, use the
+stronger installation option below.
 
 GitHub supplies the repository, run, attempt, SHA, job, push ref and workflow-ref
 environment variables. Set `EXACLY_TEST_OUTCOME` to the verification step's actual
@@ -190,9 +196,9 @@ environment variables. Set `EXACLY_TEST_OUTCOME` to the verification step's actu
 that `git rev-parse HEAD` matches the full `GITHUB_SHA`; it reads no GitHub token
 and makes no API calls.
 
-After installing a version that includes this command, the following producer
-steps can follow an existing test step with `id: verification` that writes
-`reports/junit.xml`:
+After RC3 is published, these producer steps can follow an existing test step
+with `id: verification` that writes `reports/junit.xml`. They use the exact
+package version rather than the project's editable checkout:
 
 ```yaml
 - name: Package verification evidence
@@ -200,7 +206,7 @@ steps can follow an existing test step with `id: verification` that writes
   if: always() && (steps.verification.outcome == 'success' || steps.verification.outcome == 'failure')
   env:
     EXACLY_TEST_OUTCOME: ${{ steps.verification.outcome }}
-  run: exacly package github-actions --report reports/junit.xml --out reports/evidence
+  run: uvx --from 'exacly==0.6.0rc3' exacly evidence package --report reports/junit.xml --out reports/evidence
 - name: Upload verification evidence
   if: always() && steps.evidence.outcome == 'success'
   uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -224,19 +230,70 @@ cancelled or skipped verification steps cannot be packaged. Packaging neither
 derives verification state nor approves a policy or establishes evidence origin.
 Upload the bundle, then use [live admission](#admit-github-actions-evidence) to
 check it against GitHub and an independently approved policy. The installed API
-has the same behavior: `package(report, out, *, environ=None, checkout=None)`.
+has the same behavior: `exacly.evidence.package(report, out, *, environ=None,
+checkout=None)`.
 
-Exacly's own [workflow](../.github/workflows/verification-evidence.yml) runs this
-command through `uv run --locked`. Its [producer proposal](../ci/evidence-producer.yaml)
-pins the checkout's `python/src/exacly` subtree, covering the CLI, packager and
-package imports. A source change changes those observer fingerprints and needs
-an independently reviewed policy refresh. Other projects using a published
-packager should pin its package version in the producer workflow and review
-their own observer inputs. Migrating a producer to this command changes its
-workflow bytes, so regenerate and independently review the candidate policy
-before admitting evidence from the changed workflow. The repository's old
-`ci/package_verification_evidence.py` path delegates to the packaged
-implementation for callers still using it.
+Packaging and admission share manifest-format definitions and compatibility
+tests while independently validating their inputs. Manifest `0.1.0` is versioned
+separately from Exacly's package: compatible producer and consumer releases need
+not be identical. Permanent release checks run the built wheel and the published
+exact-version CLI outside the source checkout, exercise valid and invalid
+packaging cases, and pass a newly packaged bundle to the published `0.6.0rc2`
+consumer. Those checks guard installation and format compatibility, without
+establishing test honesty or acceptance coverage.
+
+### Install from a reviewed hash lock
+
+Once RC3 is published, generate a lock for the producer runner's Python version
+and platform. The following targets Linux x86_64 with Python 3.12; adapt both
+`--python-platform` and `--python-version` for a different runner, and use that
+Python version when creating its virtual environment. The input pins Exacly exactly;
+`uv pip compile` resolves and pins all runtime dependencies and records actual
+index distribution hashes:
+
+```sh
+printf '%s\n' 'exacly==0.6.0rc3' > requirements-evidence.in
+uv pip compile requirements-evidence.in --python-version 3.12 --python-platform x86_64-unknown-linux-gnu --generate-hashes --output-file requirements-evidence.txt
+```
+
+Review the resolved versions and distribution hashes, then commit both files.
+Keep lock generation separate from the producer job. In CI, create a dedicated
+virtual environment and install only wheels from that reviewed lock, requiring
+hashes for every dependency:
+
+```sh
+uv venv --python 3.12 .venv-evidence
+uv pip install --python .venv-evidence/bin/python --require-hashes --only-binary :all: -r requirements-evidence.txt
+```
+
+After the existing test step, use this executable in the packaging step above,
+with the same outcome environment and condition:
+
+```sh
+.venv-evidence/bin/exacly evidence package --report reports/junit.xml --out reports/evidence
+```
+
+The reviewed hash lock constrains installed Exacly and dependency distributions.
+It does not attest the interpreter, installer, runner or bytes actually executed.
+A workflow digest approves the installation instructions, rather than proving
+that the runner followed them or that tests were honest. Pin and review the
+lock, workflow, relevant runner setup and observation inputs in the producer
+trust policy.
+
+Exacly's own [workflow](../.github/workflows/verification-evidence.yml) exercises
+the editable checkout through `uv run --locked`. Its
+[producer proposal](../ci/evidence-producer.yaml) pins the checkout's
+`python/src/exacly` subtree, covering the CLI, packager, shared format definitions
+and imports, the `ci` helper subtree and the release workflow exercised by tests,
+alongside `pyproject.toml` and `uv.lock`. A change to those inputs
+changes the observer fingerprints and needs an independently reviewed policy
+refresh. Other projects using a published packager should select their own
+observation inputs, including a distribution hash lock when used.
+
+Migrating a producer changes its workflow bytes, so regenerate and independently
+review the candidate policy before admitting evidence from the changed workflow.
+The repository's old `ci/package_verification_evidence.py` path delegates to the
+packaged implementation for callers still using it.
 
 ## Admit GitHub Actions evidence
 
@@ -277,6 +334,7 @@ candidate = propose_policy(
         "spec/exacly/understanding.yaml",
         "spec/exacly/planning.yaml",
         "spec/exacly/admission.yaml",
+        "spec/exacly/evidence-packaging.yaml",
         "spec/exacly/reconciliation.yaml",
         "spec/exacly/executions.yaml",
         "spec/exacly/execution-maintenance.yaml",
