@@ -45,7 +45,7 @@ Before 0.2.0 the package was `exacly-validate`, with `exacly-validate` and `exac
 exacly validate spec/exacly --revision "$(git rev-parse HEAD)"
 
 # 0.1: one product map
-exacly validate docs/exacly/product-map.yaml --json --date 2026-10-23
+exacly validate spec/examples/0.1/invoice-reminders.yaml --json --date 2026-10-23
 ```
 
 Given a folder, it reads every YAML and JSON file under it, skipping hidden folders, so a README or the copied spec beside them is ignored. Files and folders can also be given one by one. A document is state when it has state's fields (`context`, `config_revision`, `serial` or `lineage`); every other document is config. `--revision` is the config revision being validated. State computed against another revision is reported. An abbreviated Git commit hash matches the full one; any other revision name, such as `release-1`, must match exactly.
@@ -210,12 +210,18 @@ candidate = propose_policy(
         "spec/exacly/reconciliation.yaml",
         "spec/exacly/executions.yaml",
         "spec/exacly/execution-maintenance.yaml",
+        "spec/exacly/ledger-history.yaml",
+        "spec/exacly/automation.yaml",
     ],
     producer=proposal["producer"],
     observer_paths=proposal["observer_paths"],
 )
 Path("admission-policy.candidate.json").write_text(json.dumps(candidate, indent=2) + "\n")
 ```
+
+The file list must contain the complete approved config at that revision. Include
+new config documents when the model grows, and leave observed state out of this
+list.
 
 `producer` must explicitly supply `branch`, `workflow` with `path`, `job_id`, `job_name` and `steps` (`verification`, `package`, `upload`), and `artifact.name_prefix`. `observer_paths` is also required. The helper computes the workflow, observer and model fingerprints from the selected revision.
 

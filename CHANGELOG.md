@@ -8,6 +8,24 @@ that task when applicable observations satisfy its goal. It remains a 0.x
 preview. Candidate isolation, task dispatch and bounded executors
 (REQ-025–027) are proposed work and are not included.
 
+### Documentation errata — 2026-10-29
+
+The published RC1 package and tag retain their original documentation. The
+repository documentation corrects these examples and descriptions for the next
+package release; RC1's runtime behavior is unchanged.
+
+- The producer-policy example must include `spec/exacly/automation.yaml` and
+  `spec/exacly/ledger-history.yaml`. Without them, the listed model files have
+  unresolved references and admission rejects the nonconforming model.
+- The runnable 0.1 example is `spec/examples/0.1/invoice-reminders.yaml`, replacing
+  the nonexistent `docs/exacly/product-map.yaml` path.
+- Assessment subjects retain both model and implementation identities.
+  Verification assessment context and evidence applicability follow the
+  implementation revision.
+- The quadratic binding scan belongs to the historical benchmark baseline;
+  released validation groups bindings once. Operational version-4 semantic reuse
+  is implemented, rather than proposed.
+
 ### New commands and capabilities
 
 - **Plan verification work.** `exacly plan --policy FILE --target FILE --date
@@ -63,8 +81,9 @@ preview. Candidate isolation, task dispatch and bounded executors
 
 - `refresh --model-revision MODEL --revision IMPLEMENTATION` records distinct
   model and implementation identities. The enclosing state follows the model;
-  assessment context, subject and evidence applicability follow the
-  implementation. Omitting `--model-revision` keeps the single-revision behavior
+  verification assessment context and evidence applicability follow the
+  implementation, while subjects retain both model and implementation revisions.
+  Omitting `--model-revision` keeps the single-revision behavior
   and existing observations retain their original identities. The option labels
   supplied documents/results; it does not fetch revisions or authenticate them.
   Distribution refresh requires matching model and implementation revisions.

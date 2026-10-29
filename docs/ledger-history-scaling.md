@@ -42,7 +42,7 @@ The remaining column is the median base/SQLite duration minus median binding dec
 
 The measured bottleneck is semantic interpretation, especially model/state and binding-schema validation. Hashing retained bytes and SQLite quick checks are much cheaper at these sizes. This supports investigating semantic reuse; it does not measure the latency of a completed index implementation or establish production-scale capacity.
 
-The binding validator also filters all binding rows for each pending identity. Its current candidate-comparison count is `pending identities × binding rows`. That is an analytical count from the implementation, not an instrumented counter. Separate binding-only runs measure the cost without semantic proof work. Future catalogue/index integration must avoid carrying this repeated unrelated-row scan forward.
+At the recorded baseline, the binding validator filtered all binding rows for each pending identity. Its candidate-comparison count was `pending identities × binding rows`, an analytical count rather than an instrumented counter. Separate binding-only runs measured that cost without semantic proof work. Released validation now groups binding membership once; the operational comparison in the [benchmark guide](../benchmarks/README.md#operational-semantic-reuse) measures the current engines separately from the historical baseline.
 
 ## Alternatives and decision
 
