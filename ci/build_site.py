@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import io
 import json
@@ -124,6 +125,21 @@ def read_model(root: Path, source: Path) -> query.Model:
     return query.load(documents)
 
 
+def version_assets(index: str, out: Path) -> str:
+    """Give changed CSS and JavaScript new URLs so fresh HTML cannot reuse older cached assets."""
+    for name in ("style.css", "site.js"):
+        reference = f'"./{name}"'
+        if index.count(reference) != 1:
+            raise ValueError(f"The landing page must reference {name} exactly once")
+        path = out / name
+        content = path.read_bytes()
+        version = hashlib.sha256(content).hexdigest()[:12]
+        versioned = f"{path.stem}.{version}{path.suffix}"
+        (out / versioned).write_bytes(content)
+        index = index.replace(reference, f'"./{versioned}"')
+    return index
+
+
 def build(root: Path, out: Path) -> Path:
     """Build outside the checkout; derive a labelled demo without editing canonical inputs or real state."""
     root, out = root.resolve(), out.resolve()
@@ -137,6 +153,7 @@ def build(root: Path, out: Path) -> Path:
         raise ValueError(f"The landing page must contain exactly one {MARKER} marker")
     project = read_model(root, root / "spec/exacly")
     shutil.copytree(source, out, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    index = version_assets(index, out)
     invoice_out = out / "example"
     with tempfile.TemporaryDirectory(prefix="exacly-invoice-demo-") as temporary:
         demo = prepare_demo(root, Path(temporary) / "model")

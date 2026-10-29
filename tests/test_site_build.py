@@ -113,6 +113,35 @@ def test_invoice_demo_is_active_verified_and_explicitly_fictional_with_unknown_d
     assert "REQ-013" not in page and "REQ-018" not in page
 
 
+def test_asset_urls_stay_stable_until_their_content_changes(source: Path, tmp_path: Path) -> None:
+    def assets(out: Path) -> dict[str, str]:
+        parser = References()
+        parser.feed((out / "index.html").read_text())
+        found = {}
+        for name in ("style.css", "site.js"):
+            stem, suffix = name.rsplit(".", 1)
+            urls = [url for url in parser.urls if re.fullmatch(rf"\./{stem}\.[0-9a-f]{{12}}\.{suffix}", url)]
+            assert len(urls) == 1
+            assert "./" + name not in parser.urls
+            assert (out / urls[0]).read_bytes() == (source / "docs/site" / name).read_bytes()
+            assert (out / name).read_bytes() == (out / urls[0]).read_bytes()
+            found[name] = urls[0]
+        return found
+
+    before = assets(BUILDER.build(source, tmp_path / "first"))
+    assert assets(BUILDER.build(source, tmp_path / "repeated")) == before
+    css = source / "docs/site/style.css"
+    css.write_text(css.read_text() + "\n/* Changed stylesheet content. */\n")
+    after_css = assets(BUILDER.build(source, tmp_path / "changed-css"))
+    assert after_css["style.css"] != before["style.css"]
+    assert after_css["site.js"] == before["site.js"]
+    script = source / "docs/site/site.js"
+    script.write_text(script.read_text() + "\n// Changed script content.\n")
+    after_script = assets(BUILDER.build(source, tmp_path / "changed-script"))
+    assert after_script["style.css"] == after_css["style.css"]
+    assert after_script["site.js"] != after_css["site.js"]
+
+
 def test_demo_summary_preserves_its_observation_identity_and_real_project_browser_keeps_real_state(
     source: Path, tmp_path: Path
 ) -> None:

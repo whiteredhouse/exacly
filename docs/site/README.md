@@ -4,6 +4,12 @@ The build generates static HTML, CSS and JavaScript using the repository's locke
 Python dependencies. The published site needs no application server or API key.
 Keep presentation links relative for GitHub project Pages.
 
+The build gives CSS and JavaScript content-hashed filenames and points the
+published HTML at them. Changed assets get new URLs; unchanged assets keep their
+URLs across builds. The original filenames remain available for older links.
+Already-cached HTML can still show the previous page until it is reloaded or
+expires; asset versioning takes effect when the browser loads the new HTML.
+
 ## Preview
 
 From the repository root, with uv available:
