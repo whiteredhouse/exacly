@@ -6,6 +6,8 @@ The shell checks replace uv with a recorder to verify independent installed envi
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import io
 import json
 import os
@@ -71,6 +73,56 @@ def test_release_smoke_refuses_an_editable_install(monkeypatch: pytest.MonkeyPat
             version="fixture-version", read_text=lambda filename: '{"dir_info":{"editable":true}}'
         ),
     )
+    with pytest.raises(RuntimeError, match="requires an installed package"):
+        SMOKE["installation"]()
+
+
+def wheel_record(tmp_path: Path, *, symlink: bool = False) -> tuple[Any, Path]:
+    site = tmp_path / "dependency overlay" / "site-packages"
+    site.mkdir(parents=True)
+    package = (tmp_path / "uv" / "archive-v0" / "wheel" if symlink else site) / "exacly"
+    package.mkdir(parents=True)
+    module = package / "__init__.py"
+    content = b'"""Installed wheel fixture."""\n'
+    module.write_bytes(content)
+    if symlink:
+        (site / "exacly").symlink_to(package, target_is_directory=True)
+    info = site / "exacly-1.0.dist-info"
+    info.mkdir()
+    (info / "METADATA").write_text("Metadata-Version: 2.1\nName: exacly\nVersion: 1.0\n")
+    digest = base64.urlsafe_b64encode(hashlib.sha256(content).digest()).rstrip(b"=").decode()
+    (info / "RECORD").write_text(f"exacly/__init__.py,sha256={digest},{len(content)}\n")
+    return SMOKE["importlib"].metadata.PathDistribution(info), site / "exacly/__init__.py"
+
+
+@pytest.mark.parametrize("symlink", [False, True])
+def test_release_smoke_accepts_record_owned_overlay_and_symlink(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, symlink: bool
+) -> None:
+    import exacly
+
+    distribution, module = wheel_record(tmp_path, symlink=symlink)
+    assert not module.resolve().is_relative_to(Path(sys.prefix).resolve())
+    monkeypatch.setattr(exacly, "__file__", str(module))
+    monkeypatch.setattr(SMOKE["importlib"].metadata, "distribution", lambda name: distribution)
+    assert SMOKE["installation"]() == {"version": "1.0", "module": str(module.resolve())}
+
+
+@pytest.mark.parametrize("failure", ["unrelated_source", "missing_record"])
+def test_release_smoke_rejects_module_without_distribution_ownership(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    import exacly
+
+    distribution, module = wheel_record(tmp_path)
+    if failure == "unrelated_source":
+        module = tmp_path / "uv/archive-v0/unrelated-source/exacly/__init__.py"
+        module.parent.mkdir(parents=True)
+        module.write_text('"""Unrelated source fallback."""\n')
+    else:
+        (module.parent.parent / "exacly-1.0.dist-info/RECORD").unlink()
+    monkeypatch.setattr(exacly, "__file__", str(module))
+    monkeypatch.setattr(SMOKE["importlib"].metadata, "distribution", lambda name: distribution)
     with pytest.raises(RuntimeError, match="requires an installed package"):
         SMOKE["installation"]()
 

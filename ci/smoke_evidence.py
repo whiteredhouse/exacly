@@ -30,8 +30,14 @@ def installation(*, require_installed: bool = True) -> Doc:
     module = Path(exacly.__file__).resolve()
     distribution = importlib.metadata.distribution("exacly")
     direct = json.loads(distribution.read_text("direct_url.json") or "{}")
+    # uv may load dependencies from an overlay or symlinked cache outside sys.prefix.
+    # The installed distribution's RECORD must own the imported package file.
     if require_installed and (
-        direct.get("dir_info", {}).get("editable") is True or not module.is_relative_to(Path(sys.prefix).resolve())
+        direct.get("dir_info", {}).get("editable") is True
+        or not any(
+            entry.parts == ("exacly", "__init__.py") and Path(str(distribution.locate_file(entry))).resolve() == module
+            for entry in distribution.files or ()
+        )
     ):
         raise RuntimeError(f"evidence smoke requires an installed package, found {module}")
     return {"version": distribution.version, "module": str(module)}
