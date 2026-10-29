@@ -23,9 +23,13 @@ permissions:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install the Linux isolation test runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes bubblewrap libseccomp2
       - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
       - name: Test, lint, type-check, validate the examples, and refresh and validate Exacly's own state
         run: mise run check
@@ -78,7 +82,7 @@ jobs:
     # it holds a token that can write, and only on main.
     needs: check
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     concurrency:
@@ -89,6 +93,10 @@ jobs:
       queue: max
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install the Linux isolation test runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes bubblewrap libseccomp2
       - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
       - name: Refresh Exacly's own state
         run: mise run model

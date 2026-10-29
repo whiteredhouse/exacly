@@ -14,6 +14,8 @@ exacly executions backup|recover|upgrade --ledger FILE --out NEWDIR [--lock-time
 exacly executions index --ledger FILE --out NEWDIR [--dry-run] [--lock-timeout SECONDS] [--json]
 exacly executions activate --ledger FILE --out NEWDIR [--dry-run] [--lock-timeout SECONDS] [--json]
 exacly executions audit --ledger FILE [--lock-timeout SECONDS] [--json]
+exacly isolation inspect --rootfs DIR [--json]
+exacly isolate --runtime-policy FILE [--inputs FILE] --out NEWDIR [--timeout SECONDS] [--json] -- COMMAND...
 exacly plan [-m PATH]... --policy FILE --target FILE --date YYYY-MM-DD [--json] [--out FILE]
 exacly show|trace|impact|gaps [-m PATH]... [--json] ...; exacly mcp [-m PATH]...
 exacly view plan [--base REV] | site [--out DIR]
@@ -630,6 +632,67 @@ def nonnegative_seconds(value: str) -> float:
     return seconds
 
 
+def positive_seconds(value: str) -> float:
+    """One isolated invocation requires a finite positive time limit."""
+    try:
+        seconds = float(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("must be finite positive seconds") from error
+    if not math.isfinite(seconds) or seconds <= 0:
+        raise argparse.ArgumentTypeError("must be finite positive seconds")
+    return seconds
+
+
+def isolation_document(path: Path, limit: int) -> Any:
+    """Read bounded strict JSON without accepting duplicate keys or nonfinite values."""
+
+    def unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError(f"duplicate JSON key: {key}")
+            result[key] = value
+        return result
+
+    def invalid_constant(value: str) -> Any:
+        raise ValueError(f"nonfinite JSON value: {value}")
+
+    with path.open("rb") as stream:
+        encoded = stream.read(limit + 1)
+    if len(encoded) > limit:
+        raise ValueError(f"{path} exceeds the permitted JSON document size")
+    return json.loads(encoded.decode("utf-8"), object_pairs_hook=unique, parse_constant=invalid_constant)
+
+
+def isolation_inputs(path: Path | None) -> dict[str, bytes]:
+    """Decode explicitly supplied text snapshots; never discover or open candidate host paths."""
+    if path is None:
+        return {}
+    from exacly import isolation
+
+    document = isolation_document(path, 16 * 1024 * 1024)
+    if (
+        not isinstance(document, dict)
+        or set(document) != {"schema_version", "files"}
+        or document["schema_version"] != "0.1.0"
+        or not isinstance(document["files"], dict)
+    ):
+        raise ValueError("inputs must be a version 0.1.0 JSON document with an explicit files object")
+    if len(document["files"]) > isolation.MAX_INPUT_FILES:
+        raise ValueError("input snapshot exceeds the permitted file count")
+    snapshots: dict[str, bytes] = {}
+    total = 0
+    for name, text in document["files"].items():
+        if not isinstance(text, str):
+            raise ValueError("input snapshot file values must be UTF-8 text strings")
+        content = text.encode("utf-8")
+        total += len(content)
+        if total > isolation.MAX_INPUT_BYTES:
+            raise ValueError("input snapshot exceeds the permitted byte count")
+        snapshots[name] = content
+    return snapshots
+
+
 class GitHubCredentialsError(RuntimeError):
     """Credential setup failed before a live evidence read, rather than evidence being rejected."""
 
@@ -847,6 +910,36 @@ def exacly_main(argv: list[str] | None = None) -> int:
     commands.add_parser("validate", help="validate the model and print the section 11 report")
     commands.add_parser("refresh", help="write state for one context from what the bindings observe")
     commands.add_parser("observe", help="write state from an extension source, such as manual-qa observations")
+    isolation_parser = commands.add_parser("isolation", help="inspect an explicitly selected runtime root filesystem")
+    isolation_commands = isolation_parser.add_subparsers(dest="isolation_command", required=True)
+    isolation_inspect = isolation_commands.add_parser(
+        "inspect",
+        help="calculate root filesystem content identity without approving or executing it",
+        description="Calculate root filesystem content identity. The digest does not establish operator approval.",
+    )
+    isolation_inspect.add_argument(
+        "--rootfs", required=True, type=Path, help="detached trusted runtime root filesystem"
+    )
+    isolation_inspect.add_argument("--json", action="store_true", help="print the content identity as JSON")
+    isolate = commands.add_parser(
+        "isolate",
+        help="explicitly run one command within the approved isolation boundary",
+        description=(
+            "Run one command using an explicitly approved Linux runtime policy and immutable input snapshots. "
+            "Candidate logs and artifacts are retained as untrusted output in a new directory. "
+            "Isolation setup failure prevents candidate execution."
+        ),
+    )
+    isolate.add_argument("--runtime-policy", required=True, type=Path, help="reviewed runtime policy JSON")
+    isolate.add_argument("--inputs", type=Path, help="explicit versioned UTF-8 file snapshot JSON (default: no inputs)")
+    isolate.add_argument("--out", required=True, type=Path, help="new private output bundle directory")
+    isolate.add_argument(
+        "--timeout",
+        type=positive_seconds,
+        help="finite positive invocation limit in seconds (default: 30; maximum: 3600)",
+    )
+    isolate.add_argument("--json", action="store_true", help="print the invocation report as JSON")
+    isolate.add_argument("candidate", nargs=argparse.REMAINDER, metavar="COMMAND", help="candidate argv after --")
     execution_parser = commands.add_parser(
         "executions", help="register and inspect explicit task/action/output bindings"
     )
@@ -1038,6 +1131,56 @@ def exacly_main(argv: list[str] | None = None) -> int:
     view.add_argument("--base", metavar="REV", help="plan: the Git revision the change is against (default: main)")
     view.add_argument("--out", type=Path, metavar="DIR", help="site: the folder to write (default: reports/site)")
     args = parser.parse_args(argv)
+    if args.command == "isolation":
+        from exacly import isolation
+
+        try:
+            digest = isolation.rootfs_digest(args.rootfs)
+            identity_report = {
+                "schema_version": "0.1.0",
+                "operation": "inspect-rootfs",
+                "rootfs": str(args.rootfs.resolve()),
+                "digest": digest,
+                "scope": "content_identity",
+            }
+        except (ValueError, OSError) as error:
+            print(f"exacly isolation: {error}", file=sys.stderr)
+            return 2
+        if args.json:
+            print(json.dumps(identity_report, indent=2, sort_keys=True))
+        else:
+            print(f"Root filesystem: {identity_report['rootfs']}\nContent digest: {digest}")
+            print("Content identity only; operator approval is supplied separately.")
+        return 0
+    if args.command == "isolate":
+        from exacly import isolation
+
+        try:
+            candidate = args.candidate[1:] if args.candidate[:1] == ["--"] else args.candidate
+            if not candidate:
+                raise ValueError("supply one candidate command after --")
+            runtime = isolation.parse_policy(isolation_document(args.runtime_policy, 64 * 1024))
+            snapshots = isolation_inputs(args.inputs)
+            options = {} if args.timeout is None else {"timeout": args.timeout}
+            report = isolation.run(runtime, candidate, snapshots, args.out, **options)
+            if (
+                not isinstance(report, dict)
+                or report.get("schema_version") != "0.1.0"
+                or report.get("backend") != "linux-bubblewrap-v1"
+                or report.get("status") not in {"completed", "candidate_failed", "timed_out", "output_limit"}
+                or type(report.get("exit_code")) is not int
+                or (report["status"] == "completed" and report["exit_code"] != 0)
+                or (report["status"] == "candidate_failed" and report["exit_code"] == 0)
+                or not isinstance(report.get("isolation"), dict)
+                or report["isolation"].get("verified") is not True
+            ):
+                raise ValueError("isolation runtime returned an invalid report")
+            rendered = json.dumps(report, indent=2, sort_keys=True) if args.json else isolation.as_text(report)
+        except (ValueError, OSError) as error:
+            print(f"exacly isolate: {error}", file=sys.stderr)
+            return 2
+        print(rendered)
+        return 0 if report["status"] == "completed" else 1
     if args.command == "executions":
         if args.execution_command in {"index", "activate", "audit"}:
             from exacly import history_maintenance

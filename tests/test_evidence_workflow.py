@@ -55,7 +55,7 @@ def test_workflow_is_one_read_only_push_main_job_without_dynamic_job_expansion()
     assert set(WORKFLOW["jobs"]) == {"observe"}
     job = WORKFLOW["jobs"]["observe"]
     assert job["name"] == "Observe verification"
-    assert job["runs-on"] == "ubuntu-latest"
+    assert job["runs-on"] == "ubuntu-24.04"
     assert "strategy" not in job and "uses" not in job
     assert "continue-on-error" not in job
     for step in job["steps"]:
@@ -70,6 +70,9 @@ def test_workflow_checks_out_the_run_revision_without_persisting_credentials() -
     assert checkout["with"] == {"ref": "${{ github.sha }}", "persist-credentials": False}
     install = next(step for step in steps if step.get("name") == "Install locked dependencies")
     assert install["run"] == "uv sync --locked"
+    runtime = next(step for step in steps if step.get("name") == "Install the Linux isolation test runtime")
+    assert "sudo apt-get install --yes bubblewrap libseccomp2" in runtime["run"]
+    assert steps.index(checkout) < steps.index(runtime) < steps.index(install)
     check = next(step for step in steps if step.get("name") == "Run verification")
     assert check["id"] == "verification"
     assert check["env"] == {"PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1"}

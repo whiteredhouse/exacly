@@ -28,12 +28,12 @@ Exacly models itself, following the layout in section 13 of the specification. C
 The YAML records define requirements, implementers, dependencies and lifecycle. Their observation bindings connect them to verification evidence in state. Consult the records for current definitions and lifecycle, and observed state for what has been verified or released.
 
 - Browse the [published model and observations](https://whiteredhouse.github.io/exacly/project/) for the checked baseline on main. Branch proposals appear there after merge and successful CI publication.
-- Read [`automation.yaml`](automation.yaml) for the automation contracts, process steps and isolation preconditions, informed by the dated [plan/apply research](../../docs/automated-plan-apply-research.md).
+- Read [`automation.yaml`](automation.yaml) for the automation contracts and process steps, the [candidate isolation guide](../../docs/candidate-isolation.md) for the supported execution boundary, and the dated [plan/apply research](../../docs/automated-plan-apply-research.md) for the original design.
 - Run `exacly show RECORD`, `exacly trace RECORD` or `exacly gaps` from the repository root to inspect the local checkout. Preview a branch's model with `exacly view site --out reports/model-site`.
 
 Implementation and runtime references can be marked `planned`; observation bindings have no special planned mode. A binding with case patterns that select no executed tests produces `not_checked` and establishes no successful verification claim.
 
-The [completion commands](../../python/README.md#complete-registered-verification-work) authorize local state publication for an existing registered task. The wider process still includes proposed dispatch and candidate execution; completing a local task does not run candidate code or establish an isolation boundary.
+The [completion commands](../../python/README.md#complete-registered-verification-work) authorize local state publication for an existing registered task. The [isolated command launcher](../../python/README.md#isolate-a-candidate-command) verifies the supported execution boundary before running explicitly authorized candidate code. The wider process also includes durable dispatch and bounded executor supervision; each retains its own contract and authority.
 
 When implementing a proposal, update its lifecycle and planned references, review the acceptance tests and observation bindings, and update the [verification policy](../../ci/verification.yaml) in the same change. CI checks that this policy covers every active Requirement; successful verification still requires matching observations.
 
