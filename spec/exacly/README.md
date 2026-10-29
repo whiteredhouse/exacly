@@ -29,20 +29,18 @@ Exacly models itself, following the layout in section 13 of the specification. C
 The YAML records define requirements, implementers, dependencies and lifecycle. Their observation bindings connect them to verification evidence in state. Consult the records for current definitions and lifecycle, and observed state for what has been verified or released.
 
 REQ-030 and APP-017 are active for the implemented `exacly evidence package`
-command and `exacly.evidence` API. This packager is unreleased and absent from the
-published `0.6.0rc2` package. Active lifecycle describes the current contract;
-observed verification and release state remain separate. The package and
-admission share manifest `0.1.0` definitions, without making packaging an
-admission or completion decision. See the [producer and installation
-guidance](../../python/README.md#package-verification-evidence-unreleased).
+command and `exacly.evidence` API, included in `0.6.0rc3`. Active lifecycle
+describes the current contract; observed verification and release state remain
+separate. The package and admission share manifest `0.1.0` definitions, without
+making packaging an admission or completion decision. See the [producer and installation
+guidance](../../python/README.md#package-verification-evidence).
 
 REQ-019 and APP-008 also cover the installed `exacly evidence propose-policy
 github-actions` command for drafting a candidate from explicit producer and
-model inputs. This command is unreleased and absent from `0.6.0rc2`; the existing
-`exacly.admission.propose_policy` API remains available. Drafting grants no
-approval or execution authority. See the [candidate-policy
-guidance](../../python/README.md#draft-a-producer-policy-unreleased) for the
-independent review and controlled storage steps.
+model inputs. This command is included in `0.6.0rc3` and reuses the existing
+`exacly.admission.propose_policy` API. Drafting grants no approval or execution
+authority. See the [candidate-policy guidance](../../python/README.md#draft-a-producer-policy)
+for the independent review and controlled storage steps.
 
 - Browse the [published model and observations](https://whiteredhouse.github.io/exacly/project/) for the checked baseline on main. Branch proposals appear there after merge and successful CI publication.
 - Read [`automation.yaml`](automation.yaml) for the automation contracts, process steps and isolation preconditions, informed by the dated [plan/apply research](../../docs/automated-plan-apply-research.md).
