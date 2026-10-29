@@ -158,6 +158,8 @@ The repository uses [mise](https://mise.jdx.dev/) for Python, uv and tasks. Run 
 mise run check
 ```
 
+For core development without the supported Linux isolation runtime, run `mise run check-core`. It runs a development subset plus lint, type checks and examples, writing `reports/core-junit.xml` without refreshing state or evaluating readiness. It excludes the four local backend test modules and does not verify candidate isolation. Full Linux CI still runs `mise run check` with the real boundary tests. See the [development tasks](python/README.md#development).
+
 The check also evaluates [`ci/verification.yaml`](ci/verification.yaml) against a target for the checked commit. It requires verification of every active Requirement, independently of delivery. The model binds stable test-case IDs rather than a workflow name, so both the Spec and Release workflows can supply those results. Results and the selected target are written under `reports/`. See [release notes](CHANGELOG.md) for package changes.
 
 ## Status

@@ -50,12 +50,14 @@ and `0600` files, independently of the caller's umask. These are current
 contracts; verification and release claims still come from observed state.
 
 - Browse the [published model and observations](https://whiteredhouse.github.io/exacly/project/) for the checked baseline on main. Branch proposals appear there after merge and successful CI publication.
-- Read [`automation.yaml`](automation.yaml) for the automation contracts, process steps and isolation preconditions, informed by the dated [plan/apply research](../../docs/automated-plan-apply-research.md).
+- Read [`automation.yaml`](automation.yaml) for the automation contracts and process steps, the [local Bubblewrap backend contract](../../docs/candidate-isolation.md#linux-bubblewrap-v1-backend-contract) for the current isolation implementation, and the dated [plan/apply research](../../docs/automated-plan-apply-research.md) for the original design.
 - Run `exacly show RECORD`, `exacly trace RECORD` or `exacly gaps` from the repository root to inspect the local checkout. Preview a branch's model with `exacly view site --out reports/model-site`.
 
 Implementation and runtime references can be marked `planned`; observation bindings have no special planned mode. A binding with case patterns that select no executed tests produces `not_checked` and establishes no successful verification claim.
 
-The [completion commands](../../python/README.md#complete-registered-verification-work) authorize local state publication for an existing registered task. The wider process still includes proposed dispatch and candidate execution; completing a local task does not run candidate code or establish an isolation boundary.
+The [completion commands](../../python/README.md#complete-registered-verification-work) authorize local state publication for an existing registered task. They do not launch candidate code or require the optional local isolation runtime. Exacly owns the approved work contract, evidence admission and completion decision; the selected runtime enforces the execution boundary required by REQ-025.
+
+The [isolated command launcher](../../python/README.md#isolate-a-candidate-command), APP-016, is the current local backend for that contract. It delegates isolation to installed Linux Bubblewrap and verifies the actual boundary before running an explicitly authorized command. Its real integration tests verify this backend; they establish no support for a remote provider or another runtime. The wider process also includes proposed durable dispatch and bounded executor supervision. The proposed supervisor depends on this launcher when selecting the local Bubblewrap backend; every future backend must satisfy the isolation contract without gaining evidence or completion authority.
 
 When implementing a proposal, update its lifecycle and planned references, review the acceptance tests and observation bindings, and update the [verification policy](../../ci/verification.yaml) in the same change. CI checks that this policy covers every active Requirement; successful verification still requires matching observations.
 
@@ -64,6 +66,8 @@ When implementing a proposal, update its lifecycle and planned references, revie
 [`state/main.json`](state/) is the state for main, written only by `exacly refresh` and committed only from main by CI. On each push to main, the workflow's `state` job reruns the checks, refreshes the state from the test results, validates it with the config, and commits it with `[skip ci]`. It doesn't commit if a check fails. Every push to main starts this job, whatever it changed, so if main moves on before the state is pushed, the newer push's job writes the state instead. Any other push failure, such as branch protection, fails the job.
 
 `mise run check` runs the same refresh locally and on pull requests, writing to `reports/state/main.json` without committing anything. A proposed change can show its effect on state this way, but never stores it. Validation in CI reads that fresh state rather than the committed one, so a change that removes a record isn't blocked by state from before it.
+
+The optional `mise run check-core` developer subset writes a separate test report and runs without provisioning the local Bubblewrap backend. It does not refresh state or establish full verification; the complete Linux checks and real isolation tests remain required for REQ-025.
 
 Refresh and manual-QA observation use a shared conditional atomic writer for local state files. A command captures the earlier file before computing observations, then checks that it is unchanged under a parent-directory lock before replacing it. A conflict leaves the newer state in place and requires another observation. This local file protocol is separate from the workflow's Git push check and from execution-ledger transactions.
 

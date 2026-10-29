@@ -1,5 +1,11 @@
 # Package release notes
 
+## Unreleased
+
+- `exacly isolate` provides the optional local `linux-bubblewrap-v1` backend for the runtime-neutral candidate-isolation contract. It runs one explicitly authorized command with a reviewed detached root filesystem, immutable input snapshots and a verified namespace gate before execution. The launcher clears inherited authority, denies host network and operator interfaces, applies a fixed syscall filter protecting kernel keyrings and socket-family limits, cleans up descendants and safely collects bounded untrusted logs and regular artifacts into a new private bundle. `exacly isolation inspect` identifies runtime content for independent review; it grants no execution or completion authority. Core model and completion commands do not require the backend. REQ-025 is verified through real Linux integration cases, while durable dispatch and executor attempt supervision retain their separate contracts.
+- `mise run check-core` offers a development subset without the local backend's test modules. Its separate `reports/core-junit.xml` report is not used for state refresh or full verification; required Linux CI still runs the complete isolation suite and verification gate.
+
+
 ## 0.6.0 — 2026-10-29
 
 This stable 0.x release adds operator-controlled verification work: plan,

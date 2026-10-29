@@ -74,6 +74,9 @@ requirements:
 - record: REQ-024
   dimensions:
   - verification
+- record: REQ-025
+  dimensions:
+  - verification
 - record: REQ-028
   dimensions:
   - verification

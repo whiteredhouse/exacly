@@ -231,11 +231,12 @@ records:
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-26"
+    last_reviewed_at: "2026-10-29"
     statement: Run the test cases, lint, type checks, the examples and Exacly's own model on every pull request and push to main that touches them.
     acceptance_criteria:
       - The check job runs `mise run check` on pull requests and pushes to main.
       - The job fails when any test, lint rule, type check or validation fails.
+      - The optional check-core developer subset is labelled as partial and writes a separate test report; it does not refresh state, establish full verification or replace the required complete checks.
       - Post-publication installation retries refresh package metadata within a two-minute budget; the smoke test runs once after installation and fails immediately if it fails.
     verification_method: The result of the full checks in the Spec or Release workflow.
     observe:

@@ -4,8 +4,10 @@ The `exacly` command and Python package work with an Exacly model, either a 0.1 
 
 This reference describes **0.6.0**, for product context, evidence-based
 verification and recoverable local task completion. Verification and completion
-run in an operator-controlled environment. Candidate isolation, task
-dispatch and executor supervision (REQ-025–027) remain proposed. Review the
+run in an operator-controlled environment. That release excludes candidate
+isolation, task dispatch and executor supervision (REQ-025–027).
+The [isolation section](#isolate-a-candidate-command) describes additional
+unreleased functionality on main. Review the
 [release notes and upgrade paths](../CHANGELOG.md) for report-format changes and
 explicit ledger-copy upgrades.
 
@@ -23,6 +25,7 @@ explicit ledger-copy upgrades.
 - [`exacly executions upgrade`](#upgrade-a-ledger-for-completion), [`index` and `audit`](#create-and-audit-an-integrity-index-copy), and [`activate`](#activate-an-operational-indexed-ledger) create or inspect explicitly selected ledger copies.
 - [`exacly reconcile github-actions --dry-run`](#preview-verification-reconciliation) previews whether fresh admitted evidence satisfies a selected plan action's verification goal.
 - [`exacly complete github-actions` and `exacly completions show` / `recover`](#complete-registered-verification-work) complete one registered local task from admitted evidence and inspect or resolve interrupted completion.
+- [`exacly isolate`](#isolate-a-candidate-command) runs one explicitly authorized command through a verified Linux boundary and retains untrusted outputs.
 - [`exacly mcp`](#mcp-server) answers show, trace, impact and gaps questions for coding agents.
 
 ```sh
@@ -596,11 +599,15 @@ The repository uses [mise](https://mise.jdx.dev/) for its tools (Python and uv) 
 |---|---|
 | `mise run sync` | Installs exacly and the development tools into `.venv` from `uv.lock` |
 | `mise run test` | Runs the schema and exacly tests with pytest, writing `reports/junit.xml` |
+| `mise run test-core` | Runs the development subset without the four local isolation test modules, writing only `reports/core-junit.xml` |
 | `mise run lint` | Checks style and formatting with Ruff |
 | `mise run typecheck` | Type-checks with mypy in strict mode |
 | `mise run examples` | Validates every example in `spec/examples/`: each 0.1 map and each 0.2 folder |
 | `mise run model` | Refreshes Exacly's own state from the test results into `reports/state/`, then validates it with the model in [`spec/exacly/`](../spec/exacly/README.md) |
-| `mise run check` | All of the above |
+| `mise run check` | Full tests, lint, type checks, examples, model refresh and verification gate |
+| `mise run check-core` | Runs the development subset, lint, type checks and examples without refreshing state or evaluating the verification policy |
+
+Use `check-core` when developing core functionality without the supported Linux isolation runtime. It omits the backend's contract, CLI, execution and syscall test modules and cannot establish REQ-025 verification. Full CI continues to run `check`, including real isolation checks and the verification gate; subset results never replace its `reports/junit.xml`.
 
 To try a model against your working copy, run `uv run exacly validate path/to/spec/exacly`.
 
@@ -1000,3 +1007,25 @@ Show exits 0 for a valid retained phase, including `prepared` or `aborted`. Reco
 In Python, `exacly.completion.complete(source, plan_doc, action_id, readiness_policy, trust_policy, output_target, run_id, attempt, date, *, ledger, binding_id, state_path, lock_timeout=30)` returns the same report. `show(ledger, completion_id, lock_timeout=30)` inspects it; `recover(ledger, completion_id, state_path=..., lock_timeout=30)` resolves a prepared intent; `as_text(report)` renders it for people.
 
 Completion receipts remain unsigned and do not prove test honesty, acceptance coverage or that an executor produced the named output. These commands complete local verification work without closing external tickets, running candidate code, dispatching agents or granting release authority. The ledger must remain in the operator-controlled runtime; its file permissions do not isolate code running as the same operating-system user.
+
+## Isolate a candidate command
+
+**Unreleased functionality on main.**
+
+`exacly isolate` is the optional local `linux-bubblewrap-v1` execution backend. It runs one explicit argument vector through Linux Bubblewrap using a reviewed detached root filesystem and immutable input snapshots. Before starting candidate code, a trusted bootstrap verifies the actual launch's namespace separation, capability and mount protections and mandatory syscall filter. The runtime provides private writable temporary filesystems and no host network, candidate-writable host mounts, operator storage, inherited credentials or control interfaces; child processes retain the boundary.
+
+Exacly owns the execution trust contract, approved work and independent evidence and completion decisions. This backend supplies local enforcement; ordinary model, planning, admission and completion commands do not require Bubblewrap. The policy accepts only this backend, with no arbitrary provider loading. See the [responsibility boundary](../docs/candidate-isolation.md#responsibility-boundary) for the contract a future external integration must satisfy.
+
+```sh
+exacly isolation inspect --rootfs /srv/exacly/runtimes/python-rootfs --json
+mkdir -p runs
+exacly isolate --runtime-policy trusted/runtime.json \
+  --inputs approved-inputs.json --out runs/candidate --timeout 30 --json -- \
+  /usr/bin/python3 -I -S /inputs/work.py
+```
+
+Inspection identifies content for independent review; its digest does not approve a runtime. `--inputs` is an optional JSON manifest of explicit relative paths and UTF-8 contents, with no implicit source traversal. The Python API accepts binary snapshots. A fresh private output bundle retains the report, bounded logs and safely collected regular artifacts after the namespace and descendants have exited. Existing destinations are never overwritten, and unavailable or invalid isolation stops before candidate execution.
+
+Exit 0 means the command completed successfully; exit 1 records a candidate failure, timeout or output limit; exit 2 reports invalid input, setup or operational failure. Candidate status, logs and artifacts remain untrusted and cannot establish verification or completion. This launcher supplies one execution boundary; durable dispatch and executor attempt budgets retain their own contracts.
+
+See the [candidate isolation guide](../docs/candidate-isolation.md) for the exact runtime policy and snapshot formats, supported platform, limits, Python API, real integration checks and kernel/runtime trust assumptions.
