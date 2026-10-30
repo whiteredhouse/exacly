@@ -15,6 +15,8 @@ exacly dispatch github-issues --plan FILE --action ID --dispatch-policy FILE --s
 exacly dispatches init|show|recover|recover-journal|resolve|supersede --journal FILE ... [--json]
 exacly execute local --plan FILE --action ID --executor-policy FILE --binding ID ... [--dry-run|--apply]
 exacly executors init|show|cancel|recover|recover-journal --journal FILE ... [--json]
+exacly handoff local-git --request FILE [--dry-run|--apply] [--authorization FILE] [--json]
+exacly handoffs init-repository|init|show|recover|recover-journal ... [--json]
 exacly executions register --ledger FILE --plan FILE --action ID --state FILE --task TASK --opened-at ISO ...
 exacly executions show --ledger FILE --binding ID [--json]
 exacly executions inspect --ledger FILE [--lock-timeout SECONDS] [--json]
@@ -1075,7 +1077,17 @@ def exacly_main(argv: list[str] | None = None) -> int:
     parser_class = (
         PolicyDraftParser
         if argv[:2] == ["evidence", "propose-policy"]
-        or argv[:1] in (["dispatch"], ["dispatches"], ["execute"], ["executors"], ["composition"], ["compose"])
+        or argv[:1]
+        in (
+            ["dispatch"],
+            ["dispatches"],
+            ["execute"],
+            ["executors"],
+            ["handoff"],
+            ["handoffs"],
+            ["composition"],
+            ["compose"],
+        )
         else argparse.ArgumentParser
     )
     parser = parser_class(
@@ -1335,6 +1347,55 @@ def exacly_main(argv: list[str] | None = None) -> int:
             "--lock-timeout", type=nonnegative_seconds, help="maximum shared storage lock wait in seconds (default: 30)"
         )
         executor_parser.add_argument("--json", action="store_true", help="print the retained executor report as JSON")
+    handoff_parser = commands.add_parser("handoff", help="review or publish retained executor artifacts locally")
+    handoff_sources = handoff_parser.add_subparsers(dest="handoff_source", required=True)
+    handoff_git_parser = handoff_sources.add_parser(
+        "local-git", help="preview or separately authorize an exact artifact-to-Git handoff"
+    )
+    handoff_git_parser.add_argument("--request", required=True, type=Path, help="reviewed handoff request JSON")
+    handoff_git_parser.add_argument("--authorization", type=Path, help="separately reviewed handoff authorization JSON")
+    handoff_mode = handoff_git_parser.add_mutually_exclusive_group()
+    handoff_mode.add_argument("--dry-run", action="store_true", help="read-only handoff preview (the default)")
+    handoff_mode.add_argument("--apply", action="store_true", help="publish only the separately authorized local ref")
+    handoff_git_parser.add_argument(
+        "--lock-timeout", type=nonnegative_seconds, help="maximum shared handoff lock wait in seconds (default: 30)"
+    )
+    handoff_git_parser.add_argument("--json", action="store_true", help="print the handoff report as JSON")
+    handoffs = commands.add_parser("handoffs", help="initialize, inspect or recover protected local handoffs")
+    handoff_commands = handoffs.add_subparsers(dest="handoff_command", required=True)
+    for operation in ("init-repository", "init", "show", "recover", "recover-journal"):
+        handoff_command = handoff_commands.add_parser(
+            operation,
+            help={
+                "init-repository": "initialize a new protected bare Git repository",
+                "init": "initialize a new private handoff journal for one repository",
+                "show": "inspect retained handoff facts without publishing",
+                "recover": "resume the exact retained local publication",
+                "recover-journal": "back up and repair an interrupted handoff journal transaction",
+            }[operation],
+        )
+        if operation in {"init-repository", "init"}:
+            handoff_command.add_argument(
+                "--repository", required=True, type=Path, help="protected local bare repository"
+            )
+        if operation != "init-repository":
+            handoff_command.add_argument("--journal", required=True, type=Path, help="private handoff journal")
+        if operation in {"show", "recover"}:
+            handoff_command.add_argument("--handoff", required=True, help="retained handoff identity")
+        if operation == "recover-journal":
+            handoff_command.add_argument(
+                "--authorize-recovery",
+                required=True,
+                action="store_true",
+                help="authorize protected backup and SQLite repair",
+            )
+        if operation != "init-repository":
+            handoff_command.add_argument(
+                "--lock-timeout",
+                type=nonnegative_seconds,
+                help="maximum shared handoff lock wait in seconds (default: 30)",
+            )
+        handoff_command.add_argument("--json", action="store_true", help="print the retained handoff report as JSON")
     dispatch_parser = commands.add_parser("dispatch", help="preview or explicitly dispatch approved work")
     dispatch_sources = dispatch_parser.add_subparsers(dest="dispatch_source", required=True)
     dispatch_github = dispatch_sources.add_parser(
@@ -1523,6 +1584,88 @@ def exacly_main(argv: list[str] | None = None) -> int:
     view.add_argument("--base", metavar="REV", help="plan: the Git revision the change is against (default: main)")
     view.add_argument("--out", type=Path, metavar="DIR", help="site: the folder to write (default: reports/site)")
     args = parser.parse_args(argv)
+    if args.command in {"handoff", "handoffs"}:
+        from exacly import handoff, handoff_git, handoff_store
+
+        handoff_options: dict[str, Any] = {}
+        if getattr(args, "lock_timeout", None) is not None:
+            handoff_options["lock_timeout"] = args.lock_timeout
+        handoff_operation: str = args.handoff_command if args.command == "handoffs" else ""
+        try:
+            if handoff_operation == "init-repository":
+                handoff_report = {
+                    "schema_version": "0.1.0",
+                    "status": "initialized",
+                    "repository": handoff_git.initialize_repository(args.repository),
+                }
+            elif handoff_operation == "init":
+                handoff_report = handoff_store.initialize(
+                    args.journal, repository=handoff_git.inspect_repository(args.repository), **handoff_options
+                )
+            elif handoff_operation == "show":
+                handoff_report = handoff.show(args.journal, args.handoff, **handoff_options)
+            elif handoff_operation == "recover":
+                handoff_report = handoff.recover(args.journal, args.handoff, **handoff_options)
+            elif handoff_operation == "recover-journal":
+                handoff_report = handoff.recover_journal(
+                    args.journal, authorize=args.authorize_recovery, **handoff_options
+                )
+            else:
+                if not args.apply and args.authorization is not None:
+                    parser.error("--authorization requires --apply; a handoff preview grants no permission")
+                if args.apply and args.authorization is None:
+                    parser.error("--apply requires --authorization")
+                handoff_request = handoff.request_from_document(strict_json_document(args.request, 8 * 1024 * 1024))
+                if args.apply:
+                    handoff_report = handoff.apply(
+                        handoff_request,
+                        authorization=strict_json_document(args.authorization, 8 * 1024 * 1024),
+                        **handoff_options,
+                    )
+                else:
+                    handoff_report = handoff.preview(handoff_request, **handoff_options)
+            handoff_preview = args.command == "handoff" and not args.apply
+            handoff_statuses = {
+                "init-repository": {"initialized"},
+                "init": {"initialized"},
+                "show": {"prepared", "published", "missing"},
+                "recover": {"prepared", "published", "conflict", "missing"},
+                "recover-journal": {"recovered"},
+            }.get(handoff_operation, {"prepared", "published", "conflict", "blocked"})
+            if handoff_preview:
+                handoff_statuses.add("ready")
+            if (
+                not isinstance(handoff_report, dict)
+                or handoff_report.get("schema_version") != "0.1.0"
+                or handoff_report.get("status") not in handoff_statuses
+                or (handoff_operation == "init" and not isinstance(handoff_report.get("journal_id"), str))
+                or (handoff_operation == "init-repository" and not isinstance(handoff_report.get("repository"), dict))
+                or (
+                    handoff_operation not in {"init-repository", "init"}
+                    and handoff_report.get("dry_run") is not handoff_preview
+                )
+            ):
+                raise ValueError("handoff returned an invalid report")
+            if args.json:
+                handoff_rendered = json.dumps(handoff_report, indent=2, sort_keys=True)
+            elif handoff_operation in {"init-repository", "init"}:
+                handoff_rendered = (
+                    f"Initialized protected handoff repository: {args.repository}"
+                    if handoff_operation == "init-repository"
+                    else (
+                        f"Initialized private handoff journal: {args.journal}\n"
+                        f"Journal ID: {handoff_report['journal_id']}"
+                    )
+                )
+            else:
+                handoff_rendered = handoff.as_text(handoff_report)
+        except (query.QueryError, ValueError, OSError) as error:
+            print(f"exacly {args.command}: {redact_tokens(str(error), github_tokens)}", file=sys.stderr)
+            return 2
+        print(handoff_rendered)
+        if handoff_operation == "show":
+            return 1 if handoff_report["status"] == "missing" else 0
+        return 0 if handoff_report["status"] in {"ready", "published", "initialized", "recovered"} else 1
     if args.command in {"composition", "compose"}:
         from exacly import composition, composition_io, github_evidence
 
