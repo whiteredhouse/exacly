@@ -16,10 +16,11 @@ import jsonschema
 
 from exacly import execution_store, isolation, planning
 from exacly.applicability import Target
+from exacly.executor_interfaces import LOCAL_ADAPTER, IdentityValidator
 
 Doc = dict[str, Any]
 VERSION = "0.1.0"
-ADAPTER = "local-bubblewrap-v1"
+ADAPTER = LOCAL_ADAPTER
 TASK_INPUT = ".exacly-task.json"
 TEXT: Doc = {"type": "string", "minLength": 1}
 STORAGE = planning.fields(
@@ -233,7 +234,13 @@ def artifact_roster(value: Any, *, snapshots_only: bool = False) -> list[Doc]:
 
 
 def validate_history(
-    work: Doc, *, journal_id: str | None = None, ledger: str | None = None, max_concurrency: int | None = None
+    work: Doc,
+    *,
+    journal_id: str | None = None,
+    ledger: str | None = None,
+    max_concurrency: int | None = None,
+    owner_validator: IdentityValidator | None = None,
+    worker_validator: IdentityValidator | None = None,
 ) -> Doc:
     """Independently check retained authorization, process facts and terminal receipt semantics.
 
@@ -241,7 +248,13 @@ def validate_history(
     the approved action and cannot introduce another task, output identity or completion authority.
     Historical checks use no current model, state or output files so exact replay remains immutable.
     """
-    from exacly import executions, executor_runtime, query
+    from exacly import executions, query
+
+    if owner_validator is None or worker_validator is None:
+        from exacly.executor_runtime import validate_identity
+
+        owner_validator = owner_validator or validate_identity
+        worker_validator = worker_validator or validate_identity
     from exacly.core import bindings
 
     try:
@@ -351,7 +364,7 @@ def validate_history(
                 set(reservation) == {"kind", "authorization", "owner"} and reservation["kind"] == "reservation",
                 "invalid executor reservation",
             )
-            executor_runtime.validate_identity(reservation["owner"])
+            owner_validator(reservation["owner"])
             authorization = reservation["authorization"]
             require(
                 isinstance(authorization, dict) and _digest(authorization.get("state_digest")),
@@ -399,7 +412,7 @@ def validate_history(
                         and (kind != "namespace" or "worker" in kinds),
                         "executor process identity order changed",
                     )
-                    processes.append(executor_runtime.validate_identity(data["identity"]))
+                    processes.append(worker_validator(data["identity"]))
                     kinds.add(kind)
                 elif kind == "cancellation_requested":
                     require(set(data) == {"kind"} and not cancelled, "executor cancellation history changed")
@@ -472,7 +485,7 @@ def validate_history(
                             in {"terminated", "already_exited", "absent", "pid_reused", "previous_boot"},
                             "invalid exact-process termination proof",
                         )
-                        verified.append(executor_runtime.validate_identity(proof["identity"]))
+                        verified.append(worker_validator(proof["identity"]))
                     require(
                         all(process in verified for process in processes),
                         "executor receipt omits retained process termination",

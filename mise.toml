@@ -29,6 +29,8 @@ run = [
       --ignore=python/tests/test_executor_faults.py \
       --ignore=python/tests/test_executor_runtime.py \
       --ignore=python/tests/test_executor_cli.py \
+      --ignore=python/tests/test_executor_interfaces.py \
+      --ignore=python/tests/test_executor_local.py \
       --junitxml=reports/core-junit.xml""",
 ]
 

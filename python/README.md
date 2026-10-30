@@ -609,7 +609,7 @@ The repository uses [mise](https://mise.jdx.dev/) for its tools (Python and uv) 
 | `mise run check` | Full tests, lint, type checks, examples, model refresh and verification gate |
 | `mise run check-core` | Runs the development subset, lint, type checks and examples without refreshing state or evaluating the verification policy |
 
-Use `check-core` when developing core functionality without the supported Linux isolation runtime. It omits local isolation and executor integration test modules and cannot establish REQ-025 or REQ-027 verification. Full CI continues to run `check`, including real execution checks and the verification gate; subset results never replace its `reports/junit.xml` and never enter the gate.
+Use `check-core` when developing core functionality without the supported Linux isolation runtime. It omits local execution and ownership test modules and cannot establish REQ-025/027 verification or the complete REQ-031 contract. Controlled coordinator substitution cases remain in this subset. Full CI continues to run `check`, including real execution checks and the verification gate; subset results never replace its `reports/junit.xml` and never enter the gate.
 
 To try a model against your working copy, run `uv run exacly validate path/to/spec/exacly`.
 
@@ -742,6 +742,8 @@ exacly execute local -m 'spec/product/*.yaml' \
 Explicitly initialize the private attempt companion with `exacly executors init --journal FILE --ledger FILE --max-concurrency N` before reviewing its policy and authorization. Existing binding/completion ledger formats remain unchanged. Shared capacity and consumed attempts are durable; retries require fresh authorization within the retained limits. `executors show`, `cancel` and `recover` operate from retained history even after the model changes. `executors recover-journal --authorize-recovery` preserves a protected backup before repairing an interrupted journal transaction; it launches no candidate and resets no budget.
 
 A successful result retains a task reference, output paths and a host-derived content build identity. Candidate status, logs and files remain untrusted, and execution never changes state, pending work, evidence admission or completion receipts. See the [bounded executor guide](../docs/bounded-executor.md) for initialization, full policy and authorization flow, explicit retries, cancellation, recovery, storage boundaries and the Python API.
+
+The Python coordinator consumes public attempt-storage, invocation-ownership and worker-lifecycle protocols through an optional trusted `backends=` bundle; default calls and the CLI select the existing local adapters. [Coordinator backend contracts](../docs/coordinator-interfaces.md) describe the interfaces, shared conformance cases, strict local history compatibility and explicit migration requirements. Protocol `0.1.0` accepts one local-machine coordination domain; distributed ownership and remote provider support require separately reviewed and verified contracts.
 
 ## Register execution bindings
 
