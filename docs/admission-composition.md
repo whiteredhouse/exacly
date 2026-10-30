@@ -215,6 +215,7 @@ Retained output has this layout:
 ```text
 invocation/
   report.json
+  readiness.xml          # optional, with --readiness-junit
   members/
     linux-amd64/
       receipt.json
@@ -255,6 +256,68 @@ Admission's HTTP operations retain their existing per-request timeouts. The
 composition is sequential and has no separate whole-invocation deadline or
 parallel scheduling contract.
 
+## Readiness JUnit
+
+Add `--readiness-junit` to retain a standard CI test report at
+`OUT/readiness.xml`:
+
+```sh
+exacly compose github-actions --definition trusted/native-composition.yaml \
+  --selection native-selection.json --date 2026-10-30 \
+  --out reports/composition --readiness-junit --json
+```
+
+`reports/composition` must be a new directory. This boolean option uses the
+composition's private output bundle; the single-target `gate --junit FILE`
+option takes an explicit file path. The default invocation produces no readiness
+XML. Member `junit.xml` files always retain the original producer reports.
+
+Readiness XML serializes the already computed composition result. It contains a
+verdict case for every required member, plus the native prerequisite cases for
+each gate that ran. A rejected admission has a blocking member case and no
+invented gate prerequisites. Unknown and unsatisfied readiness both produce
+failures with distinct native diagnostics; neither becomes a skipped case.
+Missing, duplicate or extra members, incomplete reports and inconsistent outcomes
+cannot produce a passing subset. Standard JUnit readers can consume the XML.
+
+The `exacly-case` property supplies stable selectors. A member verdict uses:
+
+```text
+exacly.composition/v1/<composition-name>/<member-id>/verdict
+```
+
+For the definition above, one selector is
+`exacly.composition/v1/native-release-verification/linux-amd64/verdict`.
+Native prerequisite cases reuse the
+[gate reporting contract](../python/README.md#export-readiness-as-junit) with logical report
+ID `COMPOSITION_NAME/MEMBER_ID`. The slash in that logical ID is percent-encoded
+inside a single selector component; namespace, policy name, record and dimension
+retain their native meanings. All identity components are percent-encoded from
+their original UTF-8 bytes. Versions, revisions, evaluation dates and content
+digests remain metadata, so a new observation does not change its binding
+selector. Renaming the composition or member changes its logical identity.
+
+A consumer can explicitly select the member verdict above in its own reviewed
+`observe.tests.cases` binding, or select specific native prerequisite cases. The
+XML preserves original target, policy and evidence references for inspection.
+It describes a readiness evaluation; it does not claim a fresh product test,
+authenticate its own origin or move foreign state into the consumer's namespace.
+Keep the consumer's observation target and policy explicit. A generated readiness
+report must not become evidence used to satisfy the same gate that generated it.
+
+The serializer accepts at most 4,096 native prerequisite cases in total, plus
+one verdict for each of at most 64 members, and at most 8 MiB of XML. Native
+identity and diagnostic limits also apply. Oversized reports fail explicitly
+rather than omit required members or truncate selectors.
+
+The CLI retains all member proof before rendering the full report. It publishes
+the XML atomically with mode `0600`, then commits the complete `report.json`
+marker last. Requested XML output errors return 2 and leave the aggregate
+incomplete. If final aggregate publication fails after XML publication, the CLI
+attempts to remove the XML. The two files are not one filesystem transaction;
+after interruption or an output error, a missing or incomplete `report.json`
+remains authoritative and cannot establish composition success.
+
 ## Python validation and evaluation
 
 The supported `exacly.composition` API accepts parsed definition and selection
@@ -282,6 +345,7 @@ prepared = composition.validate_definition(definition, inputs, date)
 composition.validate_selection(prepared, selection, date)
 result = composition.evaluate(source, prepared, selection, date)
 report = result.report
+junit_xml = composition.as_junit(report)
 ```
 
 `source` implements the existing admission source interface. Pure validation
@@ -289,6 +353,13 @@ performs no source calls. `evaluate` validates the complete selection again befo
 fresh admission and returns the aggregate plus per-member native admission
 results. Callers that retain results must preserve the same completeness and
 freshness rules as the CLI.
+
+`composition.as_junit(report)` returns readiness XML for a complete, consistent
+composition report. It performs no source reads, observation, evaluation or file
+writes. It also accepts the aggregate returned by streaming evaluation; rendering
+does not require retained archive bytes or `result.admissions`. Its validation
+checks report structure and consistency, not independent authenticity or policy
+approval.
 
 By default, `evaluate` preserves every native `AdmissionResult` in
 `result.admissions`, including its archive and JUnit bytes. Applications that

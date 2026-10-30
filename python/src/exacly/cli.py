@@ -7,7 +7,7 @@ exacly evidence package --report FILE --out NEWDIR [--json]
 exacly evidence propose-policy github-actions --repository OWNER/REPO --revision SHA --proposal FILE ...
 exacly admit github-actions --trust-policy FILE --target FILE --run ID --attempt N --date YYYY-MM-DD --out DIR
 exacly composition validate --definition FILE --date YYYY-MM-DD [--json]
-exacly compose github-actions --definition FILE --selection FILE --date YYYY-MM-DD --out NEWDIR [--json]
+exacly compose github-actions --definition FILE --selection FILE --date DATE --out NEWDIR [--readiness-junit] [--json]
 exacly reconcile github-actions --dry-run --plan FILE --action ID --policy FILE --trust-policy FILE --target FILE ...
 exacly complete github-actions --plan FILE --action ID --policy FILE --trust-policy FILE --target FILE ...
 exacly completions show|recover --ledger FILE --completion ID [--state FILE] [--json]
@@ -1116,6 +1116,11 @@ def exacly_main(argv: list[str] | None = None) -> int:
     compose.add_argument("--selection", required=True, type=Path, help="complete immutable member run selections")
     compose.add_argument("--date", required=True, type=dt.date.fromisoformat)
     compose.add_argument("--out", required=True, type=Path, help="new private evidence and aggregate report directory")
+    compose.add_argument(
+        "--readiness-junit",
+        action="store_true",
+        help="retain derived readiness.xml inside --out, separately from producer JUnit reports",
+    )
     compose.add_argument("--json", action="store_true", help="print the complete aggregate report as JSON")
     isolation_parser = commands.add_parser("isolation", help="inspect an optional local backend's runtime filesystem")
     isolation_commands = isolation_parser.add_subparsers(dest="isolation_command", required=True)
@@ -1562,7 +1567,7 @@ def exacly_main(argv: list[str] | None = None) -> int:
                     retain_admissions=False,
                 )
                 report = composition_answer.report
-                writer.finish(report)
+                writer.finish(report, readiness_junit=args.readiness_junit)
         except (query.QueryError, ValueError, OSError, github_evidence.GitHubError) as error:
             print(f"exacly {args.command}: {redact_tokens(str(error), github_tokens)}", file=sys.stderr)
             return 2

@@ -15,6 +15,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Any, cast
+from xml.etree import ElementTree as ET
 
 import jsonschema
 
@@ -445,3 +446,292 @@ def as_text(report: Doc) -> str:
     lines += [f"Result: {report['result']}", f"Complete: {report['complete']}", f"As of: {report['as_of']}"]
     lines += [f"  {member['id']}: {member['status']} — {member['reason']}" for member in report["members"]]
     return "\n".join(lines)
+
+
+JUNIT_PREFIX = "exacly.composition/v1"
+JUNIT_MAX_BYTES = policy.JUNIT_MAX_BYTES
+JUNIT_MAX_CHECKS = policy.JUNIT_MAX_CHECKS
+JUNIT_MAX_CASES = JUNIT_MAX_CHECKS + MAX_MEMBERS
+_ADMISSION_STAGES = ("repository", "run", "observer", "producer", "artifact", "observation")
+
+
+def _junit_object(value: Any, label: str) -> Doc:
+    if not isinstance(value, dict):
+        raise ValueError(f"composition JUnit requires {label}")
+    return value
+
+
+def _junit_string(value: Any) -> str:
+    policy._junit_identity(value)
+    return cast(str, value)
+
+
+def _junit_digest_field(value: Any) -> str:
+    if not isinstance(value, str) or re.fullmatch(r"sha256:[0-9a-f]{64}", value) is None:
+        raise ValueError("composition JUnit requires valid content digest metadata")
+    return value
+
+
+def _junit_policy_identity(value: Any) -> Doc:
+    identity = _junit_object(value, "native policy identity")
+    for key in ("name", "version"):
+        _junit_string(identity.get(key))
+    _junit_digest_field(identity.get("digest"))
+    return identity
+
+
+def _junit_members(report: Doc) -> list[Doc]:
+    """Check internal report identities, without authenticating digests or evaluating evidence."""
+    if (
+        report.get("schema_version") != VERSION
+        or report.get("operation") != "compose"
+        or report.get("complete") is not True
+    ):
+        raise ValueError("composition JUnit requires a completed native composition report")
+    definition = _junit_policy_identity(report.get("definition"))
+    if _junit_digest_field(report.get("definition_digest")) != definition["digest"]:
+        raise ValueError("composition JUnit definition identities disagree")
+    _junit_digest_field(report.get("selection_digest"))
+    date = _junit_string(report.get("as_of"))
+    try:
+        if dt.date.fromisoformat(date).isoformat() != date:
+            raise ValueError("noncanonical date")
+    except ValueError as error:
+        raise ValueError("composition JUnit requires a native evaluation date") from error
+    required, members = report.get("required_members"), report.get("members")
+    if (
+        not isinstance(required, list)
+        or not 1 <= len(required) <= MAX_MEMBERS
+        or any(
+            not isinstance(identifier, str) or re.fullmatch(MEMBER_ID["pattern"], identifier) is None
+            for identifier in required
+        )
+        or len(set(required)) != len(required)
+        or not isinstance(members, list)
+        or len(members) != len(required)
+    ):
+        raise ValueError("composition JUnit requires every required member exactly once")
+    checked: dict[str, Doc] = {}
+    for value in members:
+        member = _junit_object(value, "native member reports")
+        identifier = member.get("id")
+        if not isinstance(identifier, str) or identifier not in required or identifier in checked:
+            raise ValueError("composition JUnit requires every required member exactly once")
+        checked[identifier] = member
+        trust = _junit_policy_identity(member.get("trust_policy"))
+        readiness = _junit_policy_identity(member.get("readiness_policy"))
+        model = _junit_object(member.get("model"), "native model identity")
+        _junit_string(model.get("namespace"))
+        _junit_digest_field(model.get("digest"))
+        repository = _junit_object(model.get("repository"), "native repository identity")
+        _junit_string(repository.get("full_name"))
+        if (
+            not admission.positive_id(repository.get("id"))
+            or re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository["full_name"]) is None
+        ):
+            raise ValueError("composition JUnit requires native repository identity")
+        selected = _junit_object(member.get("selection"), "member selection")
+        target = _junit_object(selected.get("target"), "member target")
+        if (
+            selected.get("id") != identifier
+            or not admission.positive_id(selected.get("run"))
+            or not admission.positive_id(selected.get("attempt"))
+            or set(target) != {"context", "model_revision", "revision"}
+            or any(
+                not isinstance(target[key], str) or re.fullmatch(r"[0-9a-f]{40}", target[key]) is None
+                for key in ("model_revision", "revision")
+            )
+            or model.get("revision") != target["model_revision"]
+        ):
+            raise ValueError("composition JUnit member selection and model identities disagree")
+        _junit_string(target["context"])
+        receipt = _junit_object(member.get("admission"), "native admission receipt")
+        status = receipt.get("status")
+        checks = receipt.get("checks")
+        if (
+            receipt.get("schema_version") != admission.RECEIPT_VERSION
+            or status not in ("admitted", "rejected")
+            or receipt.get("target") != target
+            or receipt.get("policy") != trust
+            or receipt.get("as_of") != date
+            or not isinstance(checks, list)
+            or not 1 <= len(checks) <= len(_ADMISSION_STAGES)
+        ):
+            raise ValueError("composition JUnit admission and member identities disagree")
+        _junit_digest_field(receipt.get("digest"))
+        for index, check in enumerate(checks):
+            if (
+                not isinstance(check, dict)
+                or check.get("code") != _ADMISSION_STAGES[index]
+                or type(check.get("passed")) is not bool
+                or not isinstance(check.get("reason"), str)
+                or check["passed"] is not (status == "admitted" or index < len(checks) - 1)
+            ):
+                raise ValueError("composition JUnit requires consistent native admission checks")
+        if "gate" not in member:
+            raise ValueError("composition JUnit requires an explicit native gate result or null")
+        gate = member["gate"]
+        evidence = {"receipt": f"members/{identifier}/receipt.json"}
+        if status == "admitted":
+            origin = _junit_object(receipt.get("origin"), "admitted origin identity")
+            if (
+                len(checks) != len(_ADMISSION_STAGES)
+                or any(not admission.positive_id(origin.get(key)) for key in ("repository_id", "run_id", "run_attempt"))
+                or origin.get("repository") != repository["full_name"]
+                or origin.get("repository_id") != repository["id"]
+                or origin.get("run_id") != selected["run"]
+                or origin.get("run_attempt") != selected["attempt"]
+                or origin.get("workflow_revision") != target["revision"]
+            ):
+                raise ValueError("composition JUnit admitted origin and selection identities disagree")
+            for key in ("archive_digest", "report_digest"):
+                _junit_digest_field(origin.get(key))
+            _junit_digest_field(receipt.get("state_digest"))
+            gate = _junit_object(gate, "the actual admitted member gate")
+            if (
+                gate.get("target") != target
+                or gate.get("policy") != {key: readiness[key] for key in ("name", "version")}
+                or gate.get("as_of") != date
+                or gate.get("result") not in ("satisfied", "not_satisfied", "unknown")
+            ):
+                raise ValueError("composition JUnit native gate and member identities disagree")
+            evidence.update(
+                {
+                    key: f"members/{identifier}/{name}"
+                    for key, name in (
+                        ("archive", "archive.zip"),
+                        ("report", "junit.xml"),
+                        ("state", "state.json"),
+                        ("gate", "gate.json"),
+                    )
+                }
+            )
+        elif gate is not None:
+            raise ValueError("composition JUnit cannot invent a gate for rejected admission")
+        expected = "satisfied" if gate is not None and gate["result"] == "satisfied" else "blocked"
+        if (
+            member.get("status") != expected
+            or not isinstance(member.get("reason"), str)
+            or member.get("evidence") != evidence
+        ):
+            raise ValueError("composition JUnit member outcome or retained evidence layout disagrees")
+    result = "satisfied" if all(member["status"] == "satisfied" for member in checked.values()) else "blocked"
+    if report.get("result") != result:
+        raise ValueError("composition JUnit aggregate and member outcomes disagree")
+    return [checked[identifier] for identifier in required]
+
+
+def as_junit(report: Doc) -> str:
+    """Serialize completed native composition readiness without fetching or evaluating evidence.
+
+    Every required member has a verdict case, including rejected admissions with no gate. Actual
+    gate prerequisites retain the native serializer and use ``<composition name>/<member ID>`` as
+    their logical report label. Selectors exclude changing versions, revisions and content digests.
+    At most 4,096 native prerequisites plus 64 verdicts and 8 MiB of XML are supported. Metadata
+    content digests identify supplied reports; they neither authenticate them nor establish fresh tests.
+    """
+    try:
+        members = _junit_members(_junit_object(report, "a native composition report"))
+        definition = report["definition"]
+        composition_name = definition["name"]
+        root = ET.Element("testsuites")
+        verdicts = ET.SubElement(
+            root, "testsuite", {"name": f"{JUNIT_PREFIX}/{policy._junit_identity(composition_name)}"}
+        )
+        properties = ET.SubElement(verdicts, "properties")
+        metadata = {
+            "exacly.report.kind": "composition-readiness-evaluation",
+            "exacly.composition.name": composition_name,
+            "exacly.composition.version": definition["version"],
+            "exacly.composition.definition.digest": report["definition_digest"],
+            "exacly.composition.selection.digest": report["selection_digest"],
+            "exacly.composition.result": report["result"],
+            "exacly.as_of": report["as_of"],
+            "exacly.native_report.digest": policy._junit_digest(report),
+            "exacly.evidence.aggregate": "report.json",
+        }
+        for key, value in metadata.items():
+            policy._junit_property(properties, key, value)
+        native_checks = 0
+        for member in members:
+            identifier = member["id"]
+            classname = (
+                f"{JUNIT_PREFIX}/{policy._junit_identity(composition_name)}/{policy._junit_identity(identifier)}"
+            )
+            case = ET.SubElement(verdicts, "testcase", {"classname": classname, "name": "verdict"})
+            case_properties = ET.SubElement(case, "properties")
+            ET.SubElement(case_properties, "property", {"name": "exacly-case", "value": f"{classname}/verdict"})
+            metadata = {
+                "exacly.composition.member": identifier,
+                "exacly.composition.status": member["status"],
+                "exacly.admission.status": member["admission"]["status"],
+                "exacly.admission.digest": member["admission"]["digest"],
+                "exacly.namespace": member["model"]["namespace"],
+                "exacly.model.digest": member["model"]["digest"],
+                "exacly.model.revision": member["model"]["revision"],
+                "exacly.repository": member["model"]["repository"]["full_name"],
+                "exacly.target.digest": policy._junit_digest(member["selection"]["target"]),
+                "exacly.selection.run": str(member["selection"]["run"]),
+                "exacly.selection.attempt": str(member["selection"]["attempt"]),
+            }
+            for category in ("trust_policy", "readiness_policy"):
+                metadata.update(
+                    {f"exacly.{category}.{key}": member[category][key] for key in ("name", "version", "digest")}
+                )
+            metadata.update(
+                {f"exacly.target.{key}": value for key, value in sorted(member["selection"]["target"].items())}
+            )
+            metadata.update({f"exacly.evidence.{key}": value for key, value in sorted(member["evidence"].items())})
+            for key, value in metadata.items():
+                policy._junit_property(case_properties, key, value)
+            if member["status"] != "satisfied":
+                gate = member["gate"]
+                outcome = "admission_rejected" if gate is None else gate["result"]
+                failure = ET.SubElement(
+                    case,
+                    "failure",
+                    {
+                        "type": f"exacly.composition.{outcome}",
+                        "message": policy._junit_text(member["reason"], 512),
+                    },
+                )
+                reason = member["reason"]
+                if gate is None:
+                    reason += "\n" + member["admission"]["checks"][-1]["reason"]
+                failure.text = policy._junit_text(reason)
+            if member["gate"] is not None:
+                checks = member["gate"].get("checks")
+                if not isinstance(checks, list):
+                    raise ValueError("composition JUnit requires native gate prerequisites")
+                native_checks += len(checks)
+                if native_checks > JUNIT_MAX_CHECKS:
+                    raise ValueError("composition JUnit exceeds the aggregate prerequisite limit")
+                native = ET.fromstring(
+                    policy.as_junit(
+                        member["gate"],
+                        namespace=member["model"]["namespace"],
+                        report_id=f"{composition_name}/{identifier}",
+                    )
+                )
+                root.extend(native)
+            if len(ET.tostring(root, encoding="utf-8", xml_declaration=True)) > JUNIT_MAX_BYTES:
+                raise ValueError("composition JUnit exceeds the aggregate XML size limit")
+        for suite in root:
+            cases = list(suite.iter("testcase"))
+            suite.attrib.update(
+                tests=str(len(cases)),
+                failures=str(sum(case.find("failure") is not None for case in cases)),
+                errors="0",
+                skipped="0",
+            )
+        counts = {
+            key: str(sum(int(suite.attrib[key]) for suite in root))
+            for key in ("tests", "failures", "errors", "skipped")
+        }
+        root.attrib.update(counts)
+        content: bytes = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+        if int(counts["tests"]) > JUNIT_MAX_CASES or len(content) > JUNIT_MAX_BYTES:
+            raise ValueError("composition JUnit exceeds aggregate report limits")
+        return content.decode("utf-8")
+    except RecursionError as error:
+        raise ValueError("composition JUnit report is excessively nested") from error

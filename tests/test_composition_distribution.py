@@ -27,12 +27,19 @@ def composed() -> dict[str, Any]:
 def test_console_smoke_exercises_four_native_producers_freshness_and_private_outputs(composed: dict[str, Any]) -> None:
     assert composed["package"]["version"]
     assert Path(composed["package"]["module"]).is_file()
+    assert Path(composed["package"]["composition_junit_module"]).is_file()
     for check in (
         "offline_definition_validation",
         "four_native_admissions_and_gates",
         "fresh_admission_on_rerun",
         "private_permissions_under_022_000_777",
         "namespace_and_target_preserved",
+        "default_layout_has_no_readiness_junit",
+        "native_readiness_junit_roundtrip",
+        "readiness_junit_private_under_022_000_777",
+        "readiness_junit_preserves_producer_proof_bytes",
+        "readiness_junit_blocks_failed_and_rejected_members",
+        "readiness_junit_unknown_is_failed_not_skipped",
         "admitted_failure_blocks_aggregate",
         "omission_rejected_before_source_access",
         "existing_output_preserved",

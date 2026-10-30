@@ -560,6 +560,33 @@ admit every member; old partial successes remain diagnostic. Exit codes are 0
 for a complete satisfied aggregate, 1 for a complete blocked aggregate and 2 for
 invalid inputs or output errors.
 
+Add the boolean `--readiness-junit` option to save `OUT/readiness.xml` for CI:
+
+```sh
+exacly compose github-actions --definition trusted/native-composition.yaml \
+  --selection native-selection.json --date 2026-10-30 \
+  --out reports/composition --readiness-junit --json
+```
+
+This separate report describes the computed readiness evaluation. Member
+`junit.xml` files retain the original producer results. Every required member has
+a verdict case, including a blocking case for rejected admission; gates that ran
+also retain their native prerequisite cases. Unknown readiness is a failure,
+never a skipped test. Stable member selectors use
+`exacly.composition/v1/<composition-name>/<member-id>/verdict`, with identity
+components percent-encoded. Native gate selectors keep their namespace, policy,
+record and dimension, using `COMPOSITION_NAME/MEMBER_ID` as the logical report ID.
+Revisions, policy versions and digests remain metadata.
+
+The XML is bounded and published atomically before the final complete aggregate
+marker. Requested report errors return 2; a missing or incomplete `report.json`
+cannot establish success. In Python, `composition.as_junit(result.report)` renders
+the same XML without further evaluation or source access. See the
+[composition guide](../docs/admission-composition.md#readiness-junit) for limits,
+failure handling and explicit observation-binding semantics. These reports do
+not authenticate evidence origin or prove a fresh product test ran; avoid a
+circular binding that uses a gate's own generated report to satisfy that gate.
+
 The Python API provides `MemberInputs`, `validate_definition`,
 `validate_selection` and `evaluate` through `exacly.composition`. The CLI streams
 completed members to disk before releasing their binary payloads. Python callers

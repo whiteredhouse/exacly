@@ -19,12 +19,13 @@ import stat
 import subprocess
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
 import zipfile
 from contextlib import suppress
 from pathlib import Path
 from typing import Any, NoReturn
 from unittest.mock import patch
-from urllib.parse import parse_qs, unquote, urlsplit
+from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 Doc = dict[str, Any]
 REPOSITORY = "acme/composition-smoke"
@@ -44,6 +45,7 @@ CONSOLE_WRAPPER = (
 
 def installation(*, require_installed: bool = True) -> Doc:
     import exacly
+    from exacly import composition
 
     module = Path(exacly.__file__).resolve()
     distribution = importlib.metadata.distribution("exacly")
@@ -56,7 +58,26 @@ def installation(*, require_installed: bool = True) -> Doc:
         )
     ):
         raise RuntimeError(f"composition smoke requires an installed package, found {module}")
-    return {"version": distribution.version, "module": str(module)}
+    api = composition.as_junit
+    api_file = sys.modules[api.__module__].__file__
+    if api_file is None:
+        raise RuntimeError("composition JUnit API requires a package module file")
+    api_module = Path(api_file).resolve()
+    if require_installed:
+        owner = next(
+            (
+                entry
+                for entry in distribution.files or ()
+                if Path(str(distribution.locate_file(entry))).resolve() == api_module
+            ),
+            None,
+        )
+        if owner is None or owner.hash is None or owner.hash.mode != "sha256":
+            raise RuntimeError("composition JUnit API does not belong to the installed package RECORD")
+        identity = base64.urlsafe_b64encode(hashlib.sha256(api_module.read_bytes()).digest()).rstrip(b"=").decode()
+        if owner.hash.value != identity or owner.size != api_module.stat().st_size:
+            raise RuntimeError("composition JUnit API differs from its installed package RECORD")
+    return {"version": distribution.version, "module": str(module), "composition_junit_module": str(api_module)}
 
 
 def producer(index: int) -> Doc:
@@ -204,6 +225,8 @@ class Source:
             run_id, artifact_id, workflow_id = 700 + index, 800 + index, 900 + index
             outcome = "failure" if mode == "failure" and index == 3 else "success"
             fragment = '<failure message="native fixture failed"/>' if outcome == "failure" else ""
+            if mode == "unknown" and index == 3:
+                fragment = '<skipped message="native fixture skipped"/>'
             report = (
                 f'<testsuite><testcase file="tests/test_native.py" name="test_member_{index}">'
                 f"{fragment}</testcase></testsuite>"
@@ -240,6 +263,8 @@ class Source:
                 "repository": {"id": REPOSITORY_ID, "full_name": REPOSITORY},
                 "head_repository": {"id": REPOSITORY_ID, "full_name": REPOSITORY},
             }
+            if mode == "rejection" and index == 3:
+                run["head_sha"] = "d" * 40
             job = {
                 "id": 1000 + index,
                 "run_id": run_id,
@@ -410,6 +435,47 @@ def console(mode: str, argv: list[str], *, require_installed: bool = True) -> No
     raise SystemExit(status)
 
 
+def verify_readiness_junit(output: Path, report: Doc, *, mode: str = "success") -> None:
+    """Round-trip the derived view while retaining every producer's independent native proof."""
+    from exacly import composition, policy
+    from exacly.refresh import case_id, read_junit
+
+    path = output / "readiness.xml"
+    assert path.read_text() == composition.as_junit(report)
+    root = ET.parse(path).getroot()
+    cases = {case_id(case): case for case in root.iter("testcase")}
+    assert len(cases) == len(list(root.iter("testcase")))
+    outcomes = read_junit([path])
+    expected: dict[str, str] = {}
+    name = report["definition"]["name"]
+    fixture = Source(mode)
+    for index, member in enumerate(report["members"]):
+        verdict = f"exacly.composition/v1/{quote(name, safe='')}/{quote(member['id'], safe='')}/verdict"
+        expected[verdict] = "passed" if member["status"] == "satisfied" else "failed"
+        gate = member["gate"]
+        if gate is not None:
+            native = ET.fromstring(
+                policy.as_junit(gate, namespace=member["model"]["namespace"], report_id=f"{name}/{member['id']}")
+            )
+            for case in native.iter("testcase"):
+                identity = case_id(case)
+                expected[identity] = "failed" if case.find("failure") is not None else "passed"
+                # Prerequisite metadata and diagnostics must be the native gate renderer's own.
+                assert ET.tostring(cases[identity]) == ET.tostring(case)
+        if member["admission"]["status"] == "admitted":
+            archived = fixture.archives[800 + index]
+            assert (output / member["evidence"]["archive"]).read_bytes() == archived
+            with zipfile.ZipFile(io.BytesIO(archived)) as bundle:
+                assert (output / member["evidence"]["report"]).read_bytes() == bundle.read("junit.xml")
+        else:
+            assert gate is None and "report" not in member["evidence"]
+    assert outcomes == expected
+    assert root.get("tests") == str(len(expected))
+    assert root.get("failures") == str(sum(value == "failed" for value in expected.values()))
+    assert root.get("errors") == root.get("skipped") == "0"
+    assert not list(root.iter("skipped"))
+
+
 def run(*, require_installed: bool = True) -> Doc:
     package = installation(require_installed=require_installed)
     helper = Path(__file__).resolve()
@@ -485,10 +551,26 @@ def run(*, require_installed: bool = True) -> Doc:
                 assert member["selection"]["target"]["revision"] == REVISION
             for path in (out, *out.rglob("*")):
                 assert stat.S_IMODE(path.stat().st_mode) == (0o700 if path.is_dir() else 0o600), path
+            assert not (out / "readiness.xml").exists()
         results["four_native_admissions_and_gates"] = True
         results["fresh_admission_on_rerun"] = True
         results["private_permissions_under_022_000_777"] = True
         results["namespace_and_target_preserved"] = True
+        results["default_layout_has_no_readiness_junit"] = True
+        for mask in ("022", "000", "777"):
+            out = root / f"junit-{mask}"
+            done, trace = invoke(f"junit-{mask}", [*base_args, "--readiness-junit", "--out", str(out)], umask=mask)
+            assert done.returncode == 0, done.stderr
+            report = json.loads(done.stdout)
+            assert report == json.loads((out / "report.json").read_text())
+            assert set(report) == set(json.loads((root / "pass-022/report.json").read_text()))
+            assert report["complete"] is True and report["result"] == "satisfied" and trace["downloads"] == 4
+            verify_readiness_junit(out, report)
+            for path in (out, *out.rglob("*")):
+                assert stat.S_IMODE(path.stat().st_mode) == (0o700 if path.is_dir() else 0o600), path
+        results["native_readiness_junit_roundtrip"] = True
+        results["readiness_junit_private_under_022_000_777"] = True
+        results["readiness_junit_preserves_producer_proof_bytes"] = True
         failed, trace = invoke("failed", [*base_args, "--out", str(root / "failed")], mode="failure")
         assert failed.returncode == 1, failed.stderr
         blocked = json.loads(failed.stdout)
@@ -497,6 +579,20 @@ def run(*, require_installed: bool = True) -> Doc:
         assert blocked["members"][-1]["admission"]["status"] == "admitted"
         assert blocked["members"][-1]["gate"]["result"] == "not_satisfied"
         results["admitted_failure_blocks_aggregate"] = True
+        for mode in ("failure", "rejection", "unknown"):
+            out = root / f"junit-{mode}"
+            done, trace = invoke(f"junit-{mode}", [*base_args, "--readiness-junit", "--out", str(out)], mode=mode)
+            assert done.returncode == 1, done.stderr
+            report = json.loads(done.stdout)
+            assert report == json.loads((out / "report.json").read_text())
+            assert report["complete"] is True and report["result"] == "blocked"
+            verify_readiness_junit(out, report, mode=mode)
+            assert report["members"][-1]["admission"]["status"] == ("rejected" if mode == "rejection" else "admitted")
+            assert trace["downloads"] == (3 if mode == "rejection" else 4)
+            if mode == "unknown":
+                assert report["members"][-1]["gate"]["result"] == "unknown"
+        results["readiness_junit_blocks_failed_and_rejected_members"] = True
+        results["readiness_junit_unknown_is_failed_not_skipped"] = True
         missing = root / "missing.json"
         document = json.loads(selection.read_text())
         document["members"].pop()
@@ -512,6 +608,7 @@ def run(*, require_installed: bool = True) -> Doc:
             DATE.isoformat(),
             "--out",
             str(root / "missing"),
+            "--readiness-junit",
             "--json",
         ]
         rejected, trace = invoke("missing", bad_args)

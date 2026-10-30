@@ -191,22 +191,27 @@ def protect_output(out: Path, inputs: Iterable[Path], model_folders: Iterable[Pa
     return destination
 
 
-def _replace_report(out: Path, report: Doc) -> None:
-    """Replace the aggregate atomically; all fallible durability work precedes publication."""
+def _replace_private(out: Path, name: str, data: bytes) -> None:
+    """Replace one private result atomically; fallible durability work precedes publication."""
     temporary: Path | None = None
     try:
-        with tempfile.NamedTemporaryFile(prefix=".report-", dir=out, delete=False) as stream:
+        with tempfile.NamedTemporaryFile(prefix=f".{Path(name).stem}-", dir=out, delete=False) as stream:
             temporary = Path(stream.name)
             os.fchmod(stream.fileno(), 0o600)
-            stream.write(evidence_retention.json_bytes(report))
+            stream.write(data)
             stream.flush()
             os.fsync(stream.fileno())
         evidence_retention.sync_directory(out)
-        os.replace(temporary, out / "report.json")
+        os.replace(temporary, out / name)
         temporary = None
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
+
+
+def _replace_report(out: Path, report: Doc) -> None:
+    """Replace the aggregate atomically; all fallible durability work precedes publication."""
+    _replace_private(out, "report.json", evidence_retention.json_bytes(report))
 
 
 class ResultWriter:
@@ -252,10 +257,32 @@ class ResultWriter:
         self.report["members"].append(copy.deepcopy(report))
         _replace_report(self.out, self.report)
 
-    def finish(self, report: Doc) -> None:
+    def finish(self, report: Doc, *, readiness_junit: bool = False) -> None:
         if report.get("complete") is not True or report.get("result") not in {"satisfied", "blocked"}:
             raise ValueError("composition returned an invalid aggregate status")
         if len(report["members"]) != len(self.report["members"]):
             raise ValueError("composition did not retain every required member")
         evidence_retention.sync_directory(self.out / "members")
-        _replace_report(self.out, report)
+        if not readiness_junit:
+            _replace_report(self.out, report)
+            return
+        readiness = self.out / "readiness.xml"
+        try:
+            # The XML describes all completed evaluations; the canonical aggregate becomes
+            # complete only after the requested derived output has been retained durably.
+            xml = composition.as_junit(report)
+            _replace_private(self.out, readiness.name, xml.encode("utf-8"))
+            evidence_retention.sync_directory(self.out)
+            _replace_report(self.out, report)
+        except BaseException:
+            # Ordinary write failures and controlled interruptions must not leave a passing
+            # derived artifact beside a confirmed incomplete aggregate. A signal can arrive
+            # just after the final rename commits: never undo an already complete bundle.
+            # If the marker cannot be read, preserve the XML and the original exception.
+            try:
+                retained = json.loads((self.out / "report.json").read_bytes())
+                if isinstance(retained, dict) and retained.get("complete") is False:
+                    readiness.unlink(missing_ok=True)
+            except (OSError, ValueError):
+                pass
+            raise
