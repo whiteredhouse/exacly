@@ -16,6 +16,8 @@ BACKEND_TESTS = {
     "python/tests/test_executor_faults.py",
     "python/tests/test_executor_runtime.py",
     "python/tests/test_executor_cli.py",
+    "python/tests/test_executor_interfaces.py",
+    "python/tests/test_executor_local.py",
 }
 
 

@@ -148,7 +148,7 @@ For development work that does not exercise the local backend, run:
 mise run check-core
 ```
 
-This development subset runs schema and core tests, lint, type checks and examples without the local execution backend test modules. It writes `reports/core-junit.xml`, never the full suite's `reports/junit.xml`, and performs no state refresh or verification gate. A passing subset verifies neither REQ-025 nor REQ-027 and does not replace the full CI check. Do not copy its report into the full verification path.
+This development subset runs schema and core tests, lint, type checks and examples without the local execution and ownership test modules. It writes `reports/core-junit.xml`, never the full suite's `reports/junit.xml`, and performs no state refresh or verification gate. A passing subset establishes neither REQ-025/027 verification nor the complete REQ-031 contract and does not replace the full CI check. Do not copy its report into the full verification path.
 
 The repository's real integration suites are [`test_execution_isolation.py`](../python/tests/test_execution_isolation.py) and [`test_isolation_syscalls.py`](../python/tests/test_isolation_syscalls.py). CI applies the reviewed Ubuntu 24.04 [host setup](../ci/setup_isolation_runtime.sh) and requires the [runtime preflight](../ci/check_isolation_runtime.py) to pass before running the ordinary test and model checks. These cases fail when the required runtime is unavailable; skipped or mocked namespace checks cannot establish successful verification of REQ-025.
 
