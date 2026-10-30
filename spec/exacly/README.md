@@ -1,6 +1,6 @@
 # Exacly's own model
 
-Exacly models itself, following the layout in section 13 of the specification. CI records observations as state alongside the authored config.
+Exacly models itself, following the layout in section 13 of the specification. CI records observations as state alongside the authored config. See the [release notes](../../CHANGELOG.md) for command availability in released packages.
 
 | | |
 | --- | --- |
@@ -55,9 +55,9 @@ The definition binds required member roles to their approved policy and model
 inputs; every invocation pins that identity and selects all required runs and
 targets explicitly. INFO-009 records the per-member and aggregate decisions in
 INF-006, a new private output bundle separate from authoritative state and the
-execution ledgers. The [composition guide](../../docs/admission-composition.md)
-describes unreleased functionality on main. Active lifecycle identifies the
-implemented contract; matching observations establish verification and delivery.
+execution ledgers. The [composition guide](../../docs/admission-composition.md) describes the supported
+contract. Active lifecycle identifies the implemented contract; matching observations
+establish verification and delivery.
 
 - Browse the [published model and observations](https://whiteredhouse.github.io/exacly/project/) for the checked baseline on main. Branch proposals appear there after merge and successful CI publication.
 - Read [`automation.yaml`](automation.yaml) for the automation contracts and process steps, the [durable dispatch guide](../../docs/durable-dispatch.md) for approved GitHub task creation and recovery, the [bounded executor guide](../../docs/bounded-executor.md) for local attempt supervision, the [output handoff guide](../../docs/output-handoff.md) for reviewed artifact-to-Git publication, the [local Bubblewrap backend contract](../../docs/candidate-isolation.md#linux-bubblewrap-v1-backend-contract) for the current isolation implementation, and the dated [plan/apply research](../../docs/automated-plan-apply-research.md) for the original design.
@@ -71,7 +71,7 @@ The [dispatcher](../../python/README.md#dispatch-approved-verification-work), AP
 
 The [isolated command launcher](../../python/README.md#isolate-a-candidate-command), APP-016, is the current local backend for the isolation contract. It delegates isolation to installed Linux Bubblewrap and verifies the actual boundary before running an explicitly authorized command. Its real integration tests verify this backend; they establish no support for a remote provider or another runtime. Every executor backend must satisfy the isolation contract without gaining evidence or completion authority.
 
-The [bounded local executor](../../python/README.md#run-a-bounded-local-executor), APP-014, adds reviewed task authorization, durable attempt history and shared concurrency limits through a separately initialized private companion to the execution ledger. The first adapter delegates candidate execution to APP-016, accepts explicit snapshots, permits no repository effects and returns host-derived content build identities. Execution, recovery and cancellation preserve pending verification work and cannot admit evidence or complete it. Existing binding/completion ledger formats remain unchanged. The guide describes unreleased functionality on main; lifecycle and fresh observations remain separate.
+The [bounded local executor](../../python/README.md#run-a-bounded-local-executor), APP-014, adds reviewed task authorization, durable attempt history and shared concurrency limits through a separately initialized private companion to the execution ledger. The first adapter delegates candidate execution to APP-016, accepts explicit snapshots, permits no repository effects and returns host-derived content build identities. Execution, recovery and cancellation preserve pending verification work and cannot admit evidence or complete it. Existing binding/completion ledger formats remain unchanged. Lifecycle and fresh observations remain separate.
 
 REQ-031 covers the coordinator's explicit [backend contracts](../../docs/coordinator-interfaces.md) for attempt storage, invocation ownership and worker lifecycle. APP-014 consumes the composed protocols throughout execution, inspection and recovery; its local defaults retain the existing CLI, policy and history formats. Shared reference cases establish interface semantics, while the real local runtime and crash tests establish backend behavior. Distributed scope remains unsupported by protocol `0.1.0` and needs independently verified fencing and migration guarantees before another coordinator can be supported.
 

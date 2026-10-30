@@ -1,6 +1,6 @@
 # Bounded local executor
 
-The executor supervisor implements [REQ-027](../spec/exacly/automation.yaml): one reviewed verification task can run through an isolated local command with durable attempt, time and concurrency limits. This is unreleased functionality on main. The first adapter is `local-bubblewrap-v1`, built on the existing [Linux Bubblewrap isolation contract](candidate-isolation.md#linux-bubblewrap-v1-backend-contract).
+The executor supervisor implements [REQ-027](../spec/exacly/automation.yaml): one reviewed verification task can run through an isolated local command with durable attempt, time and concurrency limits. See the [release notes](../CHANGELOG.md) for package availability. The first adapter is `local-bubblewrap-v1`, built on the existing [Linux Bubblewrap isolation contract](candidate-isolation.md#linux-bubblewrap-v1-backend-contract).
 
 The adapter receives explicit input snapshots and returns collected output files. It has no host repository or network access and permits no repository effects. It does not create a branch or PR, push a commit, close a task or change verification state. To work on source, supply its reviewed bytes as inputs and have the command write its result under `/outputs`; applying that result to a repository remains a separately authorized operation.
 

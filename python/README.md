@@ -2,18 +2,17 @@
 
 The `exacly` command and Python package work with an Exacly model, either a 0.1 product map or 0.2 config and state documents, as the [Exacly Specification](../spec/README.md) describes it.
 
-This reference describes **0.6.0**, for product context, evidence-based
-verification and recoverable local task completion. Verification and completion
-run in an operator-controlled environment. That release excludes candidate
-isolation, task dispatch and executor supervision (REQ-025–027).
-The [isolation](#isolate-a-candidate-command),
+This reference follows repository main and covers
+[isolation](#isolate-a-candidate-command),
 [dispatch](#dispatch-approved-verification-work),
 [bounded executor](#run-a-bounded-local-executor),
 [output handoff](#hand-executor-artifacts-to-a-git-revision) and
-[composition](#compose-required-admissions-and-gates) sections describe additional
-unreleased functionality on main. Review the
-[release notes and upgrade paths](../CHANGELOG.md) for report-format changes and
-explicit ledger-copy upgrades.
+[composition](#compose-required-admissions-and-gates), alongside product context,
+evidence-based verification and recoverable local completion. These commands
+run under explicit operator control;
+remote source publication and the complete unattended automation loop remain
+future work. Review the [release notes and upgrade paths](../CHANGELOG.md) for
+package availability, report-format changes and explicit ledger-copy upgrades.
 
 - [`exacly validate`](#validate) checks the model and prints the section 11 validation report.
 - [`exacly refresh`](#refresh) writes state from what the model's bindings observe.
@@ -40,8 +39,18 @@ uv tool install 'exacly==0.6.0'
 uvx --from 'exacly==0.6.0' exacly validate spec/exacly    # one-off run
 ```
 
-The exact pin selects this release; `uv tool install exacly` selects the latest
-stable release. Python 3.12 or newer is required. Exacly is at 0.x and the
+For the candidate trial, opt into the prerelease explicitly:
+
+```sh
+uv tool install 'exacly==0.7.0rc1'
+uvx --from 'exacly==0.7.0rc1' exacly validate spec/exacly    # one-off run
+```
+
+An exact pin selects that version; `uv tool install exacly` selects the latest
+stable release, currently `0.6.0`. The producer-workflow examples below retain
+their stable `0.6.0` pins. Changing a producer's package pin changes reviewed
+workflow bytes and requires an independently reviewed matching policy candidate.
+Python 3.12 or newer is required. Exacly is at 0.x and the
 specification is a Draft, so commands, output and the model may change in any
 release until 1.0. Pin the package version where a change would break you. To run
 the latest main instead, install
@@ -514,8 +523,6 @@ The receipt establishes only the checked evidence origin and target applicabilit
 
 ### Supported preflight validation
 
-**Unreleased functionality on main.**
-
 The pure Python helpers `admission.validate_request(policy_doc, target, run_id,
 attempt, date)` and `admission.validate_model(policy_doc, documents, date)` expose
 the native request and approved-model checks without source access. The first
@@ -527,8 +534,6 @@ Requirement references and duplicate checks, returning a copied policy. Native
 admission and readiness evaluation reuse these checks.
 
 ## Compose required admissions and gates
-
-**Unreleased functionality on main.**
 
 A composition defines an independently reviewed set of required members, each
 with its own producer trust policy, approved model and readiness policy. A
@@ -762,8 +767,6 @@ Reports identify policy name/version, selected target, as-of date, individual ch
 
 ### Export readiness as JUnit
 
-This option is available on main ahead of the next package release; it is not included in 0.6.0.
-
 Use the paired `--junit FILE` and `--junit-id LABEL` options when CI or an explicitly reviewed observation binding needs a standard test report. The XML serializes the same computed readiness evaluation; it does not run another evaluator. Text remains the default stdout format, and `--json` can retain the full native report alongside the XML:
 
 ```sh
@@ -862,8 +865,6 @@ In Python, `exacly.planning.create(documents, policy_doc, target, date)` produce
 
 ## Dispatch approved verification work
 
-**Unreleased functionality on main.**
-
 `exacly dispatch github-issues` renders a read-only proposal by default. It rechecks a saved plan action against the reviewed policies, target and actual current state, then shows the selected GitHub repository, issue contents and advisory authorization template. `--apply` requires a separately reviewed authorization, an explicitly initialized private dispatch journal and an execution-binding ledger. Policy and authorization pin the canonical journal, ledger and state paths plus the journal's unique initialization identity. The adapter verifies the repository's numeric identity and supports issue title/body only; it has no repository, workflow or test-path defaults.
 
 `exacly dispatches init`, `show`, `recover` and `supersede` manage explicit initialization, inspection and recovery or abandonment. The journal is separate from existing execution-ledger formats. A durable `creating` record precedes the one create request; after an ambiguous result, zero discovered matches never authorizes another create. Confirmed work is associated with one pending verification entry and its execution binding through a recoverable conditional publication protocol, preserving unrelated state.
@@ -873,8 +874,6 @@ When model or pending-work changes leave registration unable to continue under i
 Dispatch does not launch an executor, admit evidence or complete verification. See the [durable dispatch guide](../docs/durable-dispatch.md) for policy and authorization formats, commands, storage protections, attempt limits and recovery behavior. Bounded executor attempts remain the separate REQ-027 contract.
 
 ## Run a bounded local executor
-
-**Unreleased functionality on main.**
 
 `exacly execute local` previews one registered verification task under a reviewed executor policy. The policy pins the private journal and binding ledger, actual state and output storage, reviewed Bubblewrap runtime, explicit command and input snapshots, required output paths, attempt budget and wall-clock limit. `--apply` requires separately reviewed authorization for the exact contract, current state, history head and next attempt. The first `local-bubblewrap-v1` adapter permits no repository or network effects; it exchanges explicit snapshots and collected output files.
 
@@ -894,8 +893,6 @@ A successful result retains a task reference, output paths and a host-derived co
 The Python coordinator consumes public attempt-storage, invocation-ownership and worker-lifecycle protocols through an optional trusted `backends=` bundle; default calls and the CLI select the existing local adapters. [Coordinator backend contracts](../docs/coordinator-interfaces.md) describe the interfaces, shared conformance cases, strict local history compatibility and explicit migration requirements. Protocol `0.1.0` accepts one local-machine coordination domain; distributed ownership and remote provider support require separately reviewed and verified contracts.
 
 ## Hand executor artifacts to a Git revision
-
-**Unreleased functionality on main.**
 
 `exacly handoff local-git --request FILE` previews selected artifacts from one retained successful executor attempt against a pinned base commit and policy-defined permitted paths. It verifies exact artifact bytes and returns the proposed changes, tree, commit and authorization template without writing objects, refs or history. `--apply --authorization FILE` requires separate review of that exact operation.
 
@@ -1204,8 +1201,6 @@ In Python, `exacly.completion.complete(source, plan_doc, action_id, readiness_po
 Completion receipts remain unsigned and do not prove test honesty, acceptance coverage or that an executor produced the named output. These commands complete local verification work without closing external tickets, running candidate code, dispatching agents or granting release authority. The ledger must remain in the operator-controlled runtime; its file permissions do not isolate code running as the same operating-system user.
 
 ## Isolate a candidate command
-
-**Unreleased functionality on main.**
 
 `exacly isolate` is the optional local `linux-bubblewrap-v1` execution backend. It runs one explicit argument vector through Linux Bubblewrap using a reviewed detached root filesystem and immutable input snapshots. Before starting candidate code, a trusted bootstrap verifies the actual launch's namespace separation, capability and mount protections and mandatory syscall filter. The runtime provides private writable temporary filesystems and no host network, candidate-writable host mounts, operator storage, inherited credentials or control interfaces; child processes retain the boundary.
 

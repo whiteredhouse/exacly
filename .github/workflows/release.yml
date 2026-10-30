@@ -42,6 +42,7 @@ jobs:
           evidence_smoke="$PWD/ci/smoke_evidence.py"
           policy_smoke="$PWD/ci/smoke_policy.py"
           composition_smoke="$PWD/ci/smoke_composition.py"
+          automation_smoke="$PWD/ci/smoke_automation.py"
           cd "$RUNNER_TEMP"
           uvx --isolated --from "$wheel" exacly validate "$example"
           uv run --isolated --no-project --with "$wheel" python "$smoke" --example "$example"
@@ -51,6 +52,7 @@ jobs:
             --with 'exacly==0.6.0rc2' python "$evidence_smoke" --consume evidence-compatibility.zip
           uv run --isolated --no-project --with "$wheel" python "$policy_smoke"
           uv run --isolated --no-project --with "$wheel" python "$composition_smoke"
+          uv run --isolated --no-project --with "$wheel" python -I "$automation_smoke"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist
@@ -79,9 +81,13 @@ jobs:
 
   verify-publication:
     needs: publish
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install the Linux isolation test runtime
+        run: sh ci/setup_isolation_runtime.sh
+      - name: Check the Linux isolation test runtime
+        run: /usr/bin/python3 ci/check_isolation_runtime.py
       - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
       - name: Install the published version, allowing for index propagation
         env:
@@ -99,6 +105,7 @@ jobs:
           evidence_smoke="$PWD/ci/smoke_evidence.py"
           policy_smoke="$PWD/ci/smoke_policy.py"
           composition_smoke="$PWD/ci/smoke_composition.py"
+          automation_smoke="$PWD/ci/smoke_automation.py"
           cd "$RUNNER_TEMP"
           "$RUNNER_TEMP/exacly-publication/bin/python" "$smoke" --example "$example"
           "$RUNNER_TEMP/exacly-publication/bin/python" "$evidence_smoke" --archive published-evidence-compatibility.zip
@@ -106,3 +113,4 @@ jobs:
             --with 'exacly==0.6.0rc2' python "$evidence_smoke" --consume published-evidence-compatibility.zip
           "$RUNNER_TEMP/exacly-publication/bin/python" "$policy_smoke"
           "$RUNNER_TEMP/exacly-publication/bin/python" "$composition_smoke"
+          "$RUNNER_TEMP/exacly-publication/bin/python" -I "$automation_smoke"
