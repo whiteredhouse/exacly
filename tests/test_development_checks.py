@@ -12,6 +12,10 @@ BACKEND_TESTS = {
     "python/tests/test_isolation_syscalls.py",
     "python/tests/test_isolation_contract.py",
     "python/tests/test_isolation_cli.py",
+    "python/tests/test_executor.py",
+    "python/tests/test_executor_faults.py",
+    "python/tests/test_executor_runtime.py",
+    "python/tests/test_executor_cli.py",
 }
 
 

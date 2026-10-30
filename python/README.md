@@ -601,7 +601,7 @@ The repository uses [mise](https://mise.jdx.dev/) for its tools (Python and uv) 
 |---|---|
 | `mise run sync` | Installs exacly and the development tools into `.venv` from `uv.lock` |
 | `mise run test` | Runs the schema and exacly tests with pytest, writing `reports/junit.xml` |
-| `mise run test-core` | Runs the development subset without the four local isolation test modules, writing only `reports/core-junit.xml` |
+| `mise run test-core` | Runs the development subset without the local execution backend test modules, writing only `reports/core-junit.xml` |
 | `mise run lint` | Checks style and formatting with Ruff |
 | `mise run typecheck` | Type-checks with mypy in strict mode |
 | `mise run examples` | Validates every example in `spec/examples/`: each 0.1 map and each 0.2 folder |
@@ -609,7 +609,7 @@ The repository uses [mise](https://mise.jdx.dev/) for its tools (Python and uv) 
 | `mise run check` | Full tests, lint, type checks, examples, model refresh and verification gate |
 | `mise run check-core` | Runs the development subset, lint, type checks and examples without refreshing state or evaluating the verification policy |
 
-Use `check-core` when developing core functionality without the supported Linux isolation runtime. It omits the backend's contract, CLI, execution and syscall test modules and cannot establish REQ-025 verification. Full CI continues to run `check`, including real isolation checks and the verification gate; subset results never replace its `reports/junit.xml`.
+Use `check-core` when developing core functionality without the supported Linux isolation runtime. It omits local isolation and executor integration test modules and cannot establish REQ-025 or REQ-027 verification. Full CI continues to run `check`, including real execution checks and the verification gate; subset results never replace its `reports/junit.xml` and never enter the gate.
 
 To try a model against your working copy, run `uv run exacly validate path/to/spec/exacly`.
 
@@ -723,6 +723,25 @@ In Python, `exacly.planning.create(documents, policy_doc, target, date)` produce
 When model or pending-work changes leave registration unable to continue under its original contract, `dispatches resolve` previews the exact retained history and current state, pending and binding facts. `--apply` requires separate authorization for those reviewed facts and appends only a terminal `resolved` receipt. It preserves current work, leaves registration unfinalized and grants no new create. `dispatches recover-journal --authorize-recovery` can first repair an interrupted outbox transaction with a retained backup, without evaluating the stale model or publishing state. See the [resolution procedure](../docs/durable-dispatch.md#resolve-stale-partial-registration) before separately registering remaining pending work under a newly reviewed plan.
 
 Dispatch does not launch an executor, admit evidence or complete verification. See the [durable dispatch guide](../docs/durable-dispatch.md) for policy and authorization formats, commands, storage protections, attempt limits and recovery behavior. Bounded executor attempts remain the separate REQ-027 contract.
+
+## Run a bounded local executor
+
+**Unreleased functionality on main.**
+
+`exacly execute local` previews one registered verification task under a reviewed executor policy. The policy pins the private journal and binding ledger, actual state and output storage, reviewed Bubblewrap runtime, explicit command and input snapshots, required output paths, attempt budget and wall-clock limit. `--apply` requires separately reviewed authorization for the exact contract, current state, history head and next attempt. The first `local-bubblewrap-v1` adapter permits no repository or network effects; it exchanges explicit snapshots and collected output files.
+
+```sh
+exacly execute local -m 'spec/product/*.yaml' \
+  --plan approved-plan.json --action "$EXACLY_ACTION_ID" \
+  --policy trusted/verification.json --trust-policy trusted/producer.json \
+  --executor-policy trusted/executor.json --target target.json \
+  --state observations/current.json --date 2026-10-30 \
+  --binding "$EXACLY_BINDING_ID" --inputs approved-inputs.json --json
+```
+
+Explicitly initialize the private attempt companion with `exacly executors init --journal FILE --ledger FILE --max-concurrency N` before reviewing its policy and authorization. Existing binding/completion ledger formats remain unchanged. Shared capacity and consumed attempts are durable; retries require fresh authorization within the retained limits. `executors show`, `cancel` and `recover` operate from retained history even after the model changes. `executors recover-journal --authorize-recovery` preserves a protected backup before repairing an interrupted journal transaction; it launches no candidate and resets no budget.
+
+A successful result retains a task reference, output paths and a host-derived content build identity. Candidate status, logs and files remain untrusted, and execution never changes state, pending work, evidence admission or completion receipts. See the [bounded executor guide](../docs/bounded-executor.md) for initialization, full policy and authorization flow, explicit retries, cancellation, recovery, storage boundaries and the Python API.
 
 ## Register execution bindings
 

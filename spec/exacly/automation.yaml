@@ -1,5 +1,5 @@
-# Automation contracts. Local completion and opt-in Linux Bubblewrap commands are active; dispatch and bounded executor attempts remain proposed.
-# Proposed records retain future test selectors and explicitly planned implementation references.
+# Automation contracts for local completion, isolation, durable dispatch and bounded executor supervision.
+# Lifecycle describes the supported contract; observed verification and release remain separate.
 exacly: "0.2.0"
 
 records:
@@ -163,29 +163,36 @@ records:
   - id: REQ-027
     type: Requirement
     name: Bound authorized executor attempts
-    description: An executor adapter has explicit limits and returns identifiable outputs without controlling verification or completion.
+    description: A reviewed local snapshot command has durable attempt and concurrency limits and returns content-identified outputs without controlling verification or completion.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-28"
+    last_reviewed_at: "2026-10-30"
     statement: >-
       Run one explicitly approved executor adapter within the enforced isolation boundary and
       declared attempt, time and concurrency limits, retaining durable outcomes and produced
       implementation identities for independent evidence evaluation.
     acceptance_criteria:
-      - The initial executor adapter receives only the authorized task, Requirement IDs, approved criteria and binding fingerprints, input implementation, dependencies and expected observations.
-      - Explicit policy bounds attempts, wall-clock execution time, concurrent work and permitted repository effects; retries and additional actions cannot expand those limits or infer new authorization from failure.
-      - Candidate code runs only through a runtime satisfying the isolation requirement, and the supervisor retains durable attempt identity, limits and status before starting the adapter.
-      - The adapter returns task or PR references, produced immutable revision or build identities, execution outcome and retained output references; missing or ambiguous output identity prevents automatic progression to completion.
-      - Timeout, cancellation, failure and supervisor interruption are observable and recoverable; recovery reconciles or terminates an existing attempt before starting another, and retry-budget exhaustion stops further execution with an actionable reason.
-      - Executor completion and a merged PR are execution outcomes only; the supervisor cannot write verification assessments, alter the approved contract, finalize completion receipts or remove pending work.
-      - Preserve successful attempt history and isolate partial failures so retrying one action does not repeat another successful effect.
-    verification_method: Future executor adapter and command tests with controlled failures, real isolation integration, budget enforcement and process termination and restart.
+      - The initial local-bubblewrap-v1 adapter receives explicit immutable input snapshots and copied metadata for the authorized task, Requirement, approved goal, criteria and binding fingerprints, input implementation, dependencies and expected observations; no implicit repository traversal or operator storage handles are supplied.
+      - Dry-run launches no worker or candidate and changes no state, binding, watermark, attempt or output. Apply requires separately reviewed authorization binding the initialized journal and canonical storage scope, selected contract, actual history head, next attempt ordinal, exact current state and output destination; stale preconditions block execution.
+      - Recheck the approved plan, policies, target, actual state, exact pending verification task and active execution binding before reserving a new attempt; contract drift, completed work or a changed binding prevents new execution.
+      - Explicit policy bounds attempts and the worker's wall-clock time through staging, isolated execution and collection. Explicit journal initialization fixes shared concurrency capacity. The first adapter permits no repository effects; retries, changed policies and failures cannot expand retained limits or infer new authorization.
+      - Before starting the adapter, commit durable work and attempt identities, reviewed limits, status and the shared concurrency reservation in an explicitly initialized private companion journal. Existing version-2 and version-4 binding/completion ledgers retain their formats and ordinary operations never silently initialize, migrate or recover storage.
+      - Candidate code runs only through the verified local Bubblewrap launcher satisfying REQ-025, with no host-execution fallback, network or writable host repository mount. The full worker budget and process cleanup remain under the trusted supervisor.
+      - Return the registered task reference, execution outcome, retained output references and an immutable host-derived build identity computed from collected artifact paths and content. Missing required outputs or ambiguous identity prevents a successful result; candidate-provided revision claims do not establish output provenance.
+      - Timeout, cancellation, failure and supervisor interruption are observable and recoverable from retained history without requiring an unchanged model or state. An exclusive per-invocation ownership lock distinguishes active supervision from an idle long-lived API process; a cancellation request for an active invocation makes no immediate termination claim. Recovery reconciles or terminates the existing attempt before releasing its slot or permitting another; missing ownership facts or uncertain process identity never authorize signaling a reused PID or starting replacement work.
+      - Each retry needs fresh authorization for its next ordinal within the original attempt budget. Preserve consumed attempts, successful outcomes and partial-failure history; exact successful replay returns its retained receipt rather than executing again, and exhausted limits stop further execution with an actionable reason.
+      - Use bounded lock waits and protected explicit backup before journal-only SQLite recovery; neither repair nor attempt recovery resets limits, starts candidate code, changes state or repairs a different ledger.
+      - Executor success, collected artifacts and a merged PR are execution outcomes only; the supervisor cannot write verification assessments, alter the approved contract, admit evidence, finalize completion receipts or remove pending work. Build identity identifies bytes rather than test honesty, acceptance coverage or a later revision's provenance.
+    verification_method: Executor contract, command, private companion-store and process-fault tests with real Bubblewrap integration, explicit authorization, shared concurrency, attempt and wall-clock enforcement, required output identity, cancellation, timeout, supervisor termination and model-independent recovery.
     observe:
       tests:
         cases:
           - "python/tests/test_executor.py::*"
           - "python/tests/test_executor_cli.py::*"
+          - "python/tests/test_executor_faults.py::*"
+          - "python/tests/test_executor_store.py::*"
+          - "python/tests/test_executor_runtime.py::*"
 
   - id: APP-012
     type: Application
@@ -214,14 +221,14 @@ records:
   - id: APP-014
     type: Application
     name: Executor supervisor
-    description: Proposed bounded executor adapter using a selected runtime that satisfies the isolation contract.
+    description: Durable local snapshot-command supervisor using the verified Bubblewrap launcher and a private executor-attempt companion journal.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
     last_reviewed_at: "2026-10-30"
-    responsibility: Require verified isolation from the selected execution backend, enforce durable execution limits, retain attempt history and return produced implementation identities without granting completion authority.
-    interfaces: [Planned executor adapter API, Planned durable attempt supervision interface]
-    implementation_ref: { locator: python/src/exacly/executor.py, planned: true }
+    responsibility: Recheck reviewed task authorization, reserve durable attempt and concurrency limits, enforce the isolated worker's full wall-clock budget through staging and collection, reconcile interrupted attempts and return content-identified outputs without granting evidence or completion authority.
+    interfaces: [exacly execute local command, exacly executors init/show/cancel/recover/recover-journal commands, exacly.executor Python API]
+    implementation_ref: { locator: python/src/exacly/executor.py }
 
   - id: APP-016
     type: Application
@@ -274,13 +281,13 @@ records:
   - id: INFO-008
     type: Information
     name: Executor attempts
-    description: Proposed durable attempt limits and produced implementation identities for a bounded executor.
+    description: Durable reviewed local execution contracts, bounded attempts, output build identities and recovery history.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
     last_reviewed_at: "2026-10-30"
-    definition: Versioned execution attempt identities, approved limits, adapter and task inputs, retained outcomes, produced revision or build identities and recovery history; these future executor records are separate from implemented dispatch receipts.
-    identifiers: [execution attempt ID, dispatch or task identity, adapter, output revision or build]
+    definition: Versioned execution and attempt identities, pinned journal and ledger scope, exact reviewed authorization and task contract, fixed attempt and shared concurrency limits, retained launch and terminal outcomes, collected output references, host-derived content build identities and model-independent recovery history in an explicitly initialized companion journal; candidate results carry no verification or completion authority.
+    identifiers: [execution ID, execution attempt ID, attempt ordinal, journal initialization ID, task and binding identity, adapter, authorization digest, output build identity]
     steward: exacly-maintainers
 
   - id: INF-004
@@ -352,9 +359,9 @@ relationships:
   - { source: APP-016, type: reads, target: INFO-007 }
   - { source: APP-016, type: writes, target: INFO-007 }
   - { source: INF-004, type: stores, target: INFO-007, role: system_of_record, conditions: The explicit private output bundle retains isolated launch facts and untrusted candidate results. }
-  - { source: APP-014, type: depends_on, target: INF-003, conditions: The trusted supervisor retains attempts through an explicit ledger extension without exposing the ledger to candidate code. }
+  - { source: APP-014, type: depends_on, target: INF-003, conditions: "The trusted supervisor retains attempts in an explicitly initialized private companion extension pinned to the binding ledger; existing version-2 and version-4 databases retain their formats, and neither store is exposed to candidate code." }
   - { source: APP-014, type: reads, target: INFO-008 }
   - { source: APP-014, type: writes, target: INFO-008 }
   - { source: INF-003, type: stores, target: INFO-004, role: system_of_record, conditions: Operational completion history in explicitly selected schema version 2 or 4; audit-only version 3 retains a copy and version 1 has no completion history. }
   - { source: INF-005, type: stores, target: INFO-005, role: system_of_record, conditions: Explicitly initialized private dispatch journal; separate from execution-binding and completion storage. }
-  - { source: INF-003, type: stores, target: INFO-008, role: system_of_record, conditions: Proposed executor attempt history after an explicit ledger extension; absent from the current ledger format. }
+  - { source: INF-003, type: stores, target: INFO-008, role: system_of_record, conditions: Executor-attempt history in the explicitly initialized version-1 private companion journal; absent from existing binding and completion ledger tables. }

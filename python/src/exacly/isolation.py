@@ -22,7 +22,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -431,7 +431,11 @@ def _stop_namespace(anchor: int | None, process: subprocess.Popen[bytes]) -> Non
 
 
 def _execute(
-    command: list[str], host: Mapping[str, str], timeout: float, syscall_filter: NativeFilter
+    command: list[str],
+    host: Mapping[str, str],
+    timeout: float,
+    syscall_filter: NativeFilter,
+    on_namespace: Callable[[int, Doc], None] | None = None,
 ) -> tuple[int, bytes, bytes, Doc, str | None, int]:
     info_fd = os.memfd_create("exacly-isolation-status", os.MFD_CLOEXEC)
     try:
@@ -489,6 +493,9 @@ def _execute(
                         facts = _attestation(json.loads(line), host)
                         anchor, outputs = _namespace_anchor(info_fd, facts)
                         facts["syscall_policy"] = syscall_filter.description
+                        if on_namespace is not None:
+                            metadata = json.loads(os.pread(info_fd, 64 * 1024, 0))
+                            on_namespace(metadata["child-pid"], facts)
                         process.stdin.write(b"EXACLY-RUN\n")
                         process.stdin.close()
                     room = MAX_CAPTURE_BYTES - len(buffers[name])
@@ -552,7 +559,13 @@ def _publish(folder: Path, out: Path) -> None:
 
 
 def run(
-    runtime: Runtime, argv: Sequence[str], inputs: Mapping[str, bytes], out: Path, *, timeout: float = DEFAULT_TIMEOUT
+    runtime: Runtime,
+    argv: Sequence[str],
+    inputs: Mapping[str, bytes],
+    out: Path,
+    *,
+    timeout: float = DEFAULT_TIMEOUT,
+    on_namespace: Callable[[int, Doc], None] | None = None,
 ) -> Doc:
     """Run one candidate command after verifying its actual sandbox, publishing untrusted outputs."""
     try:
@@ -701,7 +714,9 @@ def run(
                 "-S",
                 "/run/exacly/bootstrap.py",
             ]
-            code, stdout, stderr, facts, stopped, outputs = _execute(launch, host, float(timeout), syscall_filter)
+            code, stdout, stderr, facts, stopped, outputs = _execute(
+                launch, host, float(timeout), syscall_filter, on_namespace
+            )
             bundle = stage / "bundle"
             try:
                 bundle.mkdir(mode=0o700)

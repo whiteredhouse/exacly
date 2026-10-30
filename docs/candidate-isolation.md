@@ -114,7 +114,7 @@ Reports identify the runtime, snapshot digests and verified launch facts separat
 
 The CLI exits 0 for `completed`; 1 for `candidate_failed`, `timed_out` or `output_limit`; and 2 for invalid inputs, unsupported setup or operational errors. Candidate logs are retained in the bundle rather than rendered directly to the terminal. Inspect them as untrusted content.
 
-The per-run timeout must be finite, greater than zero and at most 3,600 seconds, with a default of 30 seconds. Input snapshots are limited to 1,024 files and 8 MiB total, each captured log to 1 MiB, collected artifacts to 4,096 entries including directories and 64 MiB total, and a runtime tree to 100,000 entries and 1 GiB. The private output filesystem enforces its aggregate storage limit during execution; safe collection separately checks the artifact count and byte limits. The remaining limits bound the launcher's copying, collection and waiting work. They do not establish cgroup containment, a general denial-of-service defense, durable retry budgets or concurrency accounting. Those executor controls remain the separate REQ-027 contract.
+The per-run timeout must be finite, greater than zero and at most 3,600 seconds, with a default of 30 seconds. Input snapshots are limited to 1,024 files and 8 MiB total, each captured log to 1 MiB, collected artifacts to 4,096 entries including directories and 64 MiB total, and a runtime tree to 100,000 entries and 1 GiB. The private output filesystem enforces its aggregate storage limit during execution; safe collection separately checks the artifact count and byte limits. The remaining limits bound the launcher's copying, collection and waiting work. They do not establish cgroup containment, a general denial-of-service defense, durable retry budgets or concurrency accounting. [Bounded executor supervision](bounded-executor.md) adds the durable attempt, full-worker time and concurrency controls required by the separate REQ-027 contract; invoking `isolate` alone does not supply them.
 
 ## Python API
 
@@ -148,7 +148,7 @@ For development work that does not exercise the local backend, run:
 mise run check-core
 ```
 
-This development subset runs schema and core tests, lint, type checks and examples without the four isolation test modules. It writes `reports/core-junit.xml`, never the full suite's `reports/junit.xml`, and performs no state refresh or verification gate. A passing subset does not verify REQ-025 or replace the full CI check. Do not copy its report into the full verification path.
+This development subset runs schema and core tests, lint, type checks and examples without the local execution backend test modules. It writes `reports/core-junit.xml`, never the full suite's `reports/junit.xml`, and performs no state refresh or verification gate. A passing subset verifies neither REQ-025 nor REQ-027 and does not replace the full CI check. Do not copy its report into the full verification path.
 
 The repository's real integration suites are [`test_execution_isolation.py`](../python/tests/test_execution_isolation.py) and [`test_isolation_syscalls.py`](../python/tests/test_isolation_syscalls.py). CI applies the reviewed Ubuntu 24.04 [host setup](../ci/setup_isolation_runtime.sh) and requires the [runtime preflight](../ci/check_isolation_runtime.py) to pass before running the ordinary test and model checks. These cases fail when the required runtime is unavailable; skipped or mocked namespace checks cannot establish successful verification of REQ-025.
 

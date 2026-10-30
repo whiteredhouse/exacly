@@ -11,6 +11,8 @@ exacly complete github-actions --plan FILE --action ID --policy FILE --trust-pol
 exacly completions show|recover --ledger FILE --completion ID [--state FILE] [--json]
 exacly dispatch github-issues --plan FILE --action ID --dispatch-policy FILE --state FILE ... [--dry-run|--apply]
 exacly dispatches init|show|recover|recover-journal|resolve|supersede --journal FILE ... [--json]
+exacly execute local --plan FILE --action ID --executor-policy FILE --binding ID ... [--dry-run|--apply]
+exacly executors init|show|cancel|recover|recover-journal --journal FILE ... [--json]
 exacly executions register --ledger FILE --plan FILE --action ID --state FILE --task TASK --opened-at ISO ...
 exacly executions show --ledger FILE --binding ID [--json]
 exacly executions inspect --ledger FILE [--lock-timeout SECONDS] [--json]
@@ -1011,6 +1013,70 @@ def protect_dispatch_resolution_authorization(authorization: Path, journal: Path
         raise ValueError(f"resolution authorization or retained paths cannot be resolved: {error}") from error
 
 
+def protect_executor_initialization(journal: Path, ledger: Path) -> None:
+    """The new companion and its sidecars cannot alias the retained binding ledger."""
+    try:
+        for destination in execution_ledger_paths(journal):
+            selected = (destination.resolve(), destination.parent.resolve() / destination.name)
+            for source in execution_ledger_paths(ledger):
+                retained = (source.resolve(), source.parent.resolve() / source.name)
+                if any(path in retained for path in selected) or (
+                    destination.exists() and source.exists() and destination.samefile(source)
+                ):
+                    raise ValueError("executor companion ledger and binding ledger or their sidecars cannot alias")
+    except RuntimeError as error:
+        raise ValueError(f"executor initialization paths cannot be resolved: {error}") from error
+
+
+def protect_executor_paths(
+    state: Path,
+    journal: Path | None,
+    ledger: Path | None,
+    inputs: list[Path],
+    trust_policy: dict[str, Any],
+    executor_policy: Any,
+) -> None:
+    """Check reviewed storage and output destinations before any executor mutation."""
+    try:
+        storage = executor_policy["storage"]
+        if not isinstance(storage, dict) or not all(
+            isinstance(storage.get(key), str) for key in ("journal", "ledger", "state", "output_root")
+        ):
+            raise ValueError("executor policy must declare its journal, ledger, state and output root")
+        selected_journal, selected_ledger = Path(storage["journal"]), Path(storage["ledger"])
+    except (KeyError, TypeError):
+        raise ValueError("executor policy must declare its journal, ledger, state and output root") from None
+    try:
+        if journal is not None and journal.resolve() != selected_journal.resolve():
+            raise ValueError("--journal differs from the reviewed executor storage")
+        if ledger is not None and ledger.resolve() != selected_ledger.resolve():
+            raise ValueError("--ledger differs from the reviewed executor storage")
+        if state.resolve() != Path(storage["state"]).resolve():
+            raise ValueError("--state differs from the reviewed executor storage")
+        protect_dispatch_paths(state, selected_journal, selected_ledger, inputs, trust_policy)
+        output_root = Path(storage["output_root"]).resolve()
+        protected = [
+            state,
+            *inputs,
+            *execution_ledger_paths(selected_journal),
+            *execution_ledger_paths(selected_ledger),
+        ]
+        for source in protected:
+            locations = (source.resolve(), source.parent.resolve() / source.name)
+            if any(output_root.is_relative_to(path) or path.is_relative_to(output_root) for path in locations):
+                raise ValueError("executor output root cannot overlap reviewed inputs, state or ledgers")
+        folders = [Path(name).parent.resolve() for name in trust_policy["model"]["files"]]
+        if any(output_root.is_relative_to(folder) or folder.is_relative_to(output_root) for folder in folders):
+            raise ValueError("executor output root must be outside the trust policy's declared model folders")
+        runtime = executor_policy.get("runtime")
+        if isinstance(runtime, dict) and isinstance(runtime.get("rootfs"), str):
+            rootfs = Path(runtime["rootfs"]).resolve()
+            if output_root.is_relative_to(rootfs) or rootfs.is_relative_to(output_root):
+                raise ValueError("executor output root and runtime root filesystem cannot overlap")
+    except RuntimeError as error:
+        raise ValueError(f"executor or protected input paths cannot be resolved: {error}") from error
+
+
 def exacly_main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv and argv[0] in ("validate", "refresh"):
@@ -1025,7 +1091,8 @@ def exacly_main(argv: list[str] | None = None) -> int:
 
     parser_class = (
         PolicyDraftParser
-        if argv[:2] == ["evidence", "propose-policy"] or argv[:1] in (["dispatch"], ["dispatches"])
+        if argv[:2] == ["evidence", "propose-policy"]
+        or argv[:1] in (["dispatch"], ["dispatches"], ["execute"], ["executors"])
         else argparse.ArgumentParser
     )
     parser = parser_class(
@@ -1196,6 +1263,69 @@ def exacly_main(argv: list[str] | None = None) -> int:
             "--lock-timeout", type=nonnegative_seconds, help="maximum ledger lock wait in seconds (default: 30)"
         )
         history_parser.add_argument("--json", action="store_true", help="print the history report as JSON")
+    execute_parser = commands.add_parser("execute", help="preview or explicitly run bounded approved work")
+    execute_sources = execute_parser.add_subparsers(dest="execute_source", required=True)
+    execute_local = execute_sources.add_parser(
+        "local", parents=[common], help="supervise one approved isolated local executor attempt"
+    )
+    execute_local.add_argument("--plan", required=True, type=Path, help="saved verification plan JSON")
+    execute_local.add_argument("--action", required=True, help="selected saved action ID")
+    execute_local.add_argument("--policy", required=True, type=Path, help="reviewed readiness policy JSON")
+    execute_local.add_argument("--trust-policy", required=True, type=Path, help="reviewed producer/model policy JSON")
+    execute_local.add_argument(
+        "--executor-policy", required=True, type=Path, help="reviewed local executor policy JSON"
+    )
+    execute_local.add_argument("--target", required=True, type=Path, help="approved input implementation target JSON")
+    execute_local.add_argument("--state", required=True, type=Path, help="actual current state with pending work")
+    execute_local.add_argument("--date", required=True, type=dt.date.fromisoformat, help="evaluation date YYYY-MM-DD")
+    execute_local.add_argument("--binding", required=True, help="active registered execution binding ID")
+    execute_local.add_argument(
+        "--inputs", type=Path, help="explicit versioned UTF-8 snapshot JSON (default: no inputs)"
+    )
+    execute_local.add_argument("--journal", type=Path, help="initialized private executor companion ledger")
+    execute_local.add_argument("--ledger", type=Path, help="private execution binding ledger")
+    execute_local.add_argument("--authorization", type=Path, help="separately reviewed attempt authorization JSON")
+    execute_local.add_argument(
+        "--lock-timeout", type=nonnegative_seconds, help="maximum shared storage lock wait in seconds (default: 30)"
+    )
+    execute_mode = execute_local.add_mutually_exclusive_group()
+    execute_mode.add_argument("--dry-run", action="store_true", help="read-only execution preview (the default)")
+    execute_mode.add_argument("--apply", action="store_true", help="run the separately authorized bounded attempt")
+    executors = commands.add_parser("executors", help="initialize, inspect or stop retained executor attempts")
+    executor_commands = executors.add_subparsers(dest="executor_command", required=True)
+    for operation in ("init", "show", "cancel", "recover", "recover-journal"):
+        executor_parser = executor_commands.add_parser(
+            operation,
+            help={
+                "init": "explicitly initialize a private companion ledger with a fixed concurrency limit",
+                "show": "inspect retained attempts without changing them",
+                "cancel": "request cancellation and stop the exact retained attempt",
+                "recover": "reconcile or terminate an interrupted attempt before another launch",
+                "recover-journal": "explicitly repair a protected interrupted SQLite transaction",
+            }[operation],
+        )
+        executor_parser.add_argument("--journal", required=True, type=Path, help="private executor companion ledger")
+        if operation == "init":
+            executor_parser.add_argument(
+                "--ledger", required=True, type=Path, help="canonical execution binding ledger"
+            )
+            executor_parser.add_argument(
+                "--max-concurrency",
+                required=True,
+                type=positive_integer,
+                choices=range(1, 17),
+                help="fixed coordinator concurrency limit (1-16)",
+            )
+        elif operation == "recover-journal":
+            executor_parser.add_argument(
+                "--authorize-recovery", action="store_true", help="authorize protected backup and SQLite recovery"
+            )
+        else:
+            executor_parser.add_argument("--execution", required=True, help="retained execution identity")
+        executor_parser.add_argument(
+            "--lock-timeout", type=nonnegative_seconds, help="maximum shared storage lock wait in seconds (default: 30)"
+        )
+        executor_parser.add_argument("--json", action="store_true", help="print the retained executor report as JSON")
     dispatch_parser = commands.add_parser("dispatch", help="preview or explicitly dispatch approved work")
     dispatch_sources = dispatch_parser.add_subparsers(dest="dispatch_source", required=True)
     dispatch_github = dispatch_sources.add_parser(
@@ -1382,6 +1512,140 @@ def exacly_main(argv: list[str] | None = None) -> int:
     view.add_argument("--base", metavar="REV", help="plan: the Git revision the change is against (default: main)")
     view.add_argument("--out", type=Path, metavar="DIR", help="site: the folder to write (default: reports/site)")
     args = parser.parse_args(argv)
+    if args.command in {"execute", "executors"}:
+        from exacly import executor, executor_store
+
+        executor_options: dict[str, Any] = {}
+        if args.lock_timeout is not None:
+            executor_options["lock_timeout"] = args.lock_timeout
+        try:
+            executor_operation = args.executor_command if args.command == "executors" else None
+            if executor_operation == "init":
+                protect_executor_initialization(args.journal, args.ledger)
+                executor_report = executor_store.initialize(
+                    args.journal, ledger=args.ledger, max_concurrency=args.max_concurrency, **executor_options
+                )
+                if (
+                    not isinstance(executor_report, dict)
+                    or executor_report.get("schema_version") != "0.1.0"
+                    or executor_report.get("status") != "initialized"
+                    or not isinstance(executor_report.get("journal_id"), str)
+                ):
+                    raise ValueError("executor initialization returned an invalid report")
+                print(
+                    json.dumps(executor_report, indent=2, sort_keys=True)
+                    if args.json
+                    else (
+                        f"Initialized private executor companion ledger: {args.journal}\n"
+                        f"Journal ID: {executor_report['journal_id']}"
+                    )
+                )
+                return 0
+            if executor_operation == "show":
+                executor_report = executor.show(args.journal, args.execution, **executor_options)
+            elif executor_operation == "cancel":
+                executor_report = executor.cancel(args.journal, args.execution, **executor_options)
+            elif executor_operation == "recover":
+                executor_report = executor.recover(args.journal, args.execution, **executor_options)
+            elif executor_operation == "recover-journal":
+                executor_report = executor.recover_journal(
+                    args.journal, authorize=args.authorize_recovery, **executor_options
+                )
+            else:
+                if not args.apply and args.authorization is not None:
+                    parser.error("--authorization requires --apply; an execution preview grants no permission")
+                if args.apply and any(value is None for value in (args.journal, args.ledger, args.authorization)):
+                    parser.error("--apply requires --journal, --ledger and --authorization")
+                if (args.journal is None) != (args.ledger is None):
+                    parser.error("--journal and --ledger must be supplied together")
+                executor_plan = strict_json_document(args.plan, 8 * 1024 * 1024)
+                executor_readiness = strict_json_document(args.policy, 1024 * 1024)
+                executor_trust = strict_json_document(args.trust_policy, 1024 * 1024)
+                executor_policy = strict_json_document(args.executor_policy, 1024 * 1024)
+                executor_target = Target(strict_json_document(args.target, 64 * 1024))
+                executor_documents = load(args.model or [DEFAULT_MODEL])
+                executor_inputs = [args.plan, args.policy, args.trust_policy, args.executor_policy, args.target]
+                executor_inputs.extend(Path(name) for name, doc in executor_documents.items() if not is_state(doc))
+                if args.inputs is not None:
+                    executor_inputs.append(args.inputs)
+                if args.authorization is not None:
+                    executor_inputs.append(args.authorization)
+                protect_executor_paths(
+                    args.state, args.journal, args.ledger, executor_inputs, executor_trust, executor_policy
+                )
+                executor_request = executor.Request(
+                    plan=executor_plan,
+                    action_id=args.action,
+                    readiness_policy=executor_readiness,
+                    trust_policy=executor_trust,
+                    executor_policy=executor_policy,
+                    target=executor_target,
+                    date=args.date,
+                    binding_id=args.binding,
+                    inputs=isolation_inputs(args.inputs),
+                )
+                if args.apply:
+                    executor_report = executor.apply(
+                        args.journal,
+                        args.ledger,
+                        executor_documents,
+                        args.state,
+                        executor_request,
+                        authorization=strict_json_document(args.authorization, 64 * 1024),
+                        **executor_options,
+                    )
+                else:
+                    executor_report = executor.preview(
+                        executor_documents, args.state, executor_request, **executor_options
+                    )
+            executor_preview = args.command == "execute" and not args.apply
+            executor_terminal = {
+                "succeeded",
+                "failed",
+                "timed_out",
+                "cancelled",
+                "interrupted",
+                "output_invalid",
+                "runtime_failed",
+                "output_limit",
+            }
+            executor_statuses = {
+                *executor_terminal,
+                "running",
+                "reserved",
+                "attempts_exhausted",
+                "cancellation_requested",
+                "blocked",
+                "conflict",
+                "missing",
+            }
+            if executor_preview:
+                executor_statuses.add("ready")
+            if executor_operation in {"show", "cancel", "recover"}:
+                executor_statuses.add("prepared")
+            elif executor_operation == "recover-journal":
+                executor_statuses = {"recovered"}
+            if (
+                not isinstance(executor_report, dict)
+                or executor_report.get("schema_version") != "0.1.0"
+                or executor_report.get("status") not in executor_statuses
+                or executor_report.get("dry_run") is not executor_preview
+            ):
+                raise ValueError("executor returned an invalid report")
+            executor_rendered = (
+                json.dumps(executor_report, indent=2, sort_keys=True)
+                if args.json
+                else executor.as_text(executor_report)
+            )
+        except (query.QueryError, ValueError, OSError) as error:
+            print(f"exacly {args.command}: {redact_tokens(str(error), github_tokens)}", file=sys.stderr)
+            return 2
+        print(executor_rendered)
+        if executor_operation == "show":
+            return 1 if executor_report["status"] == "missing" else 0
+        if executor_operation in {"cancel", "recover"}:
+            return 0 if executor_report["status"] in {*executor_terminal, "prepared"} else 1
+        return 0 if executor_report["status"] in {"ready", "succeeded", "recovered"} else 1
     if args.command in {"dispatch", "dispatches"}:
         from exacly import dispatch, dispatch_store, github_dispatch
 
