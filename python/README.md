@@ -6,7 +6,8 @@ This reference describes **0.6.0**, for product context, evidence-based
 verification and recoverable local task completion. Verification and completion
 run in an operator-controlled environment. That release excludes candidate
 isolation, task dispatch and executor supervision (REQ-025–027).
-The [isolation section](#isolate-a-candidate-command) describes additional
+The [isolation](#isolate-a-candidate-command) and
+[dispatch](#dispatch-approved-verification-work) sections describe additional
 unreleased functionality on main. Review the
 [release notes and upgrade paths](../CHANGELOG.md) for report-format changes and
 explicit ledger-copy upgrades.
@@ -20,6 +21,7 @@ explicit ledger-copy upgrades.
 - [`exacly assess`](#assess-an-implementation-target) projects observations onto an explicit implementation and scope.
 - [`exacly gate`](#evaluate-readiness-policy) evaluates a named readiness policy against that target, separately from conformance.
 - [`exacly plan`](#plan-verification-work) proposes work for verification prerequisites against that target, with an explicit evaluation date.
+- [`exacly dispatch github-issues` and `exacly dispatches`](#dispatch-approved-verification-work) preview and explicitly dispatch one reviewed action, retaining durable task and registration history.
 - [`exacly executions register` and `show`](#register-execution-bindings) record and inspect operator-controlled bindings between existing pending work and reviewed verification contracts.
 - [`exacly executions inspect`, `backup` and `recover`](#maintain-an-execution-ledger) diagnose, back up and recover an explicitly selected ledger without changing its source files.
 - [`exacly executions upgrade`](#upgrade-a-ledger-for-completion), [`index` and `audit`](#create-and-audit-an-integrity-index-copy), and [`activate`](#activate-an-operational-indexed-ledger) create or inspect explicitly selected ledger copies.
@@ -709,6 +711,18 @@ Exit status is 0 when a plan is produced, including a blocked plan or one with u
 Plans are advisory. The command does not create tasks, dispatch agents, change observations or close pending work. Its fingerprints identify supplied content; they do not authenticate an evidence producer or authorize execution. Use a [reconciliation preview](#preview-verification-reconciliation) to check a selected action against fresh live admission, or explicitly authorize [local completion](#complete-registered-verification-work) for an existing registered verification task.
 
 In Python, `exacly.planning.create(documents, policy_doc, target, date)` produces the same plan from named documents, a policy, an `exacly.applicability.Target` and a date. `exacly.planning.as_text(plan)` renders it for people, and `exacly.planning.SCHEMA` defines the JSON artifact contract.
+
+## Dispatch approved verification work
+
+**Unreleased functionality on main.**
+
+`exacly dispatch github-issues` renders a read-only proposal by default. It rechecks a saved plan action against the reviewed policies, target and actual current state, then shows the selected GitHub repository, issue contents and advisory authorization template. `--apply` requires a separately reviewed authorization, an explicitly initialized private dispatch journal and an execution-binding ledger. Policy and authorization pin the canonical journal, ledger and state paths plus the journal's unique initialization identity. The adapter verifies the repository's numeric identity and supports issue title/body only; it has no repository, workflow or test-path defaults.
+
+`exacly dispatches init`, `show`, `recover` and `supersede` manage explicit initialization, inspection and recovery or abandonment. The journal is separate from existing execution-ledger formats. A durable `creating` record precedes the one create request; after an ambiguous result, zero discovered matches never authorizes another create. Confirmed work is associated with one pending verification entry and its execution binding through a recoverable conditional publication protocol, preserving unrelated state.
+
+When model or pending-work changes leave registration unable to continue under its original contract, `dispatches resolve` previews the exact retained history and current state, pending and binding facts. `--apply` requires separate authorization for those reviewed facts and appends only a terminal `resolved` receipt. It preserves current work, leaves registration unfinalized and grants no new create. `dispatches recover-journal --authorize-recovery` can first repair an interrupted outbox transaction with a retained backup, without evaluating the stale model or publishing state. See the [resolution procedure](../docs/durable-dispatch.md#resolve-stale-partial-registration) before separately registering remaining pending work under a newly reviewed plan.
+
+Dispatch does not launch an executor, admit evidence or complete verification. See the [durable dispatch guide](../docs/durable-dispatch.md) for policy and authorization formats, commands, storage protections, attempt limits and recovery behavior. Bounded executor attempts remain the separate REQ-027 contract.
 
 ## Register execution bindings
 

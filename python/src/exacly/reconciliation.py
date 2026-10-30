@@ -17,6 +17,7 @@ import jsonschema
 
 from exacly import admission, planning, policy, query
 from exacly.applicability import TARGET_SCHEMA, TEXT, Target
+from exacly.core import is_state
 from exacly.github_evidence import GitHubError
 
 Doc = dict[str, Any]
@@ -147,6 +148,32 @@ def saved_action(plan_doc: Any, action_id: str, date: dt.date) -> tuple[Doc, Doc
     if planning.digest(identity) != action_id:
         raise ValueError("saved action identity does not match its approved goal")
     return plan, action
+
+
+def approved_model(documents: Doc, plan: Doc, action: Doc, target: Doc, date: dt.date) -> query.Model:
+    """Recheck the saved goal against the approved config without granting execution authority."""
+    model = query.load(documents, date, revision=target["model_revision"])
+    if model.report.errors:
+        raise query.QueryError(f"approved model does not conform: {model.report.errors[0].message}")
+    if (
+        model.graph.namespace != plan["namespace"]
+        or admission.config_digest({name: doc for name, doc in documents.items() if not is_state(doc)})
+        != plan["inputs"]["config"]["digest"]
+    ):
+        raise ValueError("approved model content or namespace differs from the saved plan")
+    record = model.record(action["record"])
+    if record["type"] != "Requirement" or record["lifecycle"] == "retired" or record["id"] != action["record"]:
+        raise ValueError("the saved action does not identify an eligible Requirement")
+    candidate = planning.proposal(
+        {"record": action["record"], "classification": action["kind"], "reason": action["reason"]},
+        record,
+        model.graph.namespace,
+        plan["target"],
+        plan["policy"],
+    )
+    if any(candidate[key] != action[key] for key in ("id", "criteria_digest", "bindings_digest")):
+        raise ValueError("approved criteria, bindings or action identity changed")
+    return model
 
 
 def preview(
