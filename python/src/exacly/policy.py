@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 from typing import Any
 
@@ -43,11 +44,11 @@ POSITIVE = {"verification": "passed", "delivery": "released"}
 NEGATIVE = {"verification": {"failed"}, "delivery": {"withdrawn", "planned", "in_progress"}}
 
 
-def evaluate(model: query.Model, policy: Any, target: Target) -> Doc:
-    """Evaluate a validated policy against selected evidence without observing or changing anything.
+def validate_policy(model: query.Model, policy: Any) -> Doc:
+    """Validate a readiness policy and all model references without evaluating observations.
 
-    Negative results dominate unknown prerequisites. Invalid models cannot establish a satisfied policy;
-    invalid policy documents raise ValueError rather than becoming a readiness decision.
+    The returned snapshot can be independently reviewed and retained. Validation neither approves
+    the policy nor establishes readiness, and performs no source reads or filesystem operations.
     """
     try:
         jsonschema.validate(policy, SCHEMA)
@@ -66,6 +67,21 @@ def evaluate(model: query.Model, policy: Any, target: Target) -> Doc:
             if key in requested:
                 raise ValueError(f"invalid policy: duplicate check {key[0]} {dimension}")
             requested.add(key)
+    return copy.deepcopy(policy)
+
+
+def evaluate(model: query.Model, policy: Any, target: Target) -> Doc:
+    """Evaluate a validated policy against selected evidence without observing or changing anything.
+
+    Negative results dominate unknown prerequisites. Invalid models cannot establish a satisfied policy;
+    invalid policy documents raise ValueError rather than becoming a readiness decision.
+    """
+    chosen = validate_policy(model, policy)
+    requested = {
+        (model.record(entry["record"])["id"], dimension)
+        for entry in chosen["requirements"]
+        for dimension in entry["dimensions"]
+    }
     checks = []
     for rid, dimension in sorted(requested):
         assessment = query.assess(model, rid, target)
@@ -101,7 +117,7 @@ def evaluate(model: query.Model, policy: Any, target: Target) -> Doc:
     outcomes = {c["result"] for c in checks}
     result = "not_satisfied" if "not_satisfied" in outcomes else "unknown" if "unknown" in outcomes else "satisfied"
     return {
-        "policy": {"name": policy["name"], "version": policy["version"]},
+        "policy": {"name": chosen["name"], "version": chosen["version"]},
         "target": target.data,
         "as_of": model.report.date.isoformat(),
         "result": result,
