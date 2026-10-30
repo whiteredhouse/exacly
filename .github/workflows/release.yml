@@ -41,6 +41,7 @@ jobs:
           smoke="$PWD/ci/smoke.py"
           evidence_smoke="$PWD/ci/smoke_evidence.py"
           policy_smoke="$PWD/ci/smoke_policy.py"
+          composition_smoke="$PWD/ci/smoke_composition.py"
           cd "$RUNNER_TEMP"
           uvx --isolated --from "$wheel" exacly validate "$example"
           uv run --isolated --no-project --with "$wheel" python "$smoke" --example "$example"
@@ -49,6 +50,7 @@ jobs:
           uv run --isolated --no-project --default-index https://pypi.org/simple \
             --with 'exacly==0.6.0rc2' python "$evidence_smoke" --consume evidence-compatibility.zip
           uv run --isolated --no-project --with "$wheel" python "$policy_smoke"
+          uv run --isolated --no-project --with "$wheel" python "$composition_smoke"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist
@@ -96,9 +98,11 @@ jobs:
           smoke="$PWD/ci/smoke.py"
           evidence_smoke="$PWD/ci/smoke_evidence.py"
           policy_smoke="$PWD/ci/smoke_policy.py"
+          composition_smoke="$PWD/ci/smoke_composition.py"
           cd "$RUNNER_TEMP"
           "$RUNNER_TEMP/exacly-publication/bin/python" "$smoke" --example "$example"
           "$RUNNER_TEMP/exacly-publication/bin/python" "$evidence_smoke" --archive published-evidence-compatibility.zip
           uv run --isolated --no-project --default-index https://pypi.org/simple \
             --with 'exacly==0.6.0rc2' python "$evidence_smoke" --consume published-evidence-compatibility.zip
           "$RUNNER_TEMP/exacly-publication/bin/python" "$policy_smoke"
+          "$RUNNER_TEMP/exacly-publication/bin/python" "$composition_smoke"

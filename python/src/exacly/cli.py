@@ -6,6 +6,8 @@ exacly observe manual-qa PATH... --target FILE --state FILE [--revision REV] [--
 exacly evidence package --report FILE --out NEWDIR [--json]
 exacly evidence propose-policy github-actions --repository OWNER/REPO --revision SHA --proposal FILE ...
 exacly admit github-actions --trust-policy FILE --target FILE --run ID --attempt N --date YYYY-MM-DD --out DIR
+exacly composition validate --definition FILE --date YYYY-MM-DD [--json]
+exacly compose github-actions --definition FILE --selection FILE --date DATE --out NEWDIR [--readiness-junit] [--json]
 exacly reconcile github-actions --dry-run --plan FILE --action ID --policy FILE --trust-policy FILE --target FILE ...
 exacly complete github-actions --plan FILE --action ID --policy FILE --trust-policy FILE --target FILE ...
 exacly completions show|recover --ledger FILE --completion ID [--state FILE] [--json]
@@ -829,6 +831,9 @@ def write_admission(out: Path, inputs: Iterable[Path], trust_policy: dict[str, A
     The caller must validate trust_policy through admission.admit before invoking this helper. Model file
     declarations are remote Git paths; their corresponding local folders are excluded from output placement.
     """
+    from exacly.evidence_retention import admission_bundle, require_private_filesystem
+
+    require_private_filesystem()
     if os.path.lexists(out):
         raise ValueError("--out must be a new directory, not an existing path or symlink")
     try:
@@ -841,33 +846,7 @@ def write_admission(out: Path, inputs: Iterable[Path], trust_policy: dict[str, A
         raise ValueError("--out cannot overwrite the trust policy or target")
     if any(destination.is_relative_to(folder) for folder in folders):
         raise ValueError("--out must be outside model folders")
-    if result.receipt.get("status") not in {"admitted", "rejected"}:
-        raise ValueError("admission receipt has an invalid status")
-    if result.receipt["status"] == "admitted" and (
-        result.archive is None or result.report is None or result.state is None
-    ):
-        raise ValueError("admitted evidence must include its archive, report and state")
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix=f".{out.name}-", dir=out.parent) as temporary:
-        folder = Path(temporary)
-        folder.chmod(0o700)
-
-        def write(name: str, data: bytes) -> None:
-            path = folder / name
-            with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as file:
-                path.chmod(0o600)
-                file.write(data)
-
-        write("receipt.json", (json.dumps(result.receipt, indent=2, sort_keys=True, default=str) + "\n").encode())
-        if result.receipt["status"] == "admitted":
-            assert result.archive is not None and result.report is not None and result.state is not None
-            write("archive.zip", result.archive)
-            write("junit.xml", result.report)
-            write("state.json", (json.dumps(result.state, indent=2, sort_keys=True, default=str) + "\n").encode())
-        # Recheck immediately before publication so an ordinary repeat invocation never replaces a bundle.
-        if os.path.lexists(out):
-            raise ValueError("--out must be a new directory, not an existing path or symlink")
-        os.rename(folder, out)
+    admission_bundle(out, result)
 
 
 def write_reconciliation(
@@ -1096,7 +1075,7 @@ def exacly_main(argv: list[str] | None = None) -> int:
     parser_class = (
         PolicyDraftParser
         if argv[:2] == ["evidence", "propose-policy"]
-        or argv[:1] in (["dispatch"], ["dispatches"], ["execute"], ["executors"])
+        or argv[:1] in (["dispatch"], ["dispatches"], ["execute"], ["executors"], ["composition"], ["compose"])
         else argparse.ArgumentParser
     )
     parser = parser_class(
@@ -1117,6 +1096,32 @@ def exacly_main(argv: list[str] | None = None) -> int:
     commands.add_parser("validate", help="validate the model and print the section 11 report")
     commands.add_parser("refresh", help="write state for one context from what the bindings observe")
     commands.add_parser("observe", help="write state from an extension source, such as manual-qa observations")
+    composition_parser = commands.add_parser(
+        "composition", help="validate the complete independently reviewed composition definition offline"
+    )
+    composition_commands = composition_parser.add_subparsers(dest="composition_command", required=True)
+    validate_composition = composition_commands.add_parser(
+        "validate", help="validate required members, policies and model inputs without fetching evidence"
+    )
+    validate_composition.add_argument("--definition", required=True, type=Path, help="composition definition YAML/JSON")
+    validate_composition.add_argument("--date", required=True, type=dt.date.fromisoformat)
+    validate_composition.add_argument(
+        "--json", action="store_true", help="print validation and content identity as JSON"
+    )
+    compose = commands.add_parser(
+        "compose", help="admit and gate every required member of an independently approved composition"
+    )
+    compose.add_argument("source", choices=["github-actions"])
+    compose.add_argument("--definition", required=True, type=Path, help="approved composition definition YAML/JSON")
+    compose.add_argument("--selection", required=True, type=Path, help="complete immutable member run selections")
+    compose.add_argument("--date", required=True, type=dt.date.fromisoformat)
+    compose.add_argument("--out", required=True, type=Path, help="new private evidence and aggregate report directory")
+    compose.add_argument(
+        "--readiness-junit",
+        action="store_true",
+        help="retain derived readiness.xml inside --out, separately from producer JUnit reports",
+    )
+    compose.add_argument("--json", action="store_true", help="print the complete aggregate report as JSON")
     isolation_parser = commands.add_parser("isolation", help="inspect an optional local backend's runtime filesystem")
     isolation_commands = isolation_parser.add_subparsers(dest="isolation_command", required=True)
     isolation_inspect = isolation_commands.add_parser(
@@ -1518,6 +1523,64 @@ def exacly_main(argv: list[str] | None = None) -> int:
     view.add_argument("--base", metavar="REV", help="plan: the Git revision the change is against (default: main)")
     view.add_argument("--out", type=Path, metavar="DIR", help="site: the folder to write (default: reports/site)")
     args = parser.parse_args(argv)
+    if args.command in {"composition", "compose"}:
+        from exacly import composition, composition_io, github_evidence
+
+        try:
+            loaded = composition_io.load_definition(args.definition, args.date)
+            if args.command == "composition":
+                report = loaded.prepared.as_dict()
+            else:
+                selection = composition_io.read_document(args.selection)
+                composition.validate_selection(loaded.prepared, selection, args.date)
+                output = composition_io.protect_output(args.out, [*loaded.paths, args.selection], loaded.model_folders)
+                token = os.environ.get("GH_TOKEN")
+                if not token or not token.strip():
+                    token = os.environ.get("GITHUB_TOKEN")
+                if not token or not token.strip():
+                    raise ValueError("set GH_TOKEN or GITHUB_TOKEN to authenticate GitHub Actions evidence retrieval")
+                try:
+                    client = github_evidence.GitHubClient(token)
+                except github_evidence.GitHubError:
+                    raise ValueError("GitHub credentials are invalid") from None
+
+                class CompositionSource:
+                    def get_json(self, path: str) -> dict[str, Any]:
+                        try:
+                            return client.get_json(path)
+                        except github_evidence.GitHubError as error:
+                            raise github_evidence.GitHubError(redact_tokens(str(error), github_tokens)) from None
+
+                    def download_artifact(self, repository: str, artifact_id: int) -> bytes:
+                        try:
+                            return client.download_artifact(repository, artifact_id)
+                        except github_evidence.GitHubError as error:
+                            raise github_evidence.GitHubError(redact_tokens(str(error), github_tokens)) from None
+
+                writer = composition_io.ResultWriter(output, loaded, selection, args.date)
+                composition_answer = composition.evaluate(
+                    CompositionSource(),
+                    loaded.prepared,
+                    selection,
+                    args.date,
+                    on_member=writer.member,
+                    retain_admissions=False,
+                )
+                report = composition_answer.report
+                writer.finish(report, readiness_junit=args.readiness_junit)
+        except (query.QueryError, ValueError, OSError, github_evidence.GitHubError) as error:
+            print(f"exacly {args.command}: {redact_tokens(str(error), github_tokens)}", file=sys.stderr)
+            return 2
+        if args.json:
+            print(json.dumps(report, indent=2, sort_keys=True, default=str))
+        elif args.command == "composition":
+            print(f"Composition definition: {report['definition']['name']}\nDigest: {report['definition_digest']}")
+            print("Validation identifies supplied content; independent approval remains required.")
+        else:
+            print(f"Composition {report['definition']['name']}: {report['result']}")
+            for member in report["members"]:
+                print(f"  {member['id']}: {member['status']} — {member['reason']}")
+        return 0 if args.command == "composition" or report["result"] == "satisfied" else 1
     if args.command in {"execute", "executors"}:
         from exacly import executor, executor_store
 
@@ -2160,11 +2223,13 @@ def exacly_main(argv: list[str] | None = None) -> int:
         return 0 if report["status"] == "ready" else 1
     if args.command == "admit":
         from exacly import admission, github_evidence
+        from exacly.evidence_retention import require_private_filesystem
 
         token = os.environ.get("GH_TOKEN")
         if not token or not token.strip():
             token = os.environ.get("GITHUB_TOKEN")
         try:
+            require_private_filesystem()
             if os.path.lexists(args.out):
                 raise ValueError("--out must be a new directory, not an existing path or symlink")
             trust_policy = read(args.trust_policy)

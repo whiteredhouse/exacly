@@ -153,7 +153,7 @@ def test_environment_setup_cannot_reset_the_installation_budget(
     assert "no install attempt completed" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("fail_at", [1, 2, 3, 4])
+@pytest.mark.parametrize("fail_at", [1, 2, 3, 4, 5])
 def test_smoke_failure_runs_once_in_a_separate_step(tmp_path: Path, fail_at: int) -> None:
     workflow = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
     steps = workflow["jobs"]["verify-publication"]["steps"]

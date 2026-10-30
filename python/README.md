@@ -6,8 +6,10 @@ This reference describes **0.6.0**, for product context, evidence-based
 verification and recoverable local task completion. Verification and completion
 run in an operator-controlled environment. That release excludes candidate
 isolation, task dispatch and executor supervision (REQ-025–027).
-The [isolation](#isolate-a-candidate-command) and
-[dispatch](#dispatch-approved-verification-work) sections describe additional
+The [isolation](#isolate-a-candidate-command),
+[dispatch](#dispatch-approved-verification-work),
+[bounded executor](#run-a-bounded-local-executor) and
+[composition](#compose-required-admissions-and-gates) sections describe additional
 unreleased functionality on main. Review the
 [release notes and upgrade paths](../CHANGELOG.md) for report-format changes and
 explicit ledger-copy upgrades.
@@ -17,6 +19,7 @@ explicit ledger-copy upgrades.
 - [`exacly evidence package`](#package-verification-evidence) prepares a producer's manifest/JUnit evidence bundle.
 - [`exacly evidence propose-policy github-actions`](#draft-a-producer-policy) drafts a producer-policy candidate for independent review.
 - [`exacly admit github-actions`](#admit-github-actions-evidence) checks a live CI run against an approved producer policy before deriving verification state.
+- [`exacly composition validate` and `exacly compose github-actions`](#compose-required-admissions-and-gates) validate an approved required-member definition and freshly evaluate every member's admission and readiness gate.
 - [`exacly show`, `trace`, `impact` and `gaps`](#questions) answer questions about the model, and [`exacly view`](#views) renders them for people.
 - [`exacly assess`](#assess-an-implementation-target) projects observations onto an explicit implementation and scope.
 - [`exacly gate`](#evaluate-readiness-policy) evaluates a named readiness policy against that target, separately from conformance.
@@ -506,6 +509,94 @@ A completed failed verification step can supply evidence of failure. If its repo
 For an admission decision, the new output directory contains `receipt.json`. An admitted result also retains `archive.zip`, `junit.xml` and freshly derived `state.json`; a rejected result saves no report or state. Output is written atomically to a new directory with POSIX mode `0700`; every retained file is created with mode `0600`, independently of the caller's umask. Existing output paths are refused. Exit status is 0 for admitted, 1 for rejected, and 2 for invalid inputs or output errors.
 
 The receipt establishes only the checked evidence origin and target applicability. It records `test_honesty_verified: false`, `coverage_verified: false` and `self_authenticating: false`: a trusted producer can run weak or misleading checks, and a copied or edited receipt is not independently authenticated. Changes to acceptance coverage still need review. Retain admission output in protected storage or revalidate the live source before using it for a later decision. This command does not sign receipts, dispatch work or close pending tasks.
+
+### Supported preflight validation
+
+**Unreleased functionality on main.**
+
+The pure Python helpers `admission.validate_request(policy_doc, target, run_id,
+attempt, date)` and `admission.validate_model(policy_doc, documents, date)` expose
+the native request and approved-model checks without source access. The first
+returns copied validated policy and target dictionaries; the second returns the
+validated `query.Model`. Named model documents must match the trust policy's
+exact approved file set and config digest and contain no observed state.
+`policy.validate_policy(model, policy_doc)` validates readiness-policy shape,
+Requirement references and duplicate checks, returning a copied policy. Native
+admission and readiness evaluation reuse these checks.
+
+## Compose required admissions and gates
+
+**Unreleased functionality on main.**
+
+A composition defines an independently reviewed set of required members, each
+with its own producer trust policy, approved model and readiness policy. A
+separate invocation selection pins that definition's content digest and supplies
+an exact run, attempt and source target for every member. Whole-input validation
+finishes before evidence retrieval, including approved model digests and any
+explicitly scoped equality constraints.
+
+```sh
+exacly composition validate --definition trusted/native-composition.yaml \
+  --date 2026-10-30 --json
+
+composition_output=$(mktemp -d)
+exacly compose github-actions --definition trusted/native-composition.yaml \
+  --selection native-selection.json --date 2026-10-30 \
+  --out "$composition_output/invocation" --json
+```
+
+Validation computes identity for independent review; it grants no approval. The
+evaluation uses `GH_TOKEN`, falling back to `GITHUB_TOKEN`, and performs fresh
+native admission and a separate gate for every required member. Each member
+keeps its original namespace, context and evidence. An admitted failing or
+incomplete observation still blocks readiness. A complete aggregate succeeds
+only when every required admission is accepted and every gate is satisfied.
+
+The new private output retains `report.json` and native member bundles under
+`members/ID/`, including `gate.json` for admitted members. Directories use `0700`
+and files use `0600` independently of umask. An interrupted or incomplete report
+cannot establish aggregate success. Reruns use a new output directory and freshly
+admit every member; old partial successes remain diagnostic. Exit codes are 0
+for a complete satisfied aggregate, 1 for a complete blocked aggregate and 2 for
+invalid inputs or output errors.
+
+Add the boolean `--readiness-junit` option to save `OUT/readiness.xml` for CI:
+
+```sh
+exacly compose github-actions --definition trusted/native-composition.yaml \
+  --selection native-selection.json --date 2026-10-30 \
+  --out reports/composition --readiness-junit --json
+```
+
+This separate report describes the computed readiness evaluation. Member
+`junit.xml` files retain the original producer results. Every required member has
+a verdict case, including a blocking case for rejected admission; gates that ran
+also retain their native prerequisite cases. Unknown readiness is a failure,
+never a skipped test. Stable member selectors use
+`exacly.composition/v1/<composition-name>/<member-id>/verdict`, with identity
+components percent-encoded. Native gate selectors keep their namespace, policy,
+record and dimension, using `COMPOSITION_NAME/MEMBER_ID` as the logical report ID.
+Revisions, policy versions and digests remain metadata.
+
+The XML is bounded and published atomically before the final complete aggregate
+marker. Requested report errors return 2; a missing or incomplete `report.json`
+cannot establish success. In Python, `composition.as_junit(result.report)` renders
+the same XML without further evaluation or source access. See the
+[composition guide](../docs/admission-composition.md#readiness-junit) for limits,
+failure handling and explicit observation-binding semantics. These reports do
+not authenticate evidence origin or prove a fresh product test ran; avoid a
+circular binding that uses a gate's own generated report to satisfy that gate.
+
+The Python API provides `MemberInputs`, `validate_definition`,
+`validate_selection` and `evaluate` through `exacly.composition`. The CLI streams
+completed members to disk before releasing their binary payloads. Python callers
+retain full native admission results by default; `retain_admissions=False` with
+a synchronous `on_member` callback opts into the same streaming behavior. See the
+[composition guide](../docs/admission-composition.md) for both document schemas,
+path resolution, scoped repository/model equality, supported validation APIs,
+retained output and consumer responsibilities. Required platforms, external
+release inventories and policy approval remain consumer decisions. Composition
+publishes no authoritative state and grants no completion or deployment authority.
 
 ## Questions
 
