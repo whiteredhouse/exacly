@@ -13,24 +13,16 @@ import hashlib
 import json
 import os
 import stat
-from collections.abc import Iterator, Mapping
-from contextlib import ExitStack, contextmanager
+from collections.abc import Mapping
+from contextlib import ExitStack
 from pathlib import Path
 from typing import Any
-
-try:
-    import fcntl
-except ImportError:  # pragma: no cover - the local runtime requires Linux.
-    fcntl = None  # type: ignore[assignment]
 
 from exacly import (
     completion_store,
     execution_store,
     executions,
-    executor_runtime,
-    executor_store,
     isolation,
-    operation_locks,
     planning,
     policy,
     reconciliation,
@@ -51,18 +43,54 @@ from exacly.executor_contract import (
     validate_history,
     validate_policy,
 )
+from exacly.executor_interfaces import (
+    LOCAL_SCOPE,
+    TERMINAL,
+    AttemptReference,
+    AttemptSession,
+    CoordinatorBackends,
+    CoordinatorLockTimeoutError,
+    InvocationLease,
+    Scope,
+    WorkerHandle,
+    WorkerSpec,
+)
 
-__all__ = ["Request", "apply", "as_text", "cancel", "preview", "recover", "recover_journal", "show", "validate_policy"]
+__all__ = [
+    "CoordinatorBackends",
+    "Request",
+    "apply",
+    "as_text",
+    "cancel",
+    "preview",
+    "recover",
+    "recover_journal",
+    "show",
+    "validate_policy",
+]
 
 Doc = dict[str, Any]
-TERMINAL = executor_store.TERMINAL
 
 
-def _checked_get(journal: executor_store.Journal, identity: str) -> Doc | None:
+def _backends(backends: CoordinatorBackends | None, coordination_scope: str) -> CoordinatorBackends:
+    if backends is None:
+        from exacly.executor_local import local_backends
+
+        backends = local_backends()
+    backends.require_scope(coordination_scope)
+    return backends
+
+
+def _checked_get(journal: AttemptSession, identity: str, backends: CoordinatorBackends) -> Doc | None:
     work = journal.get(identity)
     return (
         validate_history(
-            work, journal_id=journal.journal_id, ledger=journal.ledger, max_concurrency=journal.max_concurrency
+            work,
+            journal_id=journal.journal_id,
+            ledger=journal.ledger,
+            max_concurrency=journal.max_concurrency,
+            owner_validator=backends.ownership.validate_identity,
+            worker_validator=backends.workers.validate_identity,
         )
         if work is not None
         else None
@@ -176,9 +204,10 @@ def _selection(
     documents: Mapping[str, Any],
     snapshot: state_writer.Snapshot,
     request: Request,
-    journal: executor_store.Journal,
+    journal: AttemptSession,
     chosen: Doc,
     deadline: execution_store.Deadline,
+    backends: CoordinatorBackends,
 ) -> tuple[str, Doc, dict[str, bytes], Doc | None, Doc]:
     storage = chosen["storage"]
     require(
@@ -214,7 +243,7 @@ def _selection(
         "task": task,
         "inputs": roster(inputs),
     }
-    work = _checked_get(journal, execution_id)
+    work = _checked_get(journal, execution_id, backends)
     if work is not None:
         require(
             work["intent"]["identity"] == identity
@@ -268,8 +297,12 @@ def _receipt(attempt: Doc) -> Doc | None:
     return dict(receipt)
 
 
-def _view(operation: str, work: Doc, *, dry_run: bool = False) -> Doc:
-    validate_history(work)
+def _view(operation: str, work: Doc, *, backends: CoordinatorBackends, dry_run: bool = False) -> Doc:
+    validate_history(
+        work,
+        owner_validator=backends.ownership.validate_identity,
+        worker_validator=backends.workers.validate_identity,
+    )
     report = _report(operation, work["intent"]["id"], dry_run=dry_run)
     report["history"] = copy.deepcopy(work)
     attempts = work["attempts"]
@@ -292,30 +325,28 @@ def preview(
     request: Request,
     *,
     lock_timeout: float = execution_store.DEFAULT_LOCK_TIMEOUT,
+    backends: CoordinatorBackends | None = None,
+    coordination_scope: str = LOCAL_SCOPE,
 ) -> Doc:
     """Read the exact next attempt and authorization without launching or writing anything."""
+    backends = _backends(backends, coordination_scope)
     chosen = validate_policy(request.executor_policy)
     storage = chosen["storage"]
     require(str(canonical_path(str(state_path))) == storage["state"], "state path differs from reviewed policy")
     deadline = execution_store.Deadline(lock_timeout)
-    journal_path = Path(storage["journal"])
-    with (
-        operation_locks.directories(
-            (journal_path.parent, Path(storage["ledger"]).parent, state_path.parent), write=False, deadline=deadline
-        ),
-        executor_store.opened(journal_path, write=False, deadline=deadline, already_locked=True) as journal,
-    ):
+    scope = Scope(Path(storage["journal"]), Path(storage["ledger"]), state_path)
+    with backends.storage.open(scope, write=False, lock_timeout=deadline.remaining(), coordinated=True) as journal:
         snapshot = state_writer.read(state_path)
         identity, _intent, _inputs, work, authorization = _selection(
-            documents, snapshot, request, journal, chosen, deadline
+            documents, snapshot, request, journal, chosen, deadline, backends
         )
         if work is not None and work["attempts"]:
             last = work["attempts"][-1]
             if last["phase"] not in TERMINAL or last["phase"] == "succeeded":
-                return _view("preview", work, dry_run=True)
+                return _view("preview", work, backends=backends, dry_run=True)
             if len(work["attempts"]) >= chosen["max_attempts"]:
                 return _finish(
-                    _view("preview", work, dry_run=True),
+                    _view("preview", work, backends=backends, dry_run=True),
                     "attempts_exhausted",
                     "The approved attempt budget is exhausted; no further launch is permitted.",
                 )
@@ -340,10 +371,10 @@ def preview(
         return _finish(report, "ready", "Review this exact attempt and supply separate authorization to execute it.")
 
 
-def _retained(work: Doc, authorization: Any) -> Doc | None:
+def _retained(work: Doc, authorization: Any, backends: CoordinatorBackends) -> Doc | None:
     for attempt in work["attempts"]:
         if attempt["events"][0]["data"].get("authorization") == authorization:
-            report = _view("apply", work)
+            report = _view("apply", work, backends=backends)
             report["attempt"] = attempt["number"]
             receipt = _receipt(attempt)
             return _finish(
@@ -364,59 +395,6 @@ def _event(attempt: Doc, kind: str) -> Doc | None:
 
 def _cancelled(attempt: Doc) -> bool:
     return _event(attempt, "cancellation_requested") is not None
-
-
-def _output_folder(path: Path) -> None:
-    path.parent.mkdir(mode=0o700, exist_ok=True)
-    info = path.parent.lstat()
-    require(
-        stat.S_ISDIR(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o700 and info.st_uid == os.getuid(),
-        "executor attempt parent must remain an owner-private directory",
-    )
-    require(not os.path.lexists(path), "executor attempt output already exists; inspect retained work")
-    descriptor = os.open(path.parent.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    try:
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
-
-
-@contextmanager
-def _lease(output: str, *, create: bool) -> Iterator[int | None]:
-    """Distinguish an active invocation from an idle, still-living API process."""
-    require(fcntl is not None, "executor ownership leases require POSIX locks")
-    path = Path(output).with_name("." + Path(output).name + ".owner")
-    require(path.parent == path.parent.resolve(), "executor ownership directory traverses a symbolic link")
-    parent_info = path.parent.lstat()
-    require(
-        stat.S_ISDIR(parent_info.st_mode)
-        and parent_info.st_uid == os.getuid()
-        and stat.S_IMODE(parent_info.st_mode) == 0o700,
-        "executor ownership directory must remain owner-private",
-    )
-    descriptor = os.open(
-        path, os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC | (os.O_CREAT if create else 0), 0o600
-    )
-    try:
-        before = execution_store.file_info(descriptor)
-        acquired = False
-        try:
-            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            acquired = True
-        except BlockingIOError:
-            pass
-        current = path.lstat()
-        require((before.st_dev, before.st_ino) == (current.st_dev, current.st_ino), "executor ownership lease changed")
-        if create:
-            os.fsync(descriptor)
-            parent = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-            try:
-                os.fsync(parent)
-            finally:
-                os.close(parent)
-        yield descriptor if acquired else None
-    finally:
-        os.close(descriptor)
 
 
 def _file(path: Path, limit: int) -> bytes:
@@ -546,12 +524,19 @@ def _bundle(intent: Doc, authorization: Doc) -> tuple[str, Doc | None, str | Non
 
 
 def _terminal(
-    intent: Doc, attempt: Doc, outcome: str, reason: str, termination: Any, *, inspect_output: bool = False
+    intent: Doc,
+    attempt: Doc,
+    outcome: str,
+    reason: str,
+    termination: Any,
+    *,
+    inspect_output: bool = False,
+    preserve_outcome: bool = False,
 ) -> Doc:
     authorization = attempt["events"][0]["data"]["authorization"]
     build: Doc | None = None
     isolation_digest: str | None = None
-    bounded_outcome = outcome if outcome in {"timed_out", "output_limit", "cancelled"} else None
+    bounded_outcome = outcome if preserve_outcome or outcome in {"timed_out", "output_limit", "cancelled"} else None
     bounded_reason = reason
     if inspect_output and os.path.lexists(authorization["output"]):
         try:
@@ -581,6 +566,40 @@ def _terminal(
     return receipt
 
 
+def _append_receipt(
+    journal: AttemptSession,
+    work: Doc,
+    number: int,
+    receipt: Doc,
+    backends: CoordinatorBackends,
+    lease: InvocationLease,
+) -> Doc:
+    """Check an adapter's proposed terminal meaning before releasing durable capacity.
+
+    Storage separately authenticates its exact event chain. This prospective copy validates only
+    the new receipt semantics against that already checked history; no invented chain is persisted.
+    Invalid worker results leave the actual attempt unresolved for explicit recovery.
+    """
+    proposed = copy.deepcopy(work)
+    attempt = proposed["attempts"][number - 1]
+    require(attempt["phase"] not in TERMINAL, "executor attempt is already terminal")
+    attempt["phase"] = receipt["outcome"]
+    attempt["events"].append({"data": {"kind": "receipt", "receipt": copy.deepcopy(receipt)}})
+    proposed["phase"] = receipt["outcome"]
+    validate_history(
+        proposed,
+        journal_id=journal.journal_id,
+        ledger=journal.ledger,
+        max_concurrency=journal.max_concurrency,
+        owner_validator=backends.ownership.validate_identity,
+        worker_validator=backends.workers.validate_identity,
+    )
+    lease.assert_current()
+    return journal.append(
+        work["intent"]["id"], number, receipt["outcome"], {"kind": "receipt", "receipt": receipt}, lease=lease
+    )
+
+
 def apply(
     journal_path: Path,
     ledger: Path,
@@ -590,7 +609,10 @@ def apply(
     *,
     authorization: Any,
     lock_timeout: float = execution_store.DEFAULT_LOCK_TIMEOUT,
+    backends: CoordinatorBackends | None = None,
+    coordination_scope: str = LOCAL_SCOPE,
 ) -> Doc:
+    backends = _backends(backends, coordination_scope)
     with ExitStack() as leases:
         return _apply(
             journal_path,
@@ -601,6 +623,7 @@ def apply(
             authorization=authorization,
             lock_timeout=lock_timeout,
             leases=leases,
+            backends=backends,
         )
 
 
@@ -614,23 +637,23 @@ def _apply(
     authorization: Any,
     lock_timeout: float,
     leases: ExitStack,
+    backends: CoordinatorBackends,
 ) -> Doc:
     """Reserve and run one exact reviewed ordinal; repeats never create another attempt."""
     require(
         isinstance(authorization, dict) and isinstance(authorization.get("storage"), dict),
         "separate reviewed executor authorization is required",
     )
-    # Immutable replay intentionally precedes current model, state and binding checks.
-    with executor_store.opened(journal_path, write=False, deadline=execution_store.Deadline(lock_timeout)) as journal:
+    with backends.storage.open(Scope(journal_path), write=False, lock_timeout=lock_timeout) as journal:
         require(
             authorization.get("storage", {}).get("journal") == str(journal_path.resolve())
             and authorization.get("storage", {}).get("journal_id") == journal.journal_id
             and authorization.get("storage", {}).get("ledger") == str(ledger.resolve()) == journal.ledger,
             "executor authorization selects another canonical journal instance or binding ledger",
         )
-        prior = _checked_get(journal, authorization.get("execution_id", ""))
+        prior = _checked_get(journal, authorization.get("execution_id", ""), backends)
         if prior is not None:
-            replay = _retained(prior, authorization)
+            replay = _retained(prior, authorization, backends)
             if replay is not None:
                 return replay
     chosen = validate_policy(request.executor_policy)
@@ -642,58 +665,56 @@ def _apply(
         "executor paths differ from reviewed policy",
     )
     deadline = execution_store.Deadline(lock_timeout)
-    with (
-        operation_locks.directories((journal_path.parent, ledger.parent, state_path.parent), deadline=deadline),
-        executor_store.opened(journal_path, write=True, deadline=deadline, already_locked=True) as journal,
-    ):
+    scope = Scope(journal_path, ledger, state_path)
+    with backends.storage.open(scope, write=True, lock_timeout=deadline.remaining(), coordinated=True) as journal:
         snapshot = state_writer.read(state_path)
-        identity, intent, inputs, work, expected = _selection(documents, snapshot, request, journal, chosen, deadline)
+        identity, intent, inputs, work, expected = _selection(
+            documents, snapshot, request, journal, chosen, deadline, backends
+        )
         if work is not None:
-            replay = _retained(work, authorization)
+            replay = _retained(work, authorization, backends)
             if replay is not None:
                 return replay
         require(authorization == expected, "executor authorization differs from current attempt, history or state")
-        _output_folder(Path(expected["output"]))
-        require(
-            leases.enter_context(_lease(expected["output"], create=True)) is not None,
-            "this executor attempt already has an active owner",
-        )
+        reference = AttemptReference(identity, expected["attempt"], Path(expected["output"]), journal.identity)
+        lease = leases.enter_context(backends.ownership.claim(reference, create=True))
+        require(lease is not None, "this executor attempt already has an active owner")
+        assert lease is not None
+        lease.assert_current()
         if work is None:
-            work = journal.prepare(intent)
+            work = journal.prepare(intent, lease=lease)
         else:
             intent = work["intent"]
         work = journal.reserve(
             identity,
-            {"kind": "reservation", "authorization": authorization, "owner": executor_runtime.process_identity()},
+            {"kind": "reservation", "authorization": authorization, "owner": lease.owner_identity},
+            lease=lease,
         )
         number = work["attempts"][-1]["number"]
 
     def is_cancelled() -> bool:
-        # Runtime supervision must never wait behind a writer while a candidate is executing.
         try:
-            with executor_store.opened(journal_path, write=False, deadline=execution_store.Deadline(0)) as source:
-                selected = _checked_get(source, identity)
+            with backends.storage.open(Scope(journal_path), write=False, lock_timeout=0) as source:
+                selected = _checked_get(source, identity, backends)
                 require(selected is not None, "executor attempt disappeared")
                 assert selected is not None
                 return _cancelled(selected["attempts"][number - 1])
-        except execution_store.LockTimeoutError:
+        except CoordinatorLockTimeoutError:
             return False
 
     def on_worker(process: Doc) -> None:
-        with executor_store.opened(journal_path, write=True, deadline=execution_store.Deadline(lock_timeout)) as target:
-            target.append(identity, number, "running", {"kind": "worker", "identity": process})
+        lease.assert_current()
+        with backends.storage.open(Scope(journal_path), write=True, lock_timeout=lock_timeout) as target:
+            target.append(identity, number, "running", {"kind": "worker", "identity": process}, lease=lease)
 
-    def on_namespace(process: Doc) -> None:
+    def on_boundary(process: Doc) -> None:
+        lease.assert_current()
         budget = execution_store.Deadline(lock_timeout)
-        with (
-            operation_locks.directories((journal_path.parent, ledger.parent, state_path.parent), deadline=budget),
-            executor_store.opened(journal_path, write=True, deadline=budget, already_locked=True) as target,
-        ):
-            selected = _checked_get(target, identity)
+        with backends.storage.open(scope, write=True, lock_timeout=budget.remaining(), coordinated=True) as target:
+            selected = _checked_get(target, identity, backends)
             assert selected is not None
             attempt = selected["attempts"][number - 1]
-            # Retain the known sandbox even when a changed precondition refuses its release.
-            target.append(identity, number, "running", {"kind": "namespace", "identity": process})
+            target.append(identity, number, "running", {"kind": "namespace", "identity": process}, lease=lease)
             require(not _cancelled(attempt), "executor cancellation was requested before candidate release")
             current = state_writer.read(state_path)
             require(
@@ -701,34 +722,40 @@ def _apply(
                 "current state changed before candidate release; review another attempt",
             )
             _current(documents, current, request, ledger, budget)
+            lease.assert_current()
 
     try:
-        result = executor_runtime.run(
-            isolation.parse_policy(chosen["runtime"]),
-            chosen["argv"],
-            inputs,
-            Path(expected["output"]),
-            timeout=chosen["timeout_seconds"],
+        lease.assert_current()
+        result = backends.workers.supervise(
+            WorkerSpec(
+                chosen["runtime"],
+                tuple(chosen["argv"]),
+                inputs,
+                Path(expected["output"]),
+                float(chosen["timeout_seconds"]),
+                reference,
+            ),
             on_worker=on_worker,
-            on_namespace=on_namespace,
+            on_boundary=on_boundary,
             is_cancelled=is_cancelled,
+            lease=lease,
         )
     except (ValueError, OSError, RuntimeError) as error:
-        # A callback can fail after the runtime's cleanup. Establish our own retained-process
-        # proof before releasing capacity; if proof fails, the per-invocation lease is released
-        # on return so explicit recovery can retry even in this same long-lived API process.
-        with executor_store.opened(journal_path, write=True, deadline=execution_store.Deadline(lock_timeout)) as target:
-            selected = _checked_get(target, identity)
+        with backends.storage.open(Scope(journal_path), write=True, lock_timeout=lock_timeout) as target:
+            selected = _checked_get(target, identity, backends)
             assert selected is not None
             attempt = selected["attempts"][number - 1]
             processes = [
                 event["identity"] for kind in ("worker", "namespace") if (event := _event(attempt, kind)) is not None
             ]
             try:
-                termination = executor_runtime.terminate(processes)
+                lease.assert_current()
+                termination = backends.workers.reconcile(
+                    [WorkerHandle(reference, process) for process in processes], lease=lease
+                )
             except (OSError, ValueError) as cleanup_error:
                 return _finish(
-                    _view("apply", selected),
+                    _view("apply", selected, backends=backends),
                     "interrupted",
                     "Attempt needs explicit recovery after unverified termination: " + str(cleanup_error),
                 )
@@ -740,15 +767,32 @@ def _apply(
                 termination,
                 inspect_output=True,
             )
-            selected = target.append(identity, number, receipt["outcome"], {"kind": "receipt", "receipt": receipt})
-            return _view("apply", selected)
-    with executor_store.opened(journal_path, write=True, deadline=execution_store.Deadline(lock_timeout)) as target:
-        selected = _checked_get(target, identity)
+            lease.assert_current()
+            selected = _append_receipt(target, selected, number, receipt, backends, lease)
+            return _view("apply", selected, backends=backends)
+    with backends.storage.open(Scope(journal_path), write=True, lock_timeout=lock_timeout) as target:
+        selected = _checked_get(target, identity, backends)
         assert selected is not None
         attempt = selected["attempts"][number - 1]
         if attempt["phase"] in TERMINAL:
-            return _view("apply", selected)
-        status = str(result["status"])
+            return _view("apply", selected, backends=backends)
+        require(isinstance(result, dict), "worker adapter returned an invalid result; the attempt requires recovery")
+        status = result.get("status")
+        require(
+            isinstance(status, str)
+            and status
+            in {
+                "completed",
+                "candidate_failed",
+                "runtime_failed",
+                "interrupted",
+                "timed_out",
+                "output_limit",
+                "cancelled",
+            },
+            "worker adapter returned an unsupported outcome; the attempt requires explicit recovery",
+        )
+        assert isinstance(status, str)
         outcome = {"completed": "output_invalid", "candidate_failed": "failed", "runtime_failed": "failed"}.get(
             status, status
         )
@@ -759,35 +803,56 @@ def _apply(
             result.get("reason") or "The executor attempt ended without an identified successful build.",
             result["termination"],
             inspect_output=True,
+            preserve_outcome=status == "candidate_failed",
         )
-        selected = target.append(identity, number, receipt["outcome"], {"kind": "receipt", "receipt": receipt})
-        return _view("apply", selected)
+        lease.assert_current()
+        selected = _append_receipt(target, selected, number, receipt, backends, lease)
+        return _view("apply", selected, backends=backends)
 
 
-def show(journal: Path, execution_id: str, *, lock_timeout: float = execution_store.DEFAULT_LOCK_TIMEOUT) -> Doc:
+def show(
+    journal: Path,
+    execution_id: str,
+    *,
+    lock_timeout: float = execution_store.DEFAULT_LOCK_TIMEOUT,
+    backends: CoordinatorBackends | None = None,
+    coordination_scope: str = LOCAL_SCOPE,
+) -> Doc:
     """Inspect immutable work without requiring its old model or any execution authority."""
-    with executor_store.opened(journal, write=False, deadline=execution_store.Deadline(lock_timeout)) as source:
-        work = _checked_get(source, execution_id)
+    backends = _backends(backends, coordination_scope)
+    with backends.storage.open(Scope(journal), write=False, lock_timeout=lock_timeout) as source:
+        work = _checked_get(source, execution_id, backends)
         require(work is not None, "executor work does not exist")
         assert work is not None
-        return _view("show", work)
+        return _view("show", work, backends=backends)
 
 
-def _recover(journal_path: Path, execution_id: str, *, cancel_requested: bool, lock_timeout: float) -> Doc:
-    with executor_store.opened(journal_path, write=True, deadline=execution_store.Deadline(lock_timeout)) as journal:
-        work = _checked_get(journal, execution_id)
+def _recover(
+    journal_path: Path,
+    execution_id: str,
+    *,
+    cancel_requested: bool,
+    lock_timeout: float,
+    backends: CoordinatorBackends,
+) -> Doc:
+    with backends.storage.open(Scope(journal_path), write=True, lock_timeout=lock_timeout) as journal:
+        work = _checked_get(journal, execution_id, backends)
         require(work is not None, "executor work does not exist")
         assert work is not None
+        operation = "cancel" if cancel_requested else "recover"
         if not work["attempts"] or work["attempts"][-1]["phase"] in TERMINAL:
-            return _view("cancel" if cancel_requested else "recover", work)
+            return _view(operation, work, backends=backends)
         attempt = work["attempts"][-1]
         if cancel_requested and not _cancelled(attempt):
-            work = journal.append(execution_id, attempt["number"], attempt["phase"], {"kind": "cancellation_requested"})
+            work = journal.append(
+                execution_id, attempt["number"], attempt["phase"], {"kind": "cancellation_requested"}, lease=None
+            )
             attempt = work["attempts"][-1]
-        output = attempt["events"][0]["data"]["authorization"]["output"]
-        with _lease(output, create=False) as lease:
+        output = Path(attempt["events"][0]["data"]["authorization"]["output"])
+        reference = AttemptReference(execution_id, attempt["number"], output, journal.identity)
+        with backends.ownership.claim(reference, create=False) as lease:
             if lease is None:
-                report = _view("cancel" if cancel_requested else "recover", work)
+                report = _view(operation, work, backends=backends)
                 return _finish(
                     report,
                     "cancellation_requested" if _cancelled(attempt) else "running",
@@ -795,12 +860,13 @@ def _recover(journal_path: Path, execution_id: str, *, cancel_requested: bool, l
                     if _cancelled(attempt)
                     else "This attempt still has an active supervisor; no recovery launch is permitted.",
                 )
+            lease.assert_current()
             identities = [
                 event["identity"] for kind in ("worker", "namespace") if (event := _event(attempt, kind)) is not None
             ]
-            # The old invocation no longer holds its lease and cannot launch another worker.
-            # A sandbox identity is persisted before candidate release.
-            termination = executor_runtime.terminate(identities)
+            termination = backends.workers.reconcile(
+                [WorkerHandle(reference, identity) for identity in identities], lease=lease
+            )
             receipt = _terminal(
                 work["intent"],
                 attempt,
@@ -809,30 +875,49 @@ def _recover(journal_path: Path, execution_id: str, *, cancel_requested: bool, l
                 termination,
                 inspect_output=True,
             )
-            work = journal.append(
-                execution_id, attempt["number"], receipt["outcome"], {"kind": "receipt", "receipt": receipt}
-            )
-            return _view("cancel" if cancel_requested else "recover", work)
+            lease.assert_current()
+            work = _append_receipt(journal, work, attempt["number"], receipt, backends, lease)
+            return _view(operation, work, backends=backends)
 
 
-def recover(journal: Path, execution_id: str, *, lock_timeout: float = execution_store.DEFAULT_LOCK_TIMEOUT) -> Doc:
+def recover(
+    journal: Path,
+    execution_id: str,
+    *,
+    lock_timeout: float = execution_store.DEFAULT_LOCK_TIMEOUT,
+    backends: CoordinatorBackends | None = None,
+    coordination_scope: str = LOCAL_SCOPE,
+) -> Doc:
     """Reconcile or terminate an old attempt; recovery never starts another candidate."""
-    return _recover(journal, execution_id, cancel_requested=False, lock_timeout=lock_timeout)
+    backends = _backends(backends, coordination_scope)
+    return _recover(journal, execution_id, cancel_requested=False, lock_timeout=lock_timeout, backends=backends)
 
 
-def cancel(journal: Path, execution_id: str, *, lock_timeout: float = execution_store.DEFAULT_LOCK_TIMEOUT) -> Doc:
+def cancel(
+    journal: Path,
+    execution_id: str,
+    *,
+    lock_timeout: float = execution_store.DEFAULT_LOCK_TIMEOUT,
+    backends: CoordinatorBackends | None = None,
+    coordination_scope: str = LOCAL_SCOPE,
+) -> Doc:
     """Persist cancellation for a live supervisor or terminate an abandoned attempt."""
-    return _recover(journal, execution_id, cancel_requested=True, lock_timeout=lock_timeout)
+    backends = _backends(backends, coordination_scope)
+    return _recover(journal, execution_id, cancel_requested=True, lock_timeout=lock_timeout, backends=backends)
 
 
 def recover_journal(
-    journal: Path, *, authorize: bool = False, lock_timeout: float = execution_store.DEFAULT_LOCK_TIMEOUT
+    journal: Path,
+    *,
+    authorize: bool = False,
+    lock_timeout: float = execution_store.DEFAULT_LOCK_TIMEOUT,
+    backends: CoordinatorBackends | None = None,
+    coordination_scope: str = LOCAL_SCOPE,
 ) -> Doc:
     """Repair an interrupted journal after protected backup, with no model or launch effects."""
+    backends = _backends(backends, coordination_scope)
     require(authorize is True, "executor journal recovery requires explicit authorization")
-    with executor_store.opened(
-        journal, write=True, recover=True, deadline=execution_store.Deadline(lock_timeout)
-    ) as source:
+    with backends.storage.open(Scope(journal), write=True, recover=True, lock_timeout=lock_timeout) as source:
         report = _report("recover-journal", "")
         report.update(
             journal_id=source.journal_id,

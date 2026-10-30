@@ -178,6 +178,7 @@ records:
       - Recheck the approved plan, policies, target, actual state, exact pending verification task and active execution binding before reserving a new attempt; contract drift, completed work or a changed binding prevents new execution.
       - Explicit policy bounds attempts and the worker's wall-clock time through staging, isolated execution and collection. Explicit journal initialization fixes shared concurrency capacity. The first adapter permits no repository effects; retries, changed policies and failures cannot expand retained limits or infer new authorization.
       - Before starting the adapter, commit durable work and attempt identities, reviewed limits, status and the shared concurrency reservation in an explicitly initialized private companion journal. Existing version-2 and version-4 binding/completion ledgers retain their formats and ordinary operations never silently initialize, migrate or recover storage.
+      - Supervision, inspection, cancellation and recovery consume explicitly selected attempt-storage, invocation-ownership and worker-lifecycle protocols; the default local adapters preserve the existing policy, authorization, journal and result contracts, and candidate-controlled inputs cannot select another provider.
       - Candidate code runs only through the verified local Bubblewrap launcher satisfying REQ-025, with no host-execution fallback, network or writable host repository mount. The full worker budget and process cleanup remain under the trusted supervisor.
       - Return the registered task reference, execution outcome, retained output references and an immutable host-derived build identity computed from collected artifact paths and content. Missing required outputs or ambiguous identity prevents a successful result; candidate-provided revision claims do not establish output provenance.
       - Timeout, cancellation, failure and supervisor interruption are observable and recoverable from retained history without requiring an unchanged model or state. An exclusive per-invocation ownership lock distinguishes active supervision from an idle long-lived API process; a cancellation request for an active invocation makes no immediate termination claim. Recovery reconciles or terminates the existing attempt before releasing its slot or permitting another; missing ownership facts or uncertain process identity never authorize signaling a reused PID or starting replacement work.
@@ -193,6 +194,38 @@ records:
           - "python/tests/test_executor_faults.py::*"
           - "python/tests/test_executor_store.py::*"
           - "python/tests/test_executor_runtime.py::*"
+
+  - id: REQ-031
+    type: Requirement
+    name: Compose coordinator backends through checked lifecycle contracts
+    description: Trusted coordinator implementations share explicit storage, ownership and worker protocols while preserving authorization, recovery and isolation obligations.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-30"
+    statement: >-
+      Execute the coordinator lifecycle through explicitly composed attempt-storage,
+      invocation-ownership and worker interfaces whose checked scope, atomic limits and
+      recovery semantics preserve the approved work contract across implementations.
+    acceptance_criteria:
+      - Publish typed attempt-storage, checked-session, invocation-lease and worker-lifecycle protocols, with explicit scope and versioned backend composition; the coordinator uses these interfaces for supervision, inspection, cancellation and recovery rather than only declaring structural types.
+      - Select implementations only through trusted Python construction. Preserve the local CLI and its closed reviewed policy; candidate configuration cannot discover plugins, load providers, replace the backend bundle or gain additional effects.
+      - A checked storage session owns its serialization and transaction boundary, exposes no SQLite connection or directory descriptor to orchestration, returns a checked canonical store locator and initialized instance identity, atomically enforces the immutable attempt and shared concurrency budgets, and preserves committed history and exact replay.
+      - Pass the current opaque invocation claim for the exact initialized store, work identity, ordinal and output to owned storage transitions and worker effects; implementations recognize their actual issuer and reject released, stale or differently scoped ownership at the effect boundary. The only unowned attempt mutation is a cancellation request for the current unresolved attempt, which grants no launch or capacity-release authority.
+      - Worker supervision includes gated launch, status, cancellation and the full deadline. Durable callbacks retain provider-owned worker and execution-boundary identities before release; live worker handles bind those retained identities to the selected attempt reference. Inspection alone cannot release capacity, and reconciliation rejects another invocation's handles and verifies termination of the exact retained workers before a terminal outcome frees its slot.
+      - Validate a complete proposed terminal outcome against the selected checked history before appending it; an unknown or non-string worker status, invalid worker result or insufficient termination facts leaves the attempt unresolved and its capacity occupied rather than committing an unusable receipt. Explicit candidate failure, timeout, output-limit and cancellation outcomes remain unsuccessful even when a complete output bundle is present.
+      - Keep provider-specific process identity parsing and physical runtime controls inside the trusted local adapters. Default local identity and history validation remain strict, preserve existing version-1 attempt records and version-2 or version-4 binding ledgers, and do not reinterpret candidate reports as trusted termination evidence.
+      - Protocol version 0.1.0 accepts only the existing local-bubblewrap-v1 contract adapter and one local-machine coordination domain with matching storage, ownership and worker implementations. Unsupported scope or adapter, or a mismatched domain, fails before effects; a lease heartbeat or a check followed by an unrelated write is not a distributed fencing guarantee.
+      - Any future distributed backend must specify and independently verify ownership epochs or fencing tokens enforced atomically by storage transitions and worker commands, together with takeover and reconciliation behavior. It must preserve authoritative work identities, consumed budgets and immutable history through an explicit migration before support is claimed.
+      - Run common conformance cases against the local adapters and an independent reference implementation for immutable contracts, atomic reservations, bounded attempts and concurrency, stale ownership, cancellation, replay and recovery. Reference implementations establish protocol semantics only; backend-specific process-kill durability and real REQ-025 isolation tests remain necessary.
+      - Composing a backend supplies no verification, evidence-admission, completion, release or repository-mutation authority. Runtime support still requires a reviewed backend contract and actual enforcement evidence, not a compatible Python type or provider assertion alone.
+    verification_method: Shared local and independent-reference backend conformance cases, coordinator substitution tests with opaque worker identities, strict legacy-format and local ownership tests, plus the existing real executor and isolation suites.
+    observe:
+      tests:
+        cases:
+          - "python/tests/test_executor_interfaces.py::*"
+          - "python/tests/test_coordinator_backends.py::*"
+          - "python/tests/test_executor_local.py::*"
 
   - id: APP-012
     type: Application
@@ -221,13 +254,13 @@ records:
   - id: APP-014
     type: Application
     name: Executor supervisor
-    description: Durable local snapshot-command supervisor using the verified Bubblewrap launcher and a private executor-attempt companion journal.
+    description: Bounded executor coordinator with explicit storage, invocation-ownership and worker protocols and verified local default adapters.
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
     last_reviewed_at: "2026-10-30"
-    responsibility: Recheck reviewed task authorization, reserve durable attempt and concurrency limits, enforce the isolated worker's full wall-clock budget through staging and collection, reconcile interrupted attempts and return content-identified outputs without granting evidence or completion authority.
-    interfaces: [exacly execute local command, exacly executors init/show/cancel/recover/recover-journal commands, exacly.executor Python API]
+    responsibility: Recheck reviewed task authorization, compose checked backend interfaces, reserve durable attempt and concurrency limits, enforce the isolated worker's full wall-clock budget through staging and collection, reconcile interrupted attempts and return content-identified outputs without granting evidence or completion authority.
+    interfaces: [exacly execute local command, exacly executors init/show/cancel/recover/recover-journal commands, exacly.executor Python API, exacly.executor_interfaces protocols, exacly.executor_local default adapters]
     implementation_ref: { locator: python/src/exacly/executor.py }
 
   - id: APP-016
@@ -321,10 +354,12 @@ relationships:
   - { source: REQ-025, type: supports, target: PROC-004 }
   - { source: REQ-026, type: supports, target: PROC-004 }
   - { source: REQ-027, type: supports, target: PROC-004 }
+  - { source: REQ-031, type: supports, target: PROC-004 }
   - { source: APP-012, type: implements, target: REQ-024 }
   - { source: APP-013, type: implements, target: REQ-026 }
   - { source: APP-016, type: implements, target: REQ-025 }
   - { source: APP-014, type: implements, target: REQ-027 }
+  - { source: APP-014, type: implements, target: REQ-031 }
   - { source: PROC-004, type: uses, target: APP-007, conditions: Uses existing read-only planning to select a goal before authorization. }
   - { source: PROC-004, type: uses, target: APP-012 }
   - { source: PROC-004, type: uses, target: APP-013, conditions: Only when new external work is explicitly authorized. }

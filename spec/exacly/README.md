@@ -63,6 +63,8 @@ The [isolated command launcher](../../python/README.md#isolate-a-candidate-comma
 
 The [bounded local executor](../../python/README.md#run-a-bounded-local-executor), APP-014, adds reviewed task authorization, durable attempt history and shared concurrency limits through a separately initialized private companion to the execution ledger. The first adapter delegates candidate execution to APP-016, accepts explicit snapshots, permits no repository effects and returns host-derived content build identities. Execution, recovery and cancellation preserve pending verification work and cannot admit evidence or complete it. Existing binding/completion ledger formats remain unchanged. The guide describes unreleased functionality on main; lifecycle and fresh observations remain separate.
 
+REQ-031 covers the coordinator's explicit [backend contracts](../../docs/coordinator-interfaces.md) for attempt storage, invocation ownership and worker lifecycle. APP-014 consumes the composed protocols throughout execution, inspection and recovery; its local defaults retain the existing CLI, policy and history formats. Shared reference cases establish interface semantics, while the real local runtime and crash tests establish backend behavior. Distributed scope remains unsupported by protocol `0.1.0` and needs independently verified fencing and migration guarantees before another coordinator can be supported.
+
 When implementing a proposal, update its lifecycle and planned references, review the acceptance tests and observation bindings, and update the [verification policy](../../ci/verification.yaml) in the same change. CI checks that this policy covers every active Requirement; successful verification still requires matching observations.
 
 ## State
@@ -71,7 +73,7 @@ When implementing a proposal, update its lifecycle and planned references, revie
 
 `mise run check` runs the same refresh locally and on pull requests, writing to `reports/state/main.json` without committing anything. A proposed change can show its effect on state this way, but never stores it. Validation in CI reads that fresh state rather than the committed one, so a change that removes a record isn't blocked by state from before it.
 
-The optional `mise run check-core` developer subset writes a separate test report and runs without provisioning the local Bubblewrap backend. It omits local isolation and executor integration test modules, does not refresh state or enter the verification gate, and establishes neither REQ-025 nor REQ-027 verification. Both require the complete Linux checks and real execution tests.
+The optional `mise run check-core` developer subset writes a separate test report and runs without provisioning the local Bubblewrap backend. It omits local execution and ownership test modules, does not refresh state or enter the verification gate, and establishes neither REQ-025/027 verification nor the complete REQ-031 contract. Controlled coordinator substitution cases remain in the subset; local ownership and real execution tests require the complete Linux checks.
 
 Refresh and manual-QA observation use a shared conditional atomic writer for local state files. A command captures the earlier file before computing observations, then checks that it is unchanged under a parent-directory lock before replacing it. A conflict leaves the newer state in place and requires another observation. This local file protocol is separate from the workflow's Git push check and from execution-ledger transactions.
 
