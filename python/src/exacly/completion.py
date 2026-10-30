@@ -28,6 +28,7 @@ from exacly import (
     planning,
     policy,
     query,
+    reconciliation,
     state_writer,
 )
 from exacly import execution_store as store
@@ -278,25 +279,7 @@ def _conforming(documents: Doc, date: dt.date, revision: str, label: str) -> que
 
 
 def _model(documents: Doc, plan: Doc, action: Doc, target: Doc, date: dt.date) -> query.Model:
-    model = _conforming(documents, date, target["model_revision"], "approved model")
-    if (
-        model.graph.namespace != plan["namespace"]
-        or admission.config_digest(documents) != plan["inputs"]["config"]["digest"]
-    ):
-        raise ValueError("approved model content or namespace differs from the saved plan")
-    record = model.record(action["record"])
-    if record["type"] != "Requirement" or record["lifecycle"] == "retired" or record["id"] != action["record"]:
-        raise ValueError("the saved action does not identify an eligible Requirement")
-    candidate = planning.proposal(
-        {"record": action["record"], "classification": action["kind"], "reason": action["reason"]},
-        record,
-        model.graph.namespace,
-        plan["target"],
-        plan["policy"],
-    )
-    if any(candidate[key] != action[key] for key in ("id", "criteria_digest", "bindings_digest")):
-        raise ValueError("approved criteria, bindings or action identity changed")
-    return model
+    return reconciliation.approved_model(documents, plan, action, target, date)
 
 
 def _merged(documents: Doc, previous: Doc, admitted: admission.AdmissionResult, chosen: Doc, target: Doc) -> Doc:

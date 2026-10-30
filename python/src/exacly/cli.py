@@ -9,6 +9,8 @@ exacly admit github-actions --trust-policy FILE --target FILE --run ID --attempt
 exacly reconcile github-actions --dry-run --plan FILE --action ID --policy FILE --trust-policy FILE --target FILE ...
 exacly complete github-actions --plan FILE --action ID --policy FILE --trust-policy FILE --target FILE ...
 exacly completions show|recover --ledger FILE --completion ID [--state FILE] [--json]
+exacly dispatch github-issues --plan FILE --action ID --dispatch-policy FILE --state FILE ... [--dry-run|--apply]
+exacly dispatches init|show|recover|supersede --journal FILE ... [--json]
 exacly executions register --ledger FILE --plan FILE --action ID --state FILE --task TASK --opened-at ISO ...
 exacly executions show --ledger FILE --binding ID [--json]
 exacly executions inspect --ledger FILE [--lock-timeout SECONDS] [--json]
@@ -54,6 +56,7 @@ from exacly.refresh import RefreshError, Run, check_distribution_identity, read_
 
 if TYPE_CHECKING:
     from exacly.admission import AdmissionResult, Source
+    from exacly.github_dispatch import GitHubIssueAdapter
 
 SUFFIXES = {".yaml", ".yml", ".json"}
 DEFAULT_MODEL = Path("spec/exacly")
@@ -645,7 +648,7 @@ def positive_seconds(value: str) -> float:
     return seconds
 
 
-def isolation_document(path: Path, limit: int) -> Any:
+def strict_json_document(path: Path, limit: int) -> Any:
     """Read bounded strict JSON without accepting duplicate keys or nonfinite values."""
 
     def unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -675,7 +678,7 @@ def isolation_inputs(path: Path | None) -> dict[str, bytes]:
         return {}
     from exacly import isolation
 
-    document = isolation_document(path, 16 * 1024 * 1024)
+    document = strict_json_document(path, 16 * 1024 * 1024)
     if (
         not isinstance(document, dict)
         or set(document) != {"schema_version", "files"}
@@ -699,7 +702,7 @@ def isolation_inputs(path: Path | None) -> dict[str, bytes]:
 
 
 class GitHubCredentialsError(RuntimeError):
-    """Credential setup failed before a live evidence read, rather than evidence being rejected."""
+    """Credential setup failed before a live GitHub operation."""
 
 
 class LazyGitHubSource:
@@ -735,6 +738,37 @@ class LazyGitHubSource:
 
     def redact(self, error: Exception) -> str:
         return str(error).replace(self._token, "[redacted]") if self._token else str(error)
+
+
+class LazyGitHubIssueAdapter:
+    """Local dispatch replay does not require credentials or construct a remote client."""
+
+    def __init__(self) -> None:
+        self._adapter: GitHubIssueAdapter | None = None
+
+    def _client(self) -> GitHubIssueAdapter:
+        if self._adapter is None:
+            from exacly import github_dispatch
+
+            token = os.environ.get("GH_TOKEN")
+            if not token or not token.strip():
+                token = os.environ.get("GITHUB_TOKEN")
+            if not token or not token.strip():
+                raise GitHubCredentialsError("set GH_TOKEN or GITHUB_TOKEN to authenticate GitHub issue dispatch")
+            try:
+                self._adapter = github_dispatch.GitHubIssueAdapter(token)
+            except github_dispatch.GitHubDispatchError:
+                raise GitHubCredentialsError("GitHub credentials are invalid") from None
+        return self._adapter
+
+    def repository(self, repository: dict[str, Any]) -> dict[str, Any]:
+        return self._client().repository(repository)
+
+    def discover(self, repository: dict[str, Any], marker: str, effect: dict[str, Any]) -> list[dict[str, Any]]:
+        return self._client().discover(repository, marker, effect)
+
+    def create(self, repository: dict[str, Any], effect: dict[str, Any]) -> dict[str, Any]:
+        return self._client().create(repository, effect)
 
 
 def redact_tokens(message: str, tokens: Iterable[str | None]) -> str:
@@ -941,6 +975,18 @@ def protect_completion_paths(
         raise ValueError(f"completion paths cannot be resolved: {error}") from error
 
 
+def protect_dispatch_paths(
+    state: Path,
+    journal: Path,
+    ledger: Path,
+    inputs: list[Path],
+    trust_policy: dict[str, Any],
+) -> None:
+    """Keep both stores and their SQLite sidecars disjoint from state and reviewed inputs."""
+    protect_completion_paths(state, ledger, [*inputs, *execution_ledger_paths(journal)], trust_policy, None)
+    protect_execution_ledger(journal, [state, *inputs, *execution_ledger_paths(ledger)], trust_policy)
+
+
 def exacly_main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv and argv[0] in ("validate", "refresh"):
@@ -953,7 +999,11 @@ def exacly_main(argv: list[str] | None = None) -> int:
         def error(self, message: str) -> NoReturn:
             super().error(redact_tokens(message, github_tokens))
 
-    parser_class = PolicyDraftParser if argv[:2] == ["evidence", "propose-policy"] else argparse.ArgumentParser
+    parser_class = (
+        PolicyDraftParser
+        if argv[:2] == ["evidence", "propose-policy"] or argv[:1] in (["dispatch"], ["dispatches"])
+        else argparse.ArgumentParser
+    )
     parser = parser_class(
         prog="exacly",
         description="Validate an Exacly model, write its state, and ask it about its records.",
@@ -1122,6 +1172,66 @@ def exacly_main(argv: list[str] | None = None) -> int:
             "--lock-timeout", type=nonnegative_seconds, help="maximum ledger lock wait in seconds (default: 30)"
         )
         history_parser.add_argument("--json", action="store_true", help="print the history report as JSON")
+    dispatch_parser = commands.add_parser("dispatch", help="preview or explicitly dispatch approved work")
+    dispatch_sources = dispatch_parser.add_subparsers(dest="dispatch_source", required=True)
+    dispatch_github = dispatch_sources.add_parser(
+        "github-issues", parents=[common], help="dispatch one reviewed verification action to GitHub issues"
+    )
+
+    def dispatch_selection_arguments(selected: argparse.ArgumentParser, *, storage_required: bool) -> None:
+        selected.add_argument("--plan", required=True, type=Path, help="saved verification plan JSON")
+        selected.add_argument("--action", required=True, help="selected saved action ID")
+        selected.add_argument("--policy", required=True, type=Path, help="reviewed readiness policy JSON")
+        selected.add_argument("--trust-policy", required=True, type=Path, help="reviewed producer/model policy JSON")
+        selected.add_argument(
+            "--dispatch-policy", required=True, type=Path, help="reviewed GitHub dispatch policy JSON"
+        )
+        selected.add_argument("--target", required=True, type=Path, help="approved implementation target JSON")
+        selected.add_argument("--state", required=True, type=Path, help="actual current state file")
+        selected.add_argument("--date", required=True, type=dt.date.fromisoformat, help="evaluation date YYYY-MM-DD")
+        selected.add_argument(
+            "--journal", required=storage_required, type=Path, help="initialized private dispatch journal"
+        )
+        selected.add_argument("--ledger", required=storage_required, type=Path, help="private execution binding ledger")
+        selected.add_argument(
+            "--authorization",
+            required=storage_required,
+            type=Path,
+            help="separately reviewed dispatch authorization JSON",
+        )
+        selected.add_argument(
+            "--lock-timeout", type=nonnegative_seconds, help="maximum shared storage lock wait for apply/recovery"
+        )
+
+    dispatch_selection_arguments(dispatch_github, storage_required=False)
+    dispatch_mode = dispatch_github.add_mutually_exclusive_group()
+    dispatch_mode.add_argument("--dry-run", action="store_true", help="read-only preview (the default)")
+    dispatch_mode.add_argument("--apply", action="store_true", help="apply the separately reviewed authorization")
+    dispatches = commands.add_parser("dispatches", help="initialize, inspect or recover durable dispatch history")
+    dispatch_commands = dispatches.add_subparsers(dest="dispatch_command", required=True)
+    dispatch_recover = dispatch_commands.add_parser(
+        "recover", parents=[common], help="explicitly reconcile one retained dispatch and its current contracts"
+    )
+    dispatch_selection_arguments(dispatch_recover, storage_required=True)
+    for operation in ("init", "show", "supersede"):
+        retained_dispatch = dispatch_commands.add_parser(
+            operation,
+            help={
+                "init": "explicitly initialize a new private dispatch journal",
+                "show": "inspect retained dispatch history without changing it",
+                "supersede": "explicitly retire local dispatch intent without deleting remote work",
+            }[operation],
+        )
+        retained_dispatch.add_argument("--journal", required=True, type=Path, help="private dispatch journal file")
+        if operation != "init":
+            retained_dispatch.add_argument("--dispatch", required=True, help="retained dispatch ID")
+        if operation == "supersede":
+            retained_dispatch.add_argument("--reason", required=True, help="explicit reason retained in history")
+            retained_dispatch.add_argument(
+                "--authorize-supersession", required=True, action="store_true", help="authorize this local supersession"
+            )
+        retained_dispatch.add_argument("--lock-timeout", type=nonnegative_seconds, help="maximum journal lock wait")
+        retained_dispatch.add_argument("--json", action="store_true", help="print the dispatch result as JSON")
     admit = commands.add_parser("admit", help="admit verification evidence from an authorized live source")
     admit.add_argument("source", choices=["github-actions"])
     admit.add_argument("--trust-policy", required=True, type=Path, help="trusted producer and model policy YAML/JSON")
@@ -1224,6 +1334,130 @@ def exacly_main(argv: list[str] | None = None) -> int:
     view.add_argument("--base", metavar="REV", help="plan: the Git revision the change is against (default: main)")
     view.add_argument("--out", type=Path, metavar="DIR", help="site: the folder to write (default: reports/site)")
     args = parser.parse_args(argv)
+    if args.command in {"dispatch", "dispatches"}:
+        from exacly import dispatch, dispatch_store, github_dispatch
+
+        dispatch_options: dict[str, Any] = {}
+        if args.lock_timeout is not None:
+            dispatch_options["lock_timeout"] = args.lock_timeout
+        try:
+            retained_operation = args.dispatch_command if args.command == "dispatches" else None
+            if retained_operation == "init":
+                dispatch_report = dispatch_store.initialize(args.journal, **dispatch_options)
+                if (
+                    not isinstance(dispatch_report, dict)
+                    or dispatch_report.get("schema_version") != "0.1.0"
+                    or dispatch_report.get("status") != "initialized"
+                    or not isinstance(dispatch_report.get("journal_id"), str)
+                ):
+                    raise ValueError("dispatch journal initialization returned an invalid report")
+                print(
+                    json.dumps(dispatch_report, indent=2, sort_keys=True)
+                    if args.json
+                    else (
+                        f"Initialized private dispatch journal: {args.journal}\n"
+                        f"Journal ID: {dispatch_report['journal_id']}"
+                    )
+                )
+                return 0
+            if retained_operation == "show":
+                dispatch_report = dispatch.show(args.journal, args.dispatch, **dispatch_options)
+            elif retained_operation == "supersede":
+                dispatch_report = dispatch.supersede(
+                    args.journal,
+                    args.dispatch,
+                    reason=args.reason,
+                    authorize=args.authorize_supersession,
+                    **dispatch_options,
+                )
+            else:
+                perform_apply = retained_operation == "recover" or args.apply
+                if not perform_apply:
+                    if args.authorization is not None:
+                        parser.error("--authorization requires --apply; a preview does not grant dispatch permission")
+                    if (args.journal is None) != (args.ledger is None):
+                        parser.error("--journal and --ledger must be supplied together")
+                    if args.lock_timeout is not None:
+                        parser.error("--lock-timeout requires --apply or dispatches recover")
+                elif any(value is None for value in (args.journal, args.ledger, args.authorization)):
+                    parser.error("--apply requires --journal, --ledger and --authorization")
+                dispatch_plan = strict_json_document(args.plan, 8 * 1024 * 1024)
+                dispatch_readiness = strict_json_document(args.policy, 1024 * 1024)
+                dispatch_trust = strict_json_document(args.trust_policy, 1024 * 1024)
+                dispatch_policy = strict_json_document(args.dispatch_policy, 64 * 1024)
+                dispatch_target = Target(strict_json_document(args.target, 64 * 1024))
+                dispatch_documents = load(args.model or [DEFAULT_MODEL])
+                dispatch_inputs = [args.plan, args.policy, args.trust_policy, args.dispatch_policy, args.target]
+                dispatch_inputs.extend(Path(name) for name, doc in dispatch_documents.items() if not is_state(doc))
+                if args.authorization is not None:
+                    dispatch_inputs.append(args.authorization)
+                if args.journal is not None:
+                    protect_dispatch_paths(args.state, args.journal, args.ledger, dispatch_inputs, dispatch_trust)
+                dispatch_request = dispatch.Request(
+                    plan=dispatch_plan,
+                    action_id=args.action,
+                    readiness_policy=dispatch_readiness,
+                    trust_policy=dispatch_trust,
+                    dispatch_policy=dispatch_policy,
+                    target=dispatch_target,
+                    date=args.date,
+                )
+                if not perform_apply:
+                    dispatch_report = dispatch.preview(dispatch_documents, args.state, dispatch_request)
+                    if not isinstance(dispatch_report, dict) or dispatch_report.get("dry_run") is not True:
+                        raise ValueError("dispatch preview returned a non-dry-run report")
+                else:
+                    reviewed_authorization = strict_json_document(args.authorization, 64 * 1024)
+                    dispatch_apply = dispatch.recover if retained_operation == "recover" else dispatch.apply
+                    dispatch_report = dispatch_apply(
+                        args.journal,
+                        args.ledger,
+                        dispatch_documents,
+                        args.state,
+                        dispatch_request,
+                        authorization=reviewed_authorization,
+                        client=LazyGitHubIssueAdapter(),
+                        **dispatch_options,
+                    )
+            dispatch_statuses = {
+                "registered",
+                "superseded",
+                "ambiguous",
+                "conflict",
+                "attempts_exhausted",
+                "blocked",
+                "missing",
+            }
+            dispatch_preview = args.command == "dispatch" and not args.apply
+            if dispatch_preview:
+                dispatch_statuses.add("ready")
+            if retained_operation == "show":
+                dispatch_statuses.update({"prepared", "creating", "remote_confirmed", "registration_prepared"})
+            if (
+                not isinstance(dispatch_report, dict)
+                or dispatch_report.get("schema_version") != "0.1.0"
+                or dispatch_report.get("status") not in dispatch_statuses
+                or dispatch_report.get("dry_run") is not dispatch_preview
+            ):
+                raise ValueError("dispatch returned an invalid report")
+            dispatch_rendered = (
+                json.dumps(dispatch_report, indent=2, sort_keys=True)
+                if args.json
+                else dispatch.as_text(dispatch_report)
+            )
+        except (
+            query.QueryError,
+            ValueError,
+            OSError,
+            GitHubCredentialsError,
+            github_dispatch.GitHubDispatchError,
+        ) as error:
+            print(f"exacly {args.command}: {redact_tokens(str(error), github_tokens)}", file=sys.stderr)
+            return 2
+        print(dispatch_rendered)
+        if retained_operation == "show":
+            return 1 if dispatch_report["status"] == "missing" else 0
+        return 0 if dispatch_report["status"] in {"ready", "registered", "superseded"} else 1
     if args.command == "isolation":
         from exacly import isolation
 
@@ -1252,7 +1486,7 @@ def exacly_main(argv: list[str] | None = None) -> int:
             candidate = args.candidate[1:] if args.candidate[:1] == ["--"] else args.candidate
             if not candidate:
                 raise ValueError("supply one candidate command after --")
-            runtime = isolation.parse_policy(isolation_document(args.runtime_policy, 64 * 1024))
+            runtime = isolation.parse_policy(strict_json_document(args.runtime_policy, 64 * 1024))
             snapshots = isolation_inputs(args.inputs)
             options = {} if args.timeout is None else {"timeout": args.timeout}
             report = isolation.run(runtime, candidate, snapshots, args.out, **options)

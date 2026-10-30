@@ -233,10 +233,9 @@ def validate_record(record: Any) -> Doc:
     return dict(normalized)
 
 
-def register(ledger: Path, request: Registration, *, lock_timeout: float = execution_store.DEFAULT_LOCK_TIMEOUT) -> Doc:
-    """Record an explicit operator association, without observing evidence or changing pending work."""
+def build_registration(request: Registration) -> Doc:
+    """Build and validate a binding without reading or writing a ledger."""
     plan, action, target, chosen, state = contract_inputs(request)
-    location(ledger, chosen)
     pending, _ = selected_pending(state, action["record"], request.task, request.opened_at, request.adopt_verification)
     record: Doc = {
         "schema_version": VERSION,
@@ -263,6 +262,13 @@ def register(ledger: Path, request: Registration, *, lock_timeout: float = execu
     }
     record["id"] = record_identity(record)
     validate_record(record)
+    return validate_record(record)
+
+
+def register(ledger: Path, request: Registration, *, lock_timeout: float = execution_store.DEFAULT_LOCK_TIMEOUT) -> Doc:
+    """Record an explicit operator association, without observing evidence or changing pending work."""
+    record = build_registration(request)
+    location(ledger, request.trust_policy)
     return validate_record(execution_store.put(ledger, record, lock_timeout=lock_timeout))
 
 

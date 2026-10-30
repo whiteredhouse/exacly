@@ -129,9 +129,9 @@ records:
     name: Dispatch approved work without duplicate external tasks
     description: A reviewed action can create one traceable task despite concurrent dispatchers, retries and ambiguous responses.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-28"
+    last_reviewed_at: "2026-10-30"
     statement: >-
       Under explicit dispatch authorization, persist intent for a reviewed action before creating
       external work, recover an existing task by stable identity before retrying, and retain an
@@ -140,20 +140,23 @@ records:
       - Dispatch requires explicit reviewed authorization for the selected action, destination, adapter and permitted effect; a saved plan or readiness result alone does not grant permission to create work.
       - Recheck the approved plan, criteria, bindings, policies, target and actual current state before dispatch; stale contracts require replanning, and a goal already satisfied is recorded as superseded without creating another task.
       - Dry-run renders the same selected action, preconditions and intended external effect without creating tasks or modifying state, ledger records or watermarks.
-      - Persist a stable dispatch identity and intent before the first external create request; scope the adapter marker to the authorized repository or destination and reviewed action rather than mutable state serials or diagnostic text.
-      - Concurrent workers and repeated applies recover the same task by its stable identity; a crash after remote creation or an ambiguous response triggers discovery before another create request, and multiple matching tasks produce an explicit conflict.
+      - Persist a stable dispatch identity and intent before the first external create request; scope the adapter marker to the persistent identity of the authorized repository or destination and reviewed action rather than mutable repository names, state serials or diagnostic text.
+      - Concurrent workers sharing the explicitly selected canonical dispatch journal and repeated applies recover the same task by its stable identity; persist the creating phase before sending a create request, never send another create after a possibly sent request, and retain an unresolved ambiguous result when complete discovery finds no match. Multiple matching tasks produce an explicit conflict.
       - The first adapter supports one explicitly selected GitHub task destination, with repository and adapter settings supplied by reviewed policy rather than library defaults for workflow or test paths.
       - Retain attempts, remote task identity, immutable receipts and partial successes; bounded retries resume unfinished work without replacing successful history or fabricating external rollback.
+      - Explicitly initialize a private dispatch journal outside candidate storage and Git working trees; pin its unique initialization identity and the canonical absolute journal, execution-ledger and actual state paths in both reviewed policy and authorization before remote effects. Retain this storage contract with each intent and keep dispatch history separate without changing existing execution-ledger formats. Ordinary apply and inspection reject interrupted SQLite journals; explicit recovery validates protected storage before resolving the interrupted transaction.
       - Associate a confirmed task with one unambiguous pending verification entry and its reviewed execution binding through recoverable ledger and conditional state writes; ambiguity or changed pending work blocks registration rather than linking a different task.
       - Replanning, cancellation and retirement preserve history and require explicit supersession; retiring a record or task never authorizes destruction of implementation.
       - Task creation, issue closure, agent completion reports and PR merge leave verification pending until the separately authorized completion path admits sufficient applicable evidence.
-    verification_method: Future dispatch contract and command tests with controlled GitHub responses, concurrent workers and process termination around external creation and receipt persistence.
+    verification_method: Dispatch contract, command, adapter and private-journal tests with controlled GitHub responses, concurrent workers and process termination around external creation, state publication, binding registration and receipt persistence.
     observe:
       tests:
         cases:
           - "python/tests/test_dispatch.py::*"
           - "python/tests/test_dispatch_cli.py::*"
           - "python/tests/test_dispatch_faults.py::*"
+          - "python/tests/test_dispatch_store.py::*"
+          - "python/tests/test_github_dispatch.py::*"
 
   - id: REQ-027
     type: Requirement
@@ -197,14 +200,14 @@ records:
   - id: APP-013
     type: Application
     name: Work dispatcher
-    description: Proposed operator-authorized dispatch command with an initial GitHub task adapter.
+    description: Operator-authorized dispatch command with a durable private journal and a GitHub issue adapter.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-28"
+    last_reviewed_at: "2026-10-30"
     responsibility: Persist approved dispatch intent, recover or create one external task and associate it with pending verification work without duplicate effects.
-    interfaces: [Planned dispatch dry-run and apply commands, Planned dispatch adapter Python API]
-    implementation_ref: { locator: python/src/exacly/dispatch.py, planned: true }
+    interfaces: [exacly dispatch github-issues command, exacly dispatches init/show/recover/supersede commands, exacly.dispatch Python API]
+    implementation_ref: { locator: python/src/exacly/dispatch.py }
 
   - id: APP-014
     type: Application
@@ -213,7 +216,7 @@ records:
     owner: exacly-maintainers
     lifecycle: proposed
     evidence: []
-    last_reviewed_at: "2026-10-29"
+    last_reviewed_at: "2026-10-30"
     responsibility: Require verified isolation from the selected execution backend, enforce durable execution limits, retain attempt history and return produced implementation identities without granting completion authority.
     interfaces: [Planned executor adapter API, Planned durable attempt supervision interface]
     implementation_ref: { locator: python/src/exacly/executor.py, planned: true }
@@ -244,14 +247,14 @@ records:
 
   - id: INFO-005
     type: Information
-    name: Dispatch and execution attempts
-    description: Proposed durable intent, task association and bounded executor history for approved actions.
+    name: Dispatch intents and receipts
+    description: Durable authorization, task association and recoverable registration history for approved dispatches.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-28"
-    definition: Versioned dispatch and execution identities, approved limits, adapter and destination, attempts, remote task references, output identities and receipts for recovery and explicit supersession.
-    identifiers: [dispatch ID, execution attempt ID, plan and action IDs, adapter and destination, remote task identity, output revision or build]
+    last_reviewed_at: "2026-10-30"
+    definition: Versioned stable dispatch identity and reviewed authorization, adapter and destination, pinned canonical storage paths and journal initialization identity, immutable intent and bounded reconciliation attempts, remote task receipt, retained pending-state publication and binding association, and final registration or supersession history in a separately initialized private journal.
+    identifiers: [dispatch ID, journal initialization ID, plan and action IDs, adapter and destination, remote task identity, state destination, execution binding ID]
     steward: exacly-maintainers
 
   - id: INFO-007
@@ -266,6 +269,18 @@ records:
     identifiers: [runtime root filesystem digest, snapshot path and digest, artifact path and digest]
     steward: exacly-maintainers
 
+  - id: INFO-008
+    type: Information
+    name: Executor attempts
+    description: Proposed durable attempt limits and produced implementation identities for a bounded executor.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-30"
+    definition: Versioned execution attempt identities, approved limits, adapter and task inputs, retained outcomes, produced revision or build identities and recovery history; these future executor records are separate from implemented dispatch receipts.
+    identifiers: [execution attempt ID, dispatch or task identity, adapter, output revision or build]
+    steward: exacly-maintainers
+
   - id: INF-004
     type: Infrastructure
     name: Local Bubblewrap execution runtime
@@ -277,6 +292,18 @@ records:
     kind: Linux namespace execution boundary and private run storage
     purpose: When the local Bubblewrap backend is explicitly selected, run candidate-controlled code with immutable inputs, no host network or operator interfaces and a verified boundary, then retain safely collected untrusted results.
     operational_ref: { locator: docs/candidate-isolation.md }
+
+  - id: INF-005
+    type: Infrastructure
+    name: Private dispatch journal
+    description: Explicitly initialized protected SQLite history for one canonical dispatch coordinator.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-30"
+    kind: Local private SQLite dispatch outbox
+    purpose: Retain durable dispatch intent before remote effects and immutable reconciliation, registration and supersession history, with bounded locks and explicit interrupted-transaction recovery; existing execution ledgers retain their formats.
+    operational_ref: { locator: docs/durable-dispatch.md }
 
 relationships:
   - { source: CAP-004, type: contributes_to, target: OUT-001 }
@@ -309,7 +336,8 @@ relationships:
   - { source: APP-013, type: depends_on, target: APP-010, conditions: Associates confirmed tasks with reviewed pending-work bindings while preserving registration history. }
   - { source: APP-013, type: depends_on, target: APP-002, conditions: Uses conditional state publication for recoverable pending-task registration. }
   - { source: APP-013, type: depends_on, target: INF-002, conditions: The initial adapter creates tasks only in the explicitly authorized GitHub destination. }
-  - { source: APP-013, type: depends_on, target: INF-003, conditions: Dispatch storage requires an explicit schema upgrade before use. }
+  - { source: APP-013, type: depends_on, target: INF-003, conditions: Confirmed remote work is associated with an active execution binding in the explicitly selected operational ledger without changing its format. }
+  - { source: APP-013, type: depends_on, target: INF-005, conditions: Explicit initialization and one canonical journal coordinate durable intent and recovery for the approved destination. }
   - { source: APP-013, type: reads, target: INFO-001 }
   - { source: APP-013, type: reads, target: INFO-002 }
   - { source: APP-013, type: writes, target: INFO-002 }
@@ -323,7 +351,8 @@ relationships:
   - { source: APP-016, type: writes, target: INFO-007 }
   - { source: INF-004, type: stores, target: INFO-007, role: system_of_record, conditions: The explicit private output bundle retains isolated launch facts and untrusted candidate results. }
   - { source: APP-014, type: depends_on, target: INF-003, conditions: The trusted supervisor retains attempts through an explicit ledger extension without exposing the ledger to candidate code. }
-  - { source: APP-014, type: reads, target: INFO-005 }
-  - { source: APP-014, type: writes, target: INFO-005 }
+  - { source: APP-014, type: reads, target: INFO-008 }
+  - { source: APP-014, type: writes, target: INFO-008 }
   - { source: INF-003, type: stores, target: INFO-004, role: system_of_record, conditions: Operational completion history in explicitly selected schema version 2 or 4; audit-only version 3 retains a copy and version 1 has no completion history. }
-  - { source: INF-003, type: stores, target: INFO-005, role: system_of_record, conditions: Proposed dispatch and attempt history after an explicit ledger schema upgrade; absent from the current ledger format. }
+  - { source: INF-005, type: stores, target: INFO-005, role: system_of_record, conditions: Explicitly initialized private dispatch journal; separate from execution-binding and completion storage. }
+  - { source: INF-003, type: stores, target: INFO-008, role: system_of_record, conditions: Proposed executor attempt history after an explicit ledger extension; absent from the current ledger format. }

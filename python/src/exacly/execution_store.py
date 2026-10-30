@@ -484,13 +484,46 @@ def configure(connection: sqlite3.Connection, *, deadline: Deadline | None = Non
         connection.execute(statement)
 
 
+@contextmanager
+def _registration_lock(path: Path, directory_fd: int | None, deadline: Deadline) -> Iterator[tuple[Path, int]]:
+    if directory_fd is None:
+        with locked(path, write=True, deadline=deadline) as pinned:
+            yield pinned
+    else:
+        absolute = location(path)
+        info = os.fstat(directory_fd)
+        parent = absolute.parent.stat(follow_symlinks=False)
+        require(
+            (info.st_dev, info.st_ino) == (parent.st_dev, parent.st_ino),
+            "registration directory does not match the caller's pinned lock",
+        )
+        yield absolute, directory_fd
+
+
 def put(path: Path, value: Doc, *, lock_timeout: float = DEFAULT_LOCK_TIMEOUT) -> Doc:
+    """Atomically register under the execution store's own bounded directory lock."""
+    return _put(path, value, lock_timeout=lock_timeout)
+
+
+def put_locked(path: Path, value: Doc, *, directory_fd: int, deadline: Deadline) -> Doc:
+    """Register while a coordinator retains the matching directory lock through finalization."""
+    return _put(path, value, directory_fd=directory_fd, deadline=deadline)
+
+
+def _put(
+    path: Path,
+    value: Doc,
+    *,
+    lock_timeout: float = DEFAULT_LOCK_TIMEOUT,
+    directory_fd: int | None = None,
+    deadline: Deadline | None = None,
+) -> Doc:
     """Atomically append a binding, explicitly supersede the active binding, or retry its identity."""
-    deadline = Deadline(lock_timeout)
+    deadline = deadline if deadline is not None else Deadline(lock_timeout)
     proposed = record(value)
     try:
         with (
-            locked(path, write=True, deadline=deadline) as (absolute, directory_fd),
+            _registration_lock(path, directory_fd, deadline) as (absolute, pinned_fd),
             database(absolute, create=True, deadline=deadline) as (connection, created),
         ):
             indexed = None
@@ -586,7 +619,7 @@ def put(path: Path, value: Doc, *, lock_timeout: float = DEFAULT_LOCK_TIMEOUT) -
             busy_timeout(connection, deadline)
             connection.commit()
             if created:
-                os.fsync(directory_fd)
+                os.fsync(pinned_fd)
             return existing if existing is not None else proposed
     except StoreError:
         raise
