@@ -667,6 +667,61 @@ Exit status is 0 only for `satisfied`; 1 for `not_satisfied` or `unknown`; 2 for
 
 Reports identify policy name/version, selected target, as-of date, individual checks, evidence, excluded assessments, and missing bindings. Delivery environment defaults to target context when omitted; verification without environment establishes only the selected source-level result. An environment-specific gate requires environment-specific verification evidence. A source check plus publication gate does not establish production behavior. The command evaluates only the explicit policy; it is not a general proof of release safety, artifact provenance, or complete acceptance-criteria coverage.
 
+### Export readiness as JUnit
+
+This option is available on main ahead of the next package release; it is not included in 0.6.0.
+
+Use the paired `--junit FILE` and `--junit-id LABEL` options when CI or an explicitly reviewed observation binding needs a standard test report. The XML serializes the same computed readiness evaluation; it does not run another evaluator. Text remains the default stdout format, and `--json` can retain the full native report alongside the XML:
+
+```sh
+mkdir -p reports
+exacly gate -m spec/exacly --policy policies/main-readiness.yaml \
+  --target targets/main.yaml --date 2026-10-30 \
+  --junit reports/readiness.xml --junit-id main \
+  --json > reports/readiness.json
+```
+
+The command keeps readiness exit statuses: 0 for satisfied, 1 for not satisfied or unknown, and 2 for invalid input or report-output errors. Retain both files in CI even when readiness blocks success.
+
+Each testcase represents one declared Requirement/dimension prerequisite. Only `satisfied` passes. `not_satisfied` and `unknown` produce distinct failure types and retain their native readiness reasons; missing, expired, incomplete or inapplicable evidence is never exported as a skipped testcase. A readable but nonconforming model produces unknown checks and exit 1. Invalid policy, target, unreadable or schema-invalid inputs produce no XML and exit 2.
+
+`--junit-id` names the logical target or composition member for reporting; it does not select or validate the actual assessment target. Reuse a label for successive evaluations of the same logical target, and choose distinct labels for independent targets whose reports may be combined, such as `linux-arm64` and `linux-amd64`. The `exacly-case` testcase property supplies this stable selector to Exacly's JUnit observer:
+
+```text
+exacly.gate/v1/<namespace>/<policy-name>/<junit-id>/<record>/<dimension>
+```
+
+Each component after the prefix is percent-encoded from its UTF-8 bytes, including separators and glob metacharacters. The record is its canonical unqualified ID. The classname contains the prefix through `junit-id`, and the testcase name contains the record and dimension; `exacly-case` takes precedence over their usual joined identifier. Policy version, evaluation date, context and model/implementation revisions remain metadata so that new observations do not silently change the binding selector. Do not put credentials in a label.
+
+For namespace `billing`, policy `main-readiness`, label `main` and the `REQ-001` verification prerequisite, a separate consumer Requirement can explicitly bind to the upstream gate's evaluation:
+
+```yaml
+observe:
+  tests:
+    workflow: .github/workflows/readiness.yml
+    job: evaluate
+    cases:
+      - "exacly.gate/v1/billing/main-readiness/main/REQ-001/verification"
+```
+
+This binding observes the evaluation in that workflow and job; it does not import or relabel the original product-test assessments.
+
+Suite properties retain `exacly.report.kind=readiness-evaluation`, namespace, label, policy name/version, evaluation date and overall readiness. Common target identity fields are retained as `exacly.target.*`; `exacly.target.digest` identifies the complete target, including build identities, without copying arbitrary build payloads. `exacly.native_report.digest` identifies the full native report. These content digests do not authenticate it. Case properties retain the canonical record, dimension, assessed state and readiness result, with applicable and excluded evidence references labeled separately. Keep the full JSON report and original admitted evidence when detailed assessments, exclusions, missing bindings or provenance must be inspected.
+
+Both digests use SHA-256 over canonical JSON: sorted keys, compact `(',', ':')` separators, `ensure_ascii=True` and `allow_nan=False`, encoded as ASCII (equivalently UTF-8 for that escaped output). To compare a retained JSON report, parse and canonicalize it first; hashing the pretty-printed file bytes gives a different content identity.
+
+Each check retains up to four distinct applicable evidence references as `exacly.evidence.N` and, separately, up to four distinct excluded references as `exacly.excluded_evidence.N`, with a reason of at most 512 bytes in `exacly.excluded_evidence.N.reason`. Excluded references explain observations such as expired or wrong-target evidence; they are diagnostic and never treated as applicable or positive support. Each reference is at most 1,024 UTF-8 bytes. Both categories accept HTTP(S) URLs without credentials or invalid ports, and nonempty relative paths without a scheme, host, absolute root, backslash or parent traversal, including percent-decoded variants. Control characters, whitespace and surrogates are rejected. Query strings and fragments are stripped; unsupported references are omitted.
+
+XML display text replaces invalid XML characters; testcase selectors preserve the original identity bytes through encoding and are never truncated. Each identity component is limited to 1,024 UTF-8 bytes, reports to 4,096 checks and rendered XML to 8 MiB. Failure diagnostics are bounded to 4 KiB with a 512-byte message; validation findings use a bounded suite diagnostic. These limits keep XML a reporting view rather than an unbounded copy of source output. Exceeding identity, check-count or report-size limits is a report-output error.
+
+Keep XML output outside recursively loaded model directories and away from config, state, policy and target inputs. Unsafe paths and failed writes return 2 before the normal result is printed; model inputs are not changed. Use a fresh output path or clean a prior report before invocation. Invalid inputs emit no XML and do not turn an earlier report into a result for the failed invocation.
+
+A passing JUnit case establishes only that the selected prerequisite was satisfied by the supplied native evaluation. It does not authenticate evidence origin, prove a fresh product test ran or establish delivery beyond a declared applicable delivery check. A consumer must explicitly review its observation binding and preserve the original model namespace, target, policy and evidence references. Exacly's ordinary JUnit observer does not enforce this gate metadata or infer those identities from it; do not relabel upstream state into another namespace or broaden its applicability. Never use the generated report as the evidence that satisfies the gate which generated it.
+
+This output option evaluates one explicit target. It does not add multi-target composition, approve producer policies, update bindings or write model state.
+
+In Python, `exacly.policy.as_junit(report, namespace="billing", report_id="main")` serializes the already computed native report using the supplied model namespace and logical-target label.
+
 ## Plan verification work
 
 `exacly plan` proposes the next observation, investigation or configuration decision for each verification prerequisite in a named policy. It uses the same target applicability and readiness evaluation as `assess` and `gate`. A passing result in another revision or environment cannot satisfy the selected goal.
