@@ -181,8 +181,9 @@ class WorkerLifecycle(Protocol):
 
     Supervision includes launch, status, cancellation and the full worker deadline. Before starting
     a worker and before releasing candidate execution, the corresponding callback must durably
-    retain its opaque identity. A rejected callback starts no candidate. Cancellation and recovery
-    do not clear capacity until reconcile proves termination of the exact retained workers.
+    retain its opaque identity. The coordinator detaches callback data and validates its identity
+    and event ordering before append. A rejected callback starts no candidate. Cancellation and
+    recovery do not clear capacity until reconcile proves termination of the exact retained workers.
     Implementations enforce the selected isolation contract independently of their own reports.
     """
 

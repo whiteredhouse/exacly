@@ -8,7 +8,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from exacly import execution_store, executor_runtime, executor_store, planning
+from coordinator_fixtures import CALLBACK_FAULTS, invalid_callbacks
+from dispatch_fixtures import Scenario
+from dispatch_fixtures import dispatch_scenario as dispatch_scenario
+from exacly import execution_store, executor, executor_runtime, executor_store, isolation, planning
 from exacly.executor_interfaces import (
     AttemptReference,
     CoordinatorBackends,
@@ -20,8 +23,24 @@ from exacly.executor_interfaces import (
     WorkerSpec,
 )
 from exacly.executor_local import LocalWorkerLifecycle, local_backends
+from executor_fixtures import ExecutorScenario, make_executor_scenario
 
 Doc = dict[str, Any]
+
+
+@pytest.fixture
+def local_callback_case(dispatch_scenario: Scenario, tmp_path: Path) -> ExecutorScenario:
+    root = tmp_path / "unused-reviewed-runtime"
+    root.mkdir(mode=0o700)
+    # Callback fault tests replace the runtime and never execute candidate code.
+    return make_executor_scenario(
+        dispatch_scenario, isolation.Runtime(root, "sha256:" + "1" * 64, "/usr/bin/python3"), tmp_path
+    )
+
+
+def stopped_identity(pid: int) -> Doc:
+    # A previous-boot identity exercises the real identity codec without signalling a live process.
+    return {"boot_id": "00000000-0000-0000-0000-000000000000", "pid": pid, "start_time": 1, "pid_namespace": "pid:[1]"}
 
 
 def intent(name: str = "first") -> Doc:
@@ -362,3 +381,93 @@ def test_mutating_returned_metadata_cannot_replace_owner_identity(
         supplied = lease.owner_identity
         supplied.clear()
         assert lease.owner_identity == owner
+
+
+@pytest.mark.parametrize("fault", CALLBACK_FAULTS)
+@pytest.mark.parametrize("finish", ["recover", "cancel"])
+def test_local_callback_rejection_preserves_readable_sqlite_history_and_recovery(
+    local_callback_case: ExecutorScenario,
+    monkeypatch: pytest.MonkeyPatch,
+    fault: str,
+    finish: str,
+) -> None:
+    item = local_callback_case
+    original = item.authoritative_bytes()
+    authorization = item.authorization
+    identity = authorization["execution_id"]
+    cleanup_ready = False
+    terminate = executor_runtime.terminate
+
+    def cleanup(identities: Any) -> list[Doc]:
+        if not cleanup_ready:
+            raise ValueError("controlled cleanup remains unverified")
+        return terminate(identities)
+
+    def faulty(*args: Any, on_worker: Any, on_namespace: Any, **kwargs: Any) -> None:
+        invalid_callbacks(
+            fault,
+            stopped_identity(999999),
+            stopped_identity(999998),
+            on_worker=on_worker,
+            on_boundary=on_namespace,
+        )
+
+    monkeypatch.setattr(executor_runtime, "run", faulty)
+    monkeypatch.setattr(executor_runtime, "terminate", cleanup)
+    interrupted = item.apply(authorization=authorization)
+    assert interrupted["status"] == "interrupted" and interrupted["receipt"] is None, interrupted
+    shown = executor.show(item.journal, identity)
+    expected = {
+        "worker_identity": [],
+        "boundary_identity": ["worker"],
+        "boundary_first": [],
+        "worker_twice": ["worker"],
+        "boundary_twice": ["worker", "namespace"],
+    }[fault]
+    events = shown["history"]["attempts"][0]["events"]
+    assert [event["data"]["kind"] for event in events[1:]] == expected
+    assert shown["receipt"] is None and item.preview()["authorization_template"] is None
+    assert item.apply(authorization=authorization)["receipt"] is None
+    assert item.authoritative_bytes() == original
+
+    documents = copy.deepcopy(item.documents)
+    item.documents.clear()
+    cleanup_ready = True
+    command = executor.recover if finish == "recover" else executor.cancel
+    recovered = command(item.journal, identity)
+    assert recovered["status"] == ("interrupted" if finish == "recover" else "cancelled"), recovered
+    assert recovered["receipt"]["attempt"] == 1 and recovered["receipt"]["build"] is None
+    assert item.apply(authorization=authorization)["receipt"] == recovered["receipt"]
+    assert executor.show(item.journal, identity)["receipt"] == recovered["receipt"]
+    assert item.authoritative_bytes() == original
+    item.documents.update(documents)
+    assert item.preview()["authorization_template"]["attempt"] == 2
+
+
+def test_local_callback_identity_is_detached_before_validation_and_persistence(
+    local_callback_case: ExecutorScenario,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    item = local_callback_case
+    worker = stopped_identity(999999)
+    original = dict(worker)
+    validate = executor_runtime.validate_identity
+
+    def mutate_source(value: Any) -> Doc:
+        checked = validate(value)
+        if value == original:
+            worker["start_time"] = 2
+        return checked
+
+    def run(*args: Any, on_worker: Any, **kwargs: Any) -> None:
+        on_worker(worker)
+        raise ValueError("controlled supervisor stop")
+
+    monkeypatch.setattr(executor_runtime, "validate_identity", mutate_source)
+    monkeypatch.setattr(executor_runtime, "run", run)
+    report = item.apply()
+    assert report["status"] == "interrupted", report
+    assert worker != original
+    events = report["history"]["attempts"][0]["events"]
+    assert events[1]["data"]["identity"] == original
+    assert report["receipt"]["termination"][0]["identity"] == original

@@ -13,7 +13,14 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from coordinator_fixtures import ControlledWorker, ReferenceOwnership, ReferenceStorage, reference_bundle
+from coordinator_fixtures import (
+    CALLBACK_FAULTS,
+    ControlledWorker,
+    ReferenceOwnership,
+    ReferenceStorage,
+    invalid_callbacks,
+    reference_bundle,
+)
 from dispatch_fixtures import Scenario
 from dispatch_fixtures import dispatch_scenario as dispatch_scenario
 from exacly import executor, executor_runtime, executor_store, isolation, operation_locks, state_writer
@@ -371,3 +378,88 @@ def test_a_known_unsuccessful_worker_outcome_survives_a_complete_retained_bundle
     assert report["receipt"]["build"] is None
     assert Path(report["receipt"]["output"], "report.json").is_file()
     assert case.preview()["authorization_template"]["attempt"] == 2
+
+
+@pytest.mark.parametrize("fault", CALLBACK_FAULTS)
+@pytest.mark.parametrize("finish", ["recover", "cancel"])
+def test_rejected_callbacks_leave_readable_history_and_recoverable_consumed_attempts(
+    injected_case: InjectedCase,
+    monkeypatch: pytest.MonkeyPatch,
+    fault: str,
+    finish: str,
+) -> None:
+    case = injected_case
+    item = case.item
+    original = item.authoritative_bytes()
+    authorization = case.preview()["authorization_template"]
+    identity = authorization["execution_id"]
+    case.worker.cleanup_available = False
+
+    def faulty(*args: Any, on_worker: Any, on_boundary: Any, **kwargs: Any) -> None:
+        invalid_callbacks(
+            fault,
+            {"provider": "semantic-test-worker", "job": "retained-worker"},
+            {"provider": "semantic-test-worker", "job": "retained-boundary"},
+            on_worker=on_worker,
+            on_boundary=on_boundary,
+        )
+
+    monkeypatch.setattr(case.worker, "supervise", faulty)
+    interrupted = case.apply(authorization)
+    assert interrupted["status"] == "interrupted" and interrupted["receipt"] is None, interrupted
+    shown = executor.show(item.journal, identity, backends=case.backends)
+    expected = {
+        "worker_identity": [],
+        "boundary_identity": ["worker"],
+        "boundary_first": [],
+        "worker_twice": ["worker"],
+        "boundary_twice": ["worker", "namespace"],
+    }[fault]
+    events = shown["history"]["attempts"][0]["events"]
+    assert [event["data"]["kind"] for event in events[1:]] == expected
+    assert shown["receipt"] is None and case.preview()["authorization_template"] is None
+    assert case.apply(authorization)["receipt"] is None
+    assert item.authoritative_bytes() == original
+
+    # Cleanup must work from retained facts even after the current model is unavailable.
+    documents = copy.deepcopy(item.documents)
+    item.documents.clear()
+    case.worker.cleanup_available = True
+    command = executor.recover if finish == "recover" else executor.cancel
+    recovered = command(item.journal, identity, backends=case.backends)
+    assert recovered["status"] == ("interrupted" if finish == "recover" else "cancelled"), recovered
+    assert recovered["receipt"]["attempt"] == 1 and recovered["receipt"]["build"] is None
+    assert case.apply(authorization)["receipt"] == recovered["receipt"]
+    assert executor.show(item.journal, identity, backends=case.backends)["receipt"] == recovered["receipt"]
+    assert item.authoritative_bytes() == original
+    item.documents.update(documents)
+    assert case.preview()["authorization_template"]["attempt"] == 2
+
+
+def test_mutating_callback_identity_cannot_change_its_validated_retained_snapshot(
+    injected_case: InjectedCase,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    case = injected_case
+    worker = {"provider": "semantic-test-worker", "job": "original-worker"}
+    original = dict(worker)
+    validate = case.worker.validate_identity
+
+    def mutate_source(value: Any) -> Doc:
+        checked = validate(value)
+        if value == original:
+            worker["job"] = "changed-by-callback-provider"
+        return checked
+
+    def supervise(*args: Any, on_worker: Any, **kwargs: Any) -> None:
+        on_worker(worker)
+        raise ValueError("controlled supervisor stop")
+
+    monkeypatch.setattr(case.worker, "validate_identity", mutate_source)
+    monkeypatch.setattr(case.worker, "supervise", supervise)
+    report = case.apply()
+    assert report["status"] == "interrupted", report
+    assert worker != original
+    events = report["history"]["attempts"][0]["events"]
+    assert events[1]["data"]["identity"] == original
+    assert report["receipt"]["termination"][0]["identity"] == original

@@ -566,26 +566,28 @@ def _terminal(
     return receipt
 
 
-def _append_receipt(
+def _append_event(
     journal: AttemptSession,
     work: Doc,
     number: int,
-    receipt: Doc,
+    phase: str,
+    data: Doc,
     backends: CoordinatorBackends,
     lease: InvocationLease,
 ) -> Doc:
-    """Check an adapter's proposed terminal meaning before releasing durable capacity.
+    """Check detached adapter facts before they enter immutable history.
 
     Storage separately authenticates its exact event chain. This prospective copy validates only
-    the new receipt semantics against that already checked history; no invented chain is persisted.
-    Invalid worker results leave the actual attempt unresolved for explicit recovery.
+    the new event semantics against that already checked history; no invented chain is persisted.
+    Rejected identities, callback ordering or receipts leave readable history for explicit recovery.
     """
+    data = copy.deepcopy(data)
     proposed = copy.deepcopy(work)
     attempt = proposed["attempts"][number - 1]
     require(attempt["phase"] not in TERMINAL, "executor attempt is already terminal")
-    attempt["phase"] = receipt["outcome"]
-    attempt["events"].append({"data": {"kind": "receipt", "receipt": copy.deepcopy(receipt)}})
-    proposed["phase"] = receipt["outcome"]
+    attempt["phase"] = phase
+    attempt["events"].append({"data": data})
+    proposed["phase"] = phase
     validate_history(
         proposed,
         journal_id=journal.journal_id,
@@ -595,8 +597,19 @@ def _append_receipt(
         worker_validator=backends.workers.validate_identity,
     )
     lease.assert_current()
-    return journal.append(
-        work["intent"]["id"], number, receipt["outcome"], {"kind": "receipt", "receipt": receipt}, lease=lease
+    return journal.append(work["intent"]["id"], number, phase, data, lease=lease)
+
+
+def _append_receipt(
+    journal: AttemptSession,
+    work: Doc,
+    number: int,
+    receipt: Doc,
+    backends: CoordinatorBackends,
+    lease: InvocationLease,
+) -> Doc:
+    return _append_event(
+        journal, work, number, receipt["outcome"], {"kind": "receipt", "receipt": receipt}, backends, lease
     )
 
 
@@ -705,7 +718,9 @@ def _apply(
     def on_worker(process: Doc) -> None:
         lease.assert_current()
         with backends.storage.open(Scope(journal_path), write=True, lock_timeout=lock_timeout) as target:
-            target.append(identity, number, "running", {"kind": "worker", "identity": process}, lease=lease)
+            selected = _checked_get(target, identity, backends)
+            assert selected is not None
+            _append_event(target, selected, number, "running", {"kind": "worker", "identity": process}, backends, lease)
 
     def on_boundary(process: Doc) -> None:
         lease.assert_current()
@@ -714,7 +729,9 @@ def _apply(
             selected = _checked_get(target, identity, backends)
             assert selected is not None
             attempt = selected["attempts"][number - 1]
-            target.append(identity, number, "running", {"kind": "namespace", "identity": process}, lease=lease)
+            _append_event(
+                target, selected, number, "running", {"kind": "namespace", "identity": process}, backends, lease
+            )
             require(not _cancelled(attempt), "executor cancellation was requested before candidate release")
             current = state_writer.read(state_path)
             require(

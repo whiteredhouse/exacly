@@ -33,6 +33,33 @@ from exacly.executor_interfaces import (
 
 Doc = dict[str, Any]
 TERMINAL = {"succeeded", "failed", "cancelled", "interrupted", "output_invalid", "timed_out", "output_limit"}
+CALLBACK_FAULTS = ["worker_identity", "boundary_identity", "boundary_first", "worker_twice", "boundary_twice"]
+
+
+def invalid_callbacks(
+    fault: str,
+    worker: Doc,
+    boundary: Doc,
+    *,
+    on_worker: Callable[[Doc], None],
+    on_boundary: Callable[[Doc], None],
+) -> None:
+    """Stop at one rejected callback; this controlled runtime never releases candidate code."""
+    if fault == "worker_identity":
+        on_worker({"invalid": "worker identity"})
+    elif fault == "boundary_first":
+        on_boundary(boundary)
+    else:
+        on_worker(worker)
+        if fault == "worker_twice":
+            on_worker(worker)
+        elif fault == "boundary_identity":
+            on_boundary({"invalid": "boundary identity"})
+        else:
+            assert fault == "boundary_twice"
+            on_boundary(boundary)
+            on_boundary(boundary)
+    raise AssertionError("the invalid lifecycle callback returned and could release candidate code")
 
 
 def check(condition: Any, message: str) -> None:
