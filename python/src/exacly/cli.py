@@ -10,7 +10,7 @@ exacly reconcile github-actions --dry-run --plan FILE --action ID --policy FILE 
 exacly complete github-actions --plan FILE --action ID --policy FILE --trust-policy FILE --target FILE ...
 exacly completions show|recover --ledger FILE --completion ID [--state FILE] [--json]
 exacly dispatch github-issues --plan FILE --action ID --dispatch-policy FILE --state FILE ... [--dry-run|--apply]
-exacly dispatches init|show|recover|supersede --journal FILE ... [--json]
+exacly dispatches init|show|recover|recover-journal|resolve|supersede --journal FILE ... [--json]
 exacly executions register --ledger FILE --plan FILE --action ID --state FILE --task TASK --opened-at ISO ...
 exacly executions show --ledger FILE --binding ID [--json]
 exacly executions inspect --ledger FILE [--lock-timeout SECONDS] [--json]
@@ -987,6 +987,30 @@ def protect_dispatch_paths(
     protect_execution_ledger(journal, [state, *inputs, *execution_ledger_paths(ledger)], trust_policy)
 
 
+def protect_dispatch_resolution_authorization(authorization: Path, journal: Path, inspection: dict[str, Any]) -> None:
+    """Do not interpret a retained resource or its file alias as new resolution authorization."""
+    protected = execution_ledger_paths(journal)
+    record = inspection.get("record")
+    if record is not None:
+        try:
+            intent = record["intent"]
+            protected.extend(execution_ledger_paths(Path(intent["paths"]["ledger"])))
+            protected.append(Path(intent["paths"]["state"]))
+            protected.extend(Path(name) for name in intent["contract"]["trust_policy"]["model"]["files"])
+        except (KeyError, TypeError) as error:
+            raise ValueError("dispatch inspection did not retain its protected resource paths") from error
+    try:
+        selected = (authorization.resolve(), authorization.parent.resolve() / authorization.name)
+        for source in protected:
+            locations = (source.resolve(), source.parent.resolve() / source.name)
+            if any(destination in locations for destination in selected) or (
+                authorization.exists() and source.exists() and authorization.samefile(source)
+            ):
+                raise ValueError("--authorization cannot alias a dispatch journal, state, ledger or model resource")
+    except RuntimeError as error:
+        raise ValueError(f"resolution authorization or retained paths cannot be resolved: {error}") from error
+
+
 def exacly_main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv and argv[0] in ("validate", "refresh"):
@@ -1213,22 +1237,46 @@ def exacly_main(argv: list[str] | None = None) -> int:
         "recover", parents=[common], help="explicitly reconcile one retained dispatch and its current contracts"
     )
     dispatch_selection_arguments(dispatch_recover, storage_required=True)
-    for operation in ("init", "show", "supersede"):
+    dispatch_resolve = dispatch_commands.add_parser(
+        "resolve", help="review or explicitly resolve stale local coordination without changing its resources"
+    )
+    dispatch_resolve.add_argument("--journal", required=True, type=Path, help="existing private dispatch journal")
+    dispatch_resolve.add_argument("--dispatch", required=True, help="retained partial registration dispatch ID")
+    dispatch_resolve.add_argument(
+        "--reason", required=True, help="reason pinned in the separate reviewed authorization"
+    )
+    resolution_mode = dispatch_resolve.add_mutually_exclusive_group()
+    resolution_mode.add_argument("--dry-run", action="store_true", help="read-only resolution preview (the default)")
+    resolution_mode.add_argument("--apply", action="store_true", help="append only the reviewed resolution receipt")
+    dispatch_resolve.add_argument(
+        "--authorization", type=Path, help="separately reviewed resolution authorization JSON"
+    )
+    dispatch_resolve.add_argument("--lock-timeout", type=nonnegative_seconds, help="maximum shared storage lock wait")
+    dispatch_resolve.add_argument("--json", action="store_true", help="print the resolution report as JSON")
+    for operation in ("init", "show", "supersede", "recover-journal"):
         retained_dispatch = dispatch_commands.add_parser(
             operation,
             help={
                 "init": "explicitly initialize a new private dispatch journal",
                 "show": "inspect retained dispatch history without changing it",
                 "supersede": "explicitly retire local dispatch intent without deleting remote work",
+                "recover-journal": "explicitly repair only a hot dispatch journal, preserving its storage backup",
             }[operation],
         )
         retained_dispatch.add_argument("--journal", required=True, type=Path, help="private dispatch journal file")
-        if operation != "init":
+        if operation in {"show", "supersede"}:
             retained_dispatch.add_argument("--dispatch", required=True, help="retained dispatch ID")
         if operation == "supersede":
             retained_dispatch.add_argument("--reason", required=True, help="explicit reason retained in history")
             retained_dispatch.add_argument(
                 "--authorize-supersession", required=True, action="store_true", help="authorize this local supersession"
+            )
+        if operation == "recover-journal":
+            retained_dispatch.add_argument(
+                "--authorize-recovery",
+                required=True,
+                action="store_true",
+                help="authorize storage-only journal recovery",
             )
         retained_dispatch.add_argument("--lock-timeout", type=nonnegative_seconds, help="maximum journal lock wait")
         retained_dispatch.add_argument("--json", action="store_true", help="print the dispatch result as JSON")
@@ -1362,6 +1410,31 @@ def exacly_main(argv: list[str] | None = None) -> int:
                 return 0
             if retained_operation == "show":
                 dispatch_report = dispatch.show(args.journal, args.dispatch, **dispatch_options)
+            elif retained_operation == "resolve":
+                if not args.apply:
+                    if args.authorization is not None:
+                        parser.error("--authorization requires --apply; a resolution preview grants no permission")
+                    dispatch_report = dispatch.resolution_preview(
+                        args.journal, args.dispatch, reason=args.reason, **dispatch_options
+                    )
+                else:
+                    if args.authorization is None:
+                        parser.error("resolve --apply requires --authorization")
+                    inspected = dispatch.show(args.journal, args.dispatch, **dispatch_options)
+                    protect_dispatch_resolution_authorization(args.authorization, args.journal, inspected)
+                    resolution_authorization = strict_json_document(args.authorization, 64 * 1024)
+                    if (
+                        not isinstance(resolution_authorization, dict)
+                        or resolution_authorization.get("reason") != args.reason
+                    ):
+                        raise ValueError("--reason must match the separately reviewed resolution authorization")
+                    dispatch_report = dispatch.resolve(
+                        args.journal, args.dispatch, authorization=resolution_authorization, **dispatch_options
+                    )
+            elif retained_operation == "recover-journal":
+                dispatch_report = dispatch.recover_journal(
+                    args.journal, authorize=args.authorize_recovery, **dispatch_options
+                )
             elif retained_operation == "supersede":
                 dispatch_report = dispatch.supersede(
                     args.journal,
@@ -1422,17 +1495,22 @@ def exacly_main(argv: list[str] | None = None) -> int:
             dispatch_statuses = {
                 "registered",
                 "superseded",
+                "resolved",
                 "ambiguous",
                 "conflict",
                 "attempts_exhausted",
                 "blocked",
                 "missing",
             }
-            dispatch_preview = args.command == "dispatch" and not args.apply
+            dispatch_preview = (args.command == "dispatch" or retained_operation == "resolve") and not args.apply
             if dispatch_preview:
                 dispatch_statuses.add("ready")
             if retained_operation == "show":
                 dispatch_statuses.update({"prepared", "creating", "remote_confirmed", "registration_prepared"})
+            elif retained_operation == "resolve":
+                dispatch_statuses &= {"ready", "resolved", "conflict", "blocked", "missing"}
+            elif retained_operation == "recover-journal":
+                dispatch_statuses = {"repaired"}
             if (
                 not isinstance(dispatch_report, dict)
                 or dispatch_report.get("schema_version") != "0.1.0"
@@ -1457,7 +1535,7 @@ def exacly_main(argv: list[str] | None = None) -> int:
         print(dispatch_rendered)
         if retained_operation == "show":
             return 1 if dispatch_report["status"] == "missing" else 0
-        return 0 if dispatch_report["status"] in {"ready", "registered", "superseded"} else 1
+        return 0 if dispatch_report["status"] in {"ready", "registered", "superseded", "resolved", "repaired"} else 1
     if args.command == "isolation":
         from exacly import isolation
 

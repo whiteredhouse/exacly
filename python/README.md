@@ -720,6 +720,8 @@ In Python, `exacly.planning.create(documents, policy_doc, target, date)` produce
 
 `exacly dispatches init`, `show`, `recover` and `supersede` manage explicit initialization, inspection and recovery or abandonment. The journal is separate from existing execution-ledger formats. A durable `creating` record precedes the one create request; after an ambiguous result, zero discovered matches never authorizes another create. Confirmed work is associated with one pending verification entry and its execution binding through a recoverable conditional publication protocol, preserving unrelated state.
 
+When model or pending-work changes leave registration unable to continue under its original contract, `dispatches resolve` previews the exact retained history and current state, pending and binding facts. `--apply` requires separate authorization for those reviewed facts and appends only a terminal `resolved` receipt. It preserves current work, leaves registration unfinalized and grants no new create. `dispatches recover-journal --authorize-recovery` can first repair an interrupted outbox transaction with a retained backup, without evaluating the stale model or publishing state. See the [resolution procedure](../docs/durable-dispatch.md#resolve-stale-partial-registration) before separately registering remaining pending work under a newly reviewed plan.
+
 Dispatch does not launch an executor, admit evidence or complete verification. See the [durable dispatch guide](../docs/durable-dispatch.md) for policy and authorization formats, commands, storage protections, attempt limits and recovery behavior. Bounded executor attempts remain the separate REQ-027 contract.
 
 ## Register execution bindings

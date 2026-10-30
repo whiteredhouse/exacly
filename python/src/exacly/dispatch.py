@@ -536,6 +536,10 @@ def _validate_history(record: Doc, request: Request) -> Doc | None:
         not (record["phase"] == "superseded" and prepared is not None and result is None),
         "superseded dispatch abandons an incomplete local registration",
     )
+    if record["phase"] == "resolved":
+        from exacly import dispatch_resolution
+
+        dispatch_resolution.validate_receipt(record)
     return result
 
 
@@ -772,6 +776,15 @@ def apply(
                         "Existing dispatch has another retained contract; it cannot authorize another task.",
                     )
             retained_receipt = _validate_history(record, request)
+            if record["phase"] == "resolved":
+                from exacly import dispatch_resolution
+
+                return _finish(
+                    report,
+                    "resolved",
+                    "Old dispatch coordination was explicitly resolved; no new task is authorized.",
+                    receipt=dispatch_resolution.validate_receipt(record),
+                )
             if record["phase"] == "registered":
                 _require(retained_receipt is not None, "registered dispatch lacks a validated receipt")
                 return _finish(
@@ -925,6 +938,7 @@ def supersede(
             record["phase"] != "registration_prepared",
             "complete local registration recovery before superseding this dispatch",
         )
+        _require(record["phase"] != "resolved", "a resolved dispatch retains its terminal resolution")
         if record["phase"] != "superseded":
             outbox.append(dispatch_id, "superseded", {"kind": "superseded", "reason": reason})
     return _finish(
@@ -934,9 +948,33 @@ def supersede(
     )
 
 
+def resolution_preview(
+    journal: Path, dispatch_id: str, *, reason: str, lock_timeout: float = execution_store.DEFAULT_LOCK_TIMEOUT
+) -> Doc:
+    from exacly import dispatch_resolution
+
+    return dispatch_resolution.preview(journal, dispatch_id, reason=reason, lock_timeout=lock_timeout)
+
+
+def resolve(
+    journal: Path, dispatch_id: str, *, authorization: Any, lock_timeout: float = execution_store.DEFAULT_LOCK_TIMEOUT
+) -> Doc:
+    from exacly import dispatch_resolution
+
+    return dispatch_resolution.resolve(journal, dispatch_id, authorization=authorization, lock_timeout=lock_timeout)
+
+
+def recover_journal(
+    journal: Path, *, authorize: bool = False, lock_timeout: float = execution_store.DEFAULT_LOCK_TIMEOUT
+) -> Doc:
+    from exacly import dispatch_resolution
+
+    return dispatch_resolution.recover_journal(journal, authorize=authorize, lock_timeout=lock_timeout)
+
+
 def as_text(report: Doc) -> str:
-    lines = [f"Dispatch {report['dispatch_id']}: {report['status']}", report["reason"]]
-    for key in ("action", "target", "storage", "preconditions", "effect"):
+    lines = [f"Dispatch {report.get('dispatch_id') or report.get('journal')}: {report['status']}", report["reason"]]
+    for key in ("action", "target", "storage", "preconditions", "effect", "unresolved", "recovery_backup"):
         if report.get(key) is not None:
             # JSON escaping keeps an explicitly supplied issue body reviewable without emitting
             # terminal control sequences from untrusted candidate or remote text.

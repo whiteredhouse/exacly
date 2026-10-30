@@ -96,7 +96,7 @@ The dispatch identity combines the namespace, stable action ID, adapter and immu
 
 ## Apply and retain the association
 
-For a remote operation, supply an approved GitHub token with permission to read the selected repository and create issues. The CLI uses the first nonblank `GH_TOKEN`, then `GITHUB_TOKEN`; keep it in the operator environment rather than policy or authorization JSON. Dry-run, initialization, inspection, supersession and local registered replay need no token. Apply explicitly selects the initialized journal and binding ledger:
+For a remote operation, supply an approved GitHub token with permission to read the selected repository and create issues. The CLI uses the first nonblank `GH_TOKEN`, then `GITHUB_TOKEN`; keep it in the operator environment rather than policy or authorization JSON. Dry-run, initialization, inspection, supersession, journal-only resolution or repair, and local registered replay need no token. Apply explicitly selects the initialized journal and binding ledger:
 
 ```sh
 exacly dispatch github-issues -m 'spec/product/*.yaml' \
@@ -112,7 +112,7 @@ Apply persists the reviewed intent before any remote create request and durably 
 
 After confirming the issue, dispatch retains its immutable receipt, prepares the exact local state transition and associates one unambiguous verification pending entry with its execution binding. Registration preserves unrelated observations and pending work, records `dimension: verification`, and uses conditional state publication. Changed pending entries, conflicting bindings or changed current-state preconditions block registration rather than selecting another task. The retained protocol reconciles state and SQLite resources after interruption; they are not one atomic transaction.
 
-The journal retains the initial intent, bounded attempts, remote receipt, registration preparation and final receipt or supersession. These are protected local records, not proof that an executor produced a revision or that tests honestly establish acceptance. Issue closure, an agent completion report and a merged PR leave verification pending until independently admitted evidence satisfies the separate completion contract.
+The journal retains the initial intent, bounded attempts, remote receipt, registration preparation and final registration, supersession or separately authorized resolution receipt. These are protected local records, not proof that an executor produced a revision or that tests honestly establish acceptance. A terminal resolution leaves registration unfinalized. Issue closure, an agent completion report and a merged PR leave verification pending until independently admitted evidence satisfies the separate completion contract.
 
 ## Resolve interruption without duplicating work
 
@@ -139,7 +139,9 @@ exacly dispatches recover -m 'spec/product/*.yaml' \
 
 Before resolving a recognized interrupted rollback transaction, recovery preserves the exact database and rollback-journal bytes in a new private sibling `.dispatch-recovery-*` backup with a checksummed receipt and synchronization. It validates ownership, file type, header and journal protections before letting SQLite recover the transaction. Retain that backup for operator inspection. WAL and SHM recovery are unsupported; recovery never changes an execution ledger's format or selects another state destination.
 
-The initially retained policy's `max_attempts` bounds remote reconciliation invocations, including those whose GET or discovery requests fail. Retrying or editing the policy cannot expand that dispatch's budget, and another journal cannot replay its storage-pinned authorization. Exhaustion stops further remote work; it does not erase a confirmed task or prevent purely local registration finalization. Inspect retained progress and use explicit supersession when abandoning unresolved work; supersession retains the history and never grants another create for the same identity.
+Ordinary registration recovery still checks its original approved contract and current-state preconditions. A changed model revision or pending entry does not permit publishing an old after-state or finalizing a stale binding. Use the separately authorized [resolution procedure](#resolve-stale-partial-registration) when a retained registration preparation cannot continue under that contract.
+
+The initially retained policy's `max_attempts` bounds remote reconciliation invocations, including those whose GET or discovery requests fail. Retrying or editing the policy cannot expand that dispatch's budget, and another journal cannot replay its storage-pinned authorization. Exhaustion stops further remote work; it does not erase a confirmed task or prevent purely local registration finalization. Inspect retained progress and use explicit supersession when abandoning work that has not reached registration preparation. Stale partial registration has its separate reviewed resolution path. Both retain the history and never grant another create for the same identity.
 
 Lock waiting is separately bounded by `--lock-timeout`, which accepts finite nonnegative seconds and defaults to 30. Each HTTP request has a 30-second timeout and a 2 MiB response limit; discovery permits at most 100 pages of 100 items and rejects incomplete results. The lock timeout is not a whole-command deadline. Issue titles are limited to 256 UTF-8 bytes and expanded bodies to 64 KiB, including the dispatch marker. Each dispatch retains at most 256 journal events, with an 8 MiB bound on each intent or event JSON payload.
 
@@ -151,12 +153,53 @@ exacly dispatches supersede --journal "$EXACLY_DISPATCH_JOURNAL" \
   --authorize-supersession --json
 ```
 
-Supersession does not close or delete a remote issue, remove pending work, supersede an execution binding or authorize a replacement task automatically. Review and authorize replacement work separately; resolve any ambiguous remote outcome before treating the old issue as absent.
+Supersession does not close or delete a remote issue, remove pending work, supersede an execution binding or authorize a replacement task automatically. A retained `registration_prepared` phase must first complete valid registration recovery or take the separate resolution path below; supersession cannot bypass that review. Review and authorize replacement work separately, and resolve any ambiguous remote outcome before treating the old issue as absent.
+
+## Resolve stale partial registration
+
+An interruption can leave a dispatch at `registration_prepared` after its remote task was confirmed. The current state may already contain the published pending entry, or registration may have reached another retained step before interruption. If the model revision, pending work or binding contract later changes, ordinary recovery preserves its stale-contract guards. The resolution command provides a terminal coordination outcome without rolling back current work or pretending that the old registration finished.
+
+If an interrupted outbox transaction prevents reading its history, first use the explicit journal-only repair operation:
+
+```sh
+exacly dispatches recover-journal --journal "$EXACLY_DISPATCH_JOURNAL" \
+  --authorize-recovery --json
+```
+
+This validates protected storage, retains the database and rollback-journal backup described above, and lets SQLite repair the interrupted outbox transaction. It preserves the journal instance and committed history, appends no dispatch phase, and reads no model, state or execution ledger. Its report identifies `recovery_backup`. It neither resumes registration nor makes a stale contract current.
+
+Next render the read-only resolution preview for the exact retained dispatch and an explicit reason:
+
+```sh
+exacly dispatches resolve --journal "$EXACLY_DISPATCH_JOURNAL" \
+  --dispatch "$EXACLY_DISPATCH_ID" \
+  --reason "Model revision changed after pending publication" --json \
+  > dispatch-resolution-preview.json
+```
+
+Preview uses the original retained storage paths and journal instance. Under ordered read locks, it captures the old history head and preparation, the exact current state identity and header, and current pending and binding facts. Its preconditions show missing or changed work for review; they do not repair that work. The operation requires no old plan or model files and performs no GitHub request, registration or storage mutation.
+
+Review the captured facts and unresolved work independently. Save only the reviewed `authorization_template` in protected JSON. This authorization has effect `resolve_dispatch_coordination` and pins the dispatch identity, storage paths and journal ID, history sequence/digest/phase, exact reason, current-state identity and a digest of the captured facts. It is distinct from the original create authorization; the preview report itself grants no resolution authority.
+
+Apply that reviewed authorization with the same reason:
+
+```sh
+exacly dispatches resolve --journal "$EXACLY_DISPATCH_JOURNAL" \
+  --dispatch "$EXACLY_DISPATCH_ID" \
+  --reason "Model revision changed after pending publication" \
+  --apply --authorization trusted/dispatch-resolution-authorization.json --json
+```
+
+Apply takes exclusive ordered locks, recaptures the current facts and checks the exact authorization. A changed history head, journal instance, state, pending entry, binding or reason blocks it and requires a fresh preview and review. Successful apply appends one immutable terminal `resolved` event and receipt to the dispatch journal only. It preserves the current state bytes, pending entries, ledger and bindings, and leaves the remote issue unchanged. The old registration remains unfinalized, verification remains pending, and the same dispatch identity never gains another create opportunity.
+
+An exact replay returns the original resolution receipt; that is retained history rather than a fresh assertion about later state. When appropriate pending work remains, separately review its current contract and use the existing [execution registration](../python/README.md#register-execution-bindings) command with a newly reviewed plan and any required explicit binding supersession. Missing or changed pending work requires its own review and correction; resolution does not create, repair or replace it.
 
 ## Reports and API
 
-Text and JSON describe the same operation. For preview, apply, recovery and supersession, exit `0` reports a ready preview, registration or supersession; exit `1` reports an unresolved ambiguous, conflicting, blocked, missing or exhausted result; exit `2` reports invalid input or an operational failure. Show exits `0` for any valid retained phase, including ambiguous work, and `1` when the selected dispatch is missing. Reports remain unsigned and carry no evidence-admission or completion authority. JSON inputs are bounded and reject duplicate keys, nonfinite numbers and excessive nesting.
+Text and JSON describe the same operation. For preview, apply, recovery, resolution and supersession, exit `0` reports a ready preview, registration, resolution or supersession; exit `1` reports an unresolved ambiguous, conflicting, blocked, missing or exhausted result; exit `2` reports invalid input or an operational failure. Journal-only repair reports `repaired` and exits `0`. Show exits `0` for any valid retained phase, including ambiguous or resolved work, and `1` when the selected dispatch is missing. Reports remain unsigned and carry no evidence-admission or completion authority. JSON inputs are bounded and reject duplicate keys, nonfinite numbers and excessive nesting.
 
 The Python API uses `exacly.dispatch.Request(plan, action_id, readiness_policy, trust_policy, dispatch_policy, target, date)`, where `target` is an explicit `Target`. `preview(documents, state_path, request)` is read-only. `apply(journal, ledger, documents, state_path, request, authorization=..., client=..., lock_timeout=30)` performs the reviewed effect or reconciles its retained progress. `recover(...)` uses the same inputs and explicitly permits protected rollback-journal recovery. `show(journal, dispatch_id)` inspects history, and `supersede(journal, dispatch_id, reason=..., authorize=True)` records explicit abandonment. `as_text(report)` renders the result.
+
+`resolution_preview(journal, dispatch_id, reason=..., lock_timeout=30)` returns the read-only current-facts preview and advisory authorization template. `resolve(journal, dispatch_id, authorization=..., lock_timeout=30)` appends the reviewed terminal receipt. `recover_journal(journal, authorize=True, lock_timeout=30)` performs only protected outbox transaction repair with a retained backup. These APIs require no dispatch `Request`, model documents, GitHub token or client.
 
 The supported concurrency boundary is the canonical private journal and its ordered local locks. It does not claim remote transactions with GitHub, protection against a hostile operator, or candidate execution containment. The operator's journal, ledger, policy originals, credentials and authoritative state must remain outside candidate authority.

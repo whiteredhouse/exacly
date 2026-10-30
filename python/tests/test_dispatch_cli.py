@@ -32,6 +32,7 @@ def backend(monkeypatch: pytest.MonkeyPatch) -> Doc:
 
     calls: Doc = {
         "preview": [], "apply": [], "recover": [], "show": [], "supersede": [], "initialize": [],
+        "resolution_preview": [], "resolve": [], "recover_journal": [], "record": None,
         "tokens": [], "remote": [], "live": False, "report": answer("registered"),
     }  # fmt: skip
     module = ModuleType("exacly.dispatch")
@@ -49,6 +50,15 @@ def backend(monkeypatch: pytest.MonkeyPatch) -> Doc:
             calls[name].append((args, kwargs))
             if name in {"apply", "recover"} and calls["live"]:
                 assert kwargs["client"].repository({"full_name": "acme/demo", "id": 123})["id"] == 123
+            if name == "show":
+                return {**calls["report"], "record": calls["record"]}
+            if name == "resolution_preview":
+                return {
+                    **answer("ready", dry_run=True),
+                    "authorization_template": {"reason": kwargs["reason"]},
+                }
+            if name == "recover_journal":
+                return {**answer("repaired"), "recovery_backup": "/private/retained-backup"}
             return dict(calls["report"])
 
         return operation
@@ -78,7 +88,7 @@ def backend(monkeypatch: pytest.MonkeyPatch) -> Doc:
 
     monkeypatch.setattr(module, "Request", request, raising=False)
     monkeypatch.setattr(module, "preview", preview, raising=False)
-    for name in ("apply", "recover", "show", "supersede"):
+    for name in ("apply", "recover", "show", "supersede", "resolution_preview", "resolve", "recover_journal"):
         monkeypatch.setattr(module, name, retained(name), raising=False)
     monkeypatch.setattr(module, "as_text", lambda result: f"Dispatch: {result['status']}", raising=False)
     monkeypatch.setattr(storage, "initialize", initialize, raising=False)
@@ -188,6 +198,7 @@ def test_apply_and_explicit_recovery_route_the_same_reviewed_selection(
     [
         ("registered", 0),
         ("superseded", 0),
+        ("resolved", 0),
         ("ambiguous", 1),
         ("conflict", 1),
         ("attempts_exhausted", 1),
@@ -216,7 +227,9 @@ def test_init_and_show_are_local_operations_without_credentials(
     assert not backend["tokens"] and not backend["remote"]
 
 
-@pytest.mark.parametrize("status", ["prepared", "creating", "remote_confirmed", "registration_prepared", "ambiguous"])
+@pytest.mark.parametrize(
+    "status", ["prepared", "creating", "remote_confirmed", "registration_prepared", "ambiguous", "resolved"]
+)
 def test_show_can_inspect_unfinished_history_successfully(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], backend: Doc, status: str
 ) -> None:
@@ -381,3 +394,198 @@ def test_real_cli_preview_reviewed_apply_and_local_replay(
     assert exacly_main(apply_args) == 0
     assert json.loads(capsys.readouterr().out)["status"] == "registered"
     assert scenario.client.calls == remote_calls
+
+
+def resolution_invocation(tmp_path: Path, backend: Doc, *, apply: bool = False) -> tuple[list[str], dict[str, Path]]:
+    _, paths = invocation(tmp_path)
+    paths["authorization"].write_text(json.dumps({"reason": "reviewed stale coordination"}))
+    backend["record"] = {
+        "intent": {
+            "paths": {key: str(paths[key]) for key in ("journal", "ledger", "state")},
+            "contract": {"trust_policy": {"model": {"files": [str(paths["model"])]}}},
+        }
+    }
+    backend["report"] = answer("resolved")
+    args = [
+        "dispatches", "resolve", "--journal", str(paths["journal"]), "--dispatch", DISPATCH,
+        "--reason", "reviewed stale coordination",
+    ]  # fmt: skip
+    if apply:
+        args.extend(["--apply", "--authorization", str(paths["authorization"])])
+    return args, paths
+
+
+@pytest.mark.parametrize("explicit", [False, True])
+def test_resolution_preview_needs_no_old_model_contract_or_credentials(
+    tmp_path: Path, backend: Doc, capsys: pytest.CaptureFixture[str], explicit: bool
+) -> None:
+    args, paths = resolution_invocation(tmp_path, backend)
+    for name in ("plan", "policy", "trust-policy", "dispatch-policy", "target", "model"):
+        paths[name].unlink()
+    if explicit:
+        args.append("--dry-run")
+    assert exacly_main([*args, "--lock-timeout", "0", "--json"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "ready" and report["dry_run"] is True
+    assert backend["resolution_preview"] == [
+        ((paths["journal"], DISPATCH), {"reason": "reviewed stale coordination", "lock_timeout": 0})
+    ]
+    assert not backend["tokens"] and not backend["remote"] and not backend["resolve"]
+    assert not paths["journal"].exists() and not paths["ledger"].exists()
+
+
+def test_resolution_apply_requires_separate_authorization_and_matching_reason(
+    tmp_path: Path, backend: Doc, capsys: pytest.CaptureFixture[str]
+) -> None:
+    args, paths = resolution_invocation(tmp_path, backend)
+    with pytest.raises(SystemExit) as error:
+        exacly_main([*args, "--apply"])
+    assert error.value.code == 2 and "--authorization" in capsys.readouterr().err
+    assert not backend["resolve"]
+    with pytest.raises(SystemExit) as error:
+        exacly_main([*args, "--authorization", str(paths["authorization"])])
+    assert error.value.code == 2 and "--apply" in capsys.readouterr().err
+    applied = [*args, "--apply", "--authorization", str(paths["authorization"])]
+    paths["authorization"].write_text(json.dumps({"reason": "different authorization"}))
+    assert exacly_main(applied) == 2
+    assert "--reason must match" in capsys.readouterr().err and not backend["resolve"]
+    paths["authorization"].write_text(json.dumps({"reason": "reviewed stale coordination"}))
+    assert exacly_main([*applied, "--lock-timeout", "1.5", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "resolved"
+    assert backend["resolve"] == [
+        (
+            (paths["journal"], DISPATCH),
+            {"authorization": {"reason": "reviewed stale coordination"}, "lock_timeout": 1.5},
+        )
+    ]
+    assert not backend["tokens"] and not backend["remote"]
+
+
+@pytest.mark.parametrize("source", ["journal", "journal-journal", "ledger", "ledger-wal", "state", "model"])
+def test_resolution_authorization_cannot_alias_retained_resources(
+    tmp_path: Path, backend: Doc, capsys: pytest.CaptureFixture[str], source: str
+) -> None:
+    args, paths = resolution_invocation(tmp_path, backend, apply=True)
+    if source in paths:
+        protected = paths[source]
+    else:
+        key, suffix = source.split("-", 1)
+        protected = paths[key].with_name(paths[key].name + "-" + suffix)
+    protected.write_text(json.dumps({"reason": "reviewed stale coordination"}))
+    before = protected.read_bytes()
+    assert exacly_main(replace_arg(args, "--authorization", str(protected))) == 2
+    assert "cannot alias" in capsys.readouterr().err
+    assert protected.read_bytes() == before and not backend["resolve"] and not backend["tokens"]
+
+
+@pytest.mark.parametrize("kind", ["symlink", "hardlink"])
+def test_resolution_authorization_rejects_retained_state_file_aliases(
+    tmp_path: Path, backend: Doc, capsys: pytest.CaptureFixture[str], kind: str
+) -> None:
+    args, paths = resolution_invocation(tmp_path, backend, apply=True)
+    paths["state"].write_text(json.dumps({"reason": "reviewed stale coordination"}))
+    alias = tmp_path / "aliased-authorization.json"
+    if kind == "symlink":
+        alias.symlink_to(paths["state"])
+    else:
+        alias.hardlink_to(paths["state"])
+    assert exacly_main(replace_arg(args, "--authorization", str(alias))) == 2
+    assert "cannot alias" in capsys.readouterr().err and not backend["resolve"]
+
+
+@pytest.mark.parametrize("content", ['{"reason":"x","reason":"y"}', '{"reason":NaN}', "[" * 2000, "x" * 65537])
+def test_resolution_authorization_uses_bounded_strict_json(
+    tmp_path: Path, backend: Doc, capsys: pytest.CaptureFixture[str], content: str
+) -> None:
+    args, paths = resolution_invocation(tmp_path, backend, apply=True)
+    paths["authorization"].write_text(content)
+    assert exacly_main(args) == 2
+    assert capsys.readouterr().err and not backend["resolve"] and not backend["tokens"]
+
+
+def test_resolution_errors_redact_unused_github_credentials(
+    tmp_path: Path, backend: Doc, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    args, paths = resolution_invocation(tmp_path, backend, apply=True)
+    monkeypatch.setenv("GH_TOKEN", TOKEN)
+    paths["authorization"].write_text('{"' + TOKEN + '":0,"' + TOKEN + '":1}')
+    assert exacly_main(args) == 2
+    captured = capsys.readouterr()
+    assert TOKEN not in captured.err and "[redacted]" in captured.err
+    with pytest.raises(SystemExit):
+        exacly_main([*args, "--lock-timeout", TOKEN])
+    assert TOKEN not in capsys.readouterr().err and not backend["resolve"] and not backend["tokens"]
+
+
+def test_journal_only_recovery_requires_explicit_authority_and_no_other_resources(
+    tmp_path: Path, backend: Doc, capsys: pytest.CaptureFixture[str]
+) -> None:
+    journal = tmp_path / "dispatch.sqlite3"
+    args = ["dispatches", "recover-journal", "--journal", str(journal)]
+    with pytest.raises(SystemExit) as error:
+        exacly_main(args)
+    assert error.value.code == 2 and "--authorize-recovery" in capsys.readouterr().err
+    assert not backend["recover_journal"]
+    assert exacly_main([*args, "--authorize-recovery", "--lock-timeout", "0", "--json"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "repaired" and report["recovery_backup"] == "/private/retained-backup"
+    assert backend["recover_journal"] == [((journal,), {"authorize": True, "lock_timeout": 0})]
+    assert not backend["tokens"] and not backend["remote"]
+
+
+def test_real_cli_can_review_resolve_and_replay_a_stale_partial_registration(
+    dispatch_scenario: Scenario,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from exacly import dispatch, state_writer
+
+    scenario = dispatch_scenario
+    original_publish = state_writer.publish_locked
+
+    def interrupted_after_publication(*args: Any, **kwargs: Any) -> None:
+        original_publish(*args, **kwargs)
+        raise ValueError("simulated interruption after state publication")
+
+    with monkeypatch.context() as interrupted:
+        interrupted.setattr(state_writer, "publish_locked", interrupted_after_publication)
+        partial = scenario.apply()
+    assert partial["status"] == "conflict" and scenario.client.calls.count("create") == 1
+    identity = partial["dispatch_id"]
+    assert dispatch.show(scenario.journal, identity)["status"] == "registration_prepared"
+    snapshot = state_writer.read(scenario.state_path)
+    state = snapshot.document
+    assert state is not None
+    state["serial"] += 1
+    state["config_revision"] = "c" * 40
+    state["x-unrelated-work"] = "Preserve current work while resolving stale coordination."
+    state_writer.publish(snapshot, state)
+    before_state = scenario.state_path.read_bytes()
+    before_ledger = scenario.ledger.read_bytes() if scenario.ledger.exists() else None
+    before_remote = list(scenario.client.calls)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    args = [
+        "dispatches", "resolve", "--journal", str(scenario.journal), "--dispatch", identity,
+        "--reason", "The current model advanced; retain unfinished work for separate review.", "--json",
+    ]  # fmt: skip
+    before_journal = scenario.journal.read_bytes()
+    assert exacly_main(args[:-1]) == 0
+    text = capsys.readouterr().out
+    assert "c" * 40 in text and scenario.client.issues[0]["url"] in text
+    assert '"binding_ledger_modified": false' in text and '"pending_entry_still_present": true' in text
+    assert exacly_main(args) == 0
+    preview = json.loads(capsys.readouterr().out)
+    assert preview["status"] == "ready" and preview["dry_run"] is True
+    assert scenario.journal.read_bytes() == before_journal
+    authorization = tmp_path / "reviewed-resolution.json"
+    authorization.write_text(json.dumps(preview["authorization_template"]))
+    assert exacly_main([*args, "--apply", "--authorization", str(authorization)]) == 0
+    resolved = json.loads(capsys.readouterr().out)
+    assert resolved["status"] == "resolved"
+    assert exacly_main([*args, "--apply", "--authorization", str(authorization)]) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "resolved"
+    assert scenario.state_path.read_bytes() == before_state
+    assert (scenario.ledger.read_bytes() if scenario.ledger.exists() else None) == before_ledger
+    assert scenario.client.calls == before_remote and len(scenario.state["pending"]) == 1

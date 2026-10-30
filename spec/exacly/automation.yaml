@@ -146,9 +146,10 @@ records:
       - Retain attempts, remote task identity, immutable receipts and partial successes; bounded retries resume unfinished work without replacing successful history or fabricating external rollback.
       - Explicitly initialize a private dispatch journal outside candidate storage and Git working trees; pin its unique initialization identity and the canonical absolute journal, execution-ledger and actual state paths in both reviewed policy and authorization before remote effects. Retain this storage contract with each intent and keep dispatch history separate without changing existing execution-ledger formats. Ordinary apply and inspection reject interrupted SQLite journals; explicit recovery validates protected storage before resolving the interrupted transaction.
       - Associate a confirmed task with one unambiguous pending verification entry and its reviewed execution binding through recoverable ledger and conditional state writes; ambiguity or changed pending work blocks registration rather than linking a different task.
-      - Replanning, cancellation and retirement preserve history and require explicit supersession; retiring a record or task never authorizes destruction of implementation.
+      - When a retained registration preparation can no longer satisfy its original contract, a read-only resolution preview captures the pinned journal instance and history head, explicit reason and exact current storage, state, pending and binding facts. Separately reviewed authorization for those facts permits only one terminal resolved receipt in the journal; any changed precondition blocks it. Resolution preserves current state, pending work, bindings and remote tasks, leaves registration unfinalized and never grants another create for the dispatch identity.
+      - Replanning, cancellation and retirement preserve history and require explicit supersession or separately reviewed journal-only resolution; retiring a record or task never authorizes destruction of implementation. Ordinary registration recovery retains its original contract and current-state guards.
       - Task creation, issue closure, agent completion reports and PR merge leave verification pending until the separately authorized completion path admits sufficient applicable evidence.
-    verification_method: Dispatch contract, command, adapter and private-journal tests with controlled GitHub responses, concurrent workers and process termination around external creation, state publication, binding registration and receipt persistence.
+    verification_method: Dispatch contract, command, adapter, private-journal and explicit resolution tests with controlled GitHub responses, concurrent workers and process termination around external creation, state publication, binding registration and receipt persistence, including model drift and resolution authorization pinned to reviewed current facts.
     observe:
       tests:
         cases:
@@ -157,6 +158,7 @@ records:
           - "python/tests/test_dispatch_faults.py::*"
           - "python/tests/test_dispatch_store.py::*"
           - "python/tests/test_github_dispatch.py::*"
+          - "python/tests/test_dispatch_resolution.py::*"
 
   - id: REQ-027
     type: Requirement
@@ -205,8 +207,8 @@ records:
     lifecycle: active
     evidence: []
     last_reviewed_at: "2026-10-30"
-    responsibility: Persist approved dispatch intent, recover or create one external task and associate it with pending verification work without duplicate effects.
-    interfaces: [exacly dispatch github-issues command, exacly dispatches init/show/recover/supersede commands, exacly.dispatch Python API]
+    responsibility: Persist approved dispatch intent, recover or create one external task and associate it with pending verification work without duplicate effects; retain separately authorized journal-only resolution when registration cannot continue under its original contract.
+    interfaces: [exacly dispatch github-issues command, exacly dispatches init/show/recover/recover-journal/resolve/supersede commands, exacly.dispatch Python API]
     implementation_ref: { locator: python/src/exacly/dispatch.py }
 
   - id: APP-014
@@ -253,8 +255,8 @@ records:
     lifecycle: active
     evidence: []
     last_reviewed_at: "2026-10-30"
-    definition: Versioned stable dispatch identity and reviewed authorization, adapter and destination, pinned canonical storage paths and journal initialization identity, immutable intent and bounded reconciliation attempts, remote task receipt, retained pending-state publication and binding association, and final registration or supersession history in a separately initialized private journal.
-    identifiers: [dispatch ID, journal initialization ID, plan and action IDs, adapter and destination, remote task identity, state destination, execution binding ID]
+    definition: Versioned stable dispatch identity and reviewed authorization, adapter and destination, pinned canonical storage paths and journal initialization identity, immutable intent and bounded reconciliation attempts, remote task receipt, retained pending-state publication and binding association, and registration, supersession or separately authorized terminal resolution history. Resolution receipts retain the reviewed history head, reason and exact current facts without claiming registration finalization or changing the preserved work.
+    identifiers: [dispatch ID, journal initialization ID, plan and action IDs, adapter and destination, remote task identity, state destination, execution binding ID, reviewed history head, resolution receipt digest]
     steward: exacly-maintainers
 
   - id: INFO-007
@@ -302,7 +304,7 @@ records:
     evidence: []
     last_reviewed_at: "2026-10-30"
     kind: Local private SQLite dispatch outbox
-    purpose: Retain durable dispatch intent before remote effects and immutable reconciliation, registration and supersession history, with bounded locks and explicit interrupted-transaction recovery; existing execution ledgers retain their formats.
+    purpose: Retain durable dispatch intent before remote effects and immutable reconciliation, registration, supersession and explicit resolution history, with bounded locks and explicit interrupted-transaction recovery; existing execution ledgers retain their formats.
     operational_ref: { locator: docs/durable-dispatch.md }
 
 relationships:

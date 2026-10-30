@@ -36,9 +36,10 @@ _PHASES = {
     "creating": {"creating", "ambiguous", "remote_confirmed", "superseded"},
     "ambiguous": {"ambiguous", "remote_confirmed", "superseded"},
     "remote_confirmed": {"remote_confirmed", "registration_prepared", "superseded"},
-    "registration_prepared": {"registration_prepared", "registered", "superseded"},
+    "registration_prepared": {"registration_prepared", "registered", "superseded", "resolved"},
     "registered": {"registered", "superseded"},
     "superseded": {"superseded"},
+    "resolved": {"resolved"},
 }
 SCHEMA = {
     "dispatch_journal": "CREATE TABLE dispatch_journal (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)",
