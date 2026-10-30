@@ -77,7 +77,7 @@ Exacly borrows the plan and apply loop from infrastructure as code, and the spec
 | **Register work** | Bind an existing pending task to a reviewed verification plan and output target in an operator-controlled ledger. | [`exacly executions register`](python/README.md#register-execution-bindings), with explicit [ledger diagnosis, backup and recovery](python/README.md#maintain-an-execution-ledger); [durable dispatch](docs/durable-dispatch.md) has separate authorization |
 | **Apply** | Dispatch an authorized plan action as traceable work for a person, agent or workflow. | [Proposed automation](spec/exacly/README.md#automation-roadmap) |
 | **Reconcile** | Check whether a selected plan action's verification goal is satisfied by fresh admitted evidence, optionally checking its registered pending-task binding. | [`exacly reconcile github-actions --dry-run`](python/README.md#preview-verification-reconciliation), read-only preview |
-| **Compose evidence** | Freshly admit and gate every required member under its own approved producer and model contract, preserving individual evidence and an aggregate decision. | [`exacly composition validate` and `compose github-actions`](python/README.md#compose-required-admissions-and-gates), part of the 0.7.0rc1 candidate |
+| **Compose evidence** | Freshly admit and gate every required member under its own approved producer and model contract, preserving individual evidence and an aggregate decision. | [`exacly composition validate` and `compose github-actions`](python/README.md#compose-required-admissions-and-gates) |
 | **Complete** | Complete one registered local verification task from fresh admitted evidence and merged current state, retaining a recoverable intent and completion receipt. | [`exacly complete github-actions`](python/README.md#complete-registered-verification-work), with explicit local authorization; new ledgers are completion-ready, and existing version-1 ledgers need a [copy-only upgrade](python/README.md#upgrade-a-ledger-for-completion) |
 
 See [Exacly's model](spec/exacly/README.md) for record lifecycles, traceability and observed verification and delivery.
@@ -197,4 +197,3 @@ Each part of Exacly has its own version, tagged as `<part>-vX.Y.Z`, as release-p
 | 0.4.0: independent verification, explicit assessment targets and readiness policies | 0.1, 0.2 |
 | 0.5.0: incomplete execution of case-bound tests gives inconclusive verification | 0.1, 0.2 |
 | 0.6.0: operator-controlled verification work, installed producer tools and recoverable local completion | 0.1, 0.2 |
-| 0.7.0rc1 candidate: durable dispatch, isolated local execution and Git handoff, evidence composition and JUnit reporting | 0.1, 0.2 |

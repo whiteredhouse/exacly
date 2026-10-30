@@ -1,6 +1,6 @@
 # Reviewed executor output handoff
 
-The local handoff implements [REQ-033](../spec/exacly/automation.yaml). It connects a retained successful [executor attempt](bounded-executor.md) to an exact Git implementation revision. This is part of the `0.7.0rc1` release candidate.
+The local handoff implements [REQ-033](../spec/exacly/automation.yaml). It connects a retained successful [executor attempt](bounded-executor.md) to an exact Git implementation revision. See the [release notes](../CHANGELOG.md) for package availability.
 
 The executor identifies collected artifact bytes. The handoff separately reviews how selected artifacts become source files, constructs the resulting Git tree and commit in trusted operator code, and conditionally publishes one selected local branch ref. The retained provenance identifies this byte-to-Git transformation; it does not authenticate tests, establish acceptance coverage or authorize evidence admission or completion.
 

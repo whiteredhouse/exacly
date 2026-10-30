@@ -2,7 +2,7 @@
 
 Exacly dispatches one explicitly approved verification action to a GitHub issue and associates the confirmed task with local pending verification work. Its contract is [REQ-026](../spec/exacly/automation.yaml). Dispatch creates work; independent evidence admission and [local completion](../python/README.md#complete-registered-verification-work) still decide whether that work satisfies the approved goal.
 
-This is part of the `0.7.0rc1` release candidate. The first adapter is `github-issue-v1`; it accepts one reviewed repository and issue title/body. It does not launch candidate code, assign an executor, close issues, merge pull requests, publish releases or grant completion authority. [Bounded executor supervision](bounded-executor.md) remains the separate REQ-027 contract and requires its own reviewed execution authorization.
+See the [release notes](../CHANGELOG.md) for package availability. The first adapter is `github-issue-v1`; it accepts one reviewed repository and issue title/body. It does not launch candidate code, assign an executor, close issues, merge pull requests, publish releases or grant completion authority. [Bounded executor supervision](bounded-executor.md) remains the separate REQ-027 contract and requires its own reviewed execution authorization.
 
 ## Choose canonical operator storage
 
