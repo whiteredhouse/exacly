@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import copy
 import shutil
+import subprocess
+import zlib
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -116,6 +118,33 @@ def test_artifact_drift_after_review_never_prepares_or_publishes(
         case.apply(authorization)
     assert (case.journal.read_bytes(), repository_bytes(case.repository), case.authoritative_bytes()) == before
     assert handoff.show(case.journal, authorization["handoff_id"])["status"] == "missing"
+
+
+@pytest.mark.parametrize("damage", ["missing", "corrupt"])
+@pytest.mark.parametrize("operation", ["preview", "apply"])
+def test_invalid_unrelated_base_objects_block_review_and_old_approval_without_effects(
+    handoff_case: HandoffCase, damage: str, operation: str
+) -> None:
+    case = handoff_case
+    authorization = case.authorization
+    listed = subprocess.check_output(
+        ["/usr/bin/git", "--git-dir=" + str(case.repository), "ls-tree", case.request.base_revision, "README.md"]
+    )
+    identity = listed.split()[2].decode()
+    source = case.repository / "objects" / identity[:2] / identity[2:]
+    if damage == "missing":
+        source.unlink()
+    else:
+        source.write_bytes(zlib.compress(b"blob 7\0changed"))
+    before = case.journal.read_bytes(), repository_bytes(case.repository), case.authoritative_bytes()
+    with pytest.raises(ValueError, match="trusted Git operation failed"):
+        if operation == "preview":
+            case.preview()
+        else:
+            case.apply(authorization)
+    assert (case.journal.read_bytes(), repository_bytes(case.repository), case.authoritative_bytes()) == before
+    assert handoff.show(case.journal, authorization["handoff_id"])["status"] == "missing"
+    assert handoff_git.read_ref(case.repository, case.request.ref) is None
 
 
 @pytest.mark.parametrize(

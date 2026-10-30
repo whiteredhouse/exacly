@@ -171,3 +171,18 @@ def test_delivery_scope_cannot_satisfy_a_different_or_unspecified_target(scope: 
     delivery_only = {**POLICY, "requirements": [{"record": "REQ-1", "dimensions": ["delivery"]}]}
     assert evaluate(docs, delivery_only)["result"] == "unknown"
     assert evaluate(docs, delivery_only, **{scope: value})["result"] == "satisfied"
+
+
+def test_public_policy_preflight_checks_references_without_observation_evaluation() -> None:
+    from exacly import policy as gates
+
+    docs = documents()
+    docs.pop("state")
+    model = query.load(docs, WHEN)
+    validated = gates.validate_policy(model, POLICY)
+    assert validated == POLICY
+    validated["requirements"][0]["dimensions"].clear()
+    assert POLICY["requirements"][0]["dimensions"] == ["verification", "delivery"]
+    invalid = {**POLICY, "requirements": [{"record": "REQ-MISSING", "dimensions": ["verification"]}]}
+    with pytest.raises(ValueError, match="invalid policy"):
+        gates.validate_policy(model, invalid)

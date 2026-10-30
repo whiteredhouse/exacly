@@ -145,7 +145,7 @@ records:
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-26"
+    last_reviewed_at: "2026-10-30"
     statement: Evaluate a versioned readiness policy using applicable verification and delivery assessments, distinguishing satisfied, known unmet and unknown prerequisites.
     acceptance_criteria:
       - Every required check needs applicable support; a known negative takes precedence over an unknown prerequisite.
@@ -154,10 +154,21 @@ records:
       - Exit status is 0 for satisfied, 1 for not satisfied or unknown, and 2 for invalid input.
       - CI requires verification of every active Requirement, without requiring delivery before publication.
       - Evaluation is read-only and reports policy identity, selected target and evaluation date.
-    verification_method: Policy tests, CI policy coverage test and installed-package smoke exercise.
+      - Optional JUnit output serializes the same readiness evaluation without changing its checks, text or JSON decisions, or existing readiness exit statuses.
+      - Each JUnit testcase identifies one declared record and dimension using a versioned selector containing the model namespace, policy name and an explicit stable logical-target label. Policy version, evaluation date and changing implementation identities remain report metadata rather than changing the selector.
+      - Only satisfied prerequisites pass; not satisfied and unknown prerequisites produce distinct blocking failures with their native readiness status and reason, never nonblocking skipped cases.
+      - XML safely escapes arbitrary names and diagnostics, bounds diagnostic output and retains policy, target and evaluation identity with bounded safe HTTP(S) or relative-path evidence references. Full native JSON remains available separately.
+      - JUnit output and its logical-target label are paired explicit options; independent logical targets use distinct labels. Invalid inputs return 2 without emitting XML, and an unsafe output path or failed write returns 2 without printing a successful result or changing model inputs.
+      - Generated JUnit reports describe readiness evaluation, not fresh product tests, authenticated evidence origin or delivery. Consumers explicitly review their bindings and retain original targets and evidence; reporting neither relabels model state nor authorizes a circular binding that satisfies its own gate.
+    verification_method: Policy and JUnit reporting tests, CI policy coverage test and installed-package smoke exercise.
     observe:
       tests:
-        cases: ["python/tests/test_policy.py::*", "tests/test_ci_policy.py::*", "tests/test_release_smoke.py::*"]
+        cases:
+          - "python/tests/test_policy.py::*"
+          - "python/tests/test_policy_junit.py::*"
+          - "python/tests/test_gate_junit.py::*"
+          - "tests/test_ci_policy.py::*"
+          - "tests/test_release_smoke.py::*"
 
   - id: APP-003
     type: Application
@@ -174,13 +185,13 @@ records:
   - id: APP-006
     type: Application
     name: Readiness policy evaluator
-    description: The read-only exacly gate command and its policy evaluator.
+    description: The read-only exacly gate command, policy evaluator and native readiness report serializers.
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-26"
-    responsibility: Evaluate explicit policy prerequisites using scoped observations, separately from model conformance.
-    interfaces: [exacly gate command, exacly.policy Python API]
+    last_reviewed_at: "2026-10-30"
+    responsibility: Evaluate explicit policy prerequisites using scoped observations and serialize the same decision as text, JSON or JUnit, separately from model conformance.
+    interfaces: [exacly gate command, exacly.policy Python API, JUnit XML]
     implementation_ref: { locator: python/src/exacly/policy.py }
 
   - id: APP-004

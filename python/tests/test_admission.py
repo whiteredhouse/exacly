@@ -6,10 +6,12 @@ import datetime as dt
 import hashlib
 import io
 import json
+import os
 import stat
 import struct
 import warnings
 import zipfile
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -18,6 +20,7 @@ import pytest
 import yaml
 from exacly import admission, policy, query
 from exacly.applicability import Target
+from exacly.refresh import read_junit
 from test_applicability import WHEN, A, B
 from test_refresh import config, requirement
 
@@ -1045,3 +1048,60 @@ def test_source_failures_cannot_supply_an_observation() -> None:
             raise GitHubError("GitHub could not establish run identity")
 
     rejected(admit(Unavailable()))
+
+
+def test_public_request_preflight_returns_independent_policy_and_target_snapshots() -> None:
+    source = Source()
+    selected = Target({"context": "main", "model_revision": A, "revision": B})
+    chosen, target = admission.validate_request(source.policy, selected, RUN_ID, ATTEMPT, WHEN)
+    assert chosen == source.policy and target == selected.data
+    chosen["name"] = "changed"
+    target["context"] = "changed"
+    assert source.policy["name"] != "changed" and selected.data["context"] == "main"
+    assert source.calls == [] and source.downloads == []
+
+
+def test_public_model_validation_binds_exact_named_approved_config_without_source_reads() -> None:
+    source = Source()
+    documents = {MODEL_FILE: copy.deepcopy(source.config)}
+    validated = admission.validate_model(source.policy, documents, WHEN)
+    assert validated.graph.namespace == source.config["model"]["namespace"]
+    assert not validated.report.errors
+    with pytest.raises(ValueError, match="exactly match"):
+        admission.validate_model(source.policy, {"renamed.yaml": source.config}, WHEN)
+    documents[MODEL_FILE]["records"][0]["description"] = "Changed after approval"
+    with pytest.raises(ValueError, match="digest"):
+        admission.validate_model(source.policy, documents, WHEN)
+    assert source.calls == [] and source.downloads == []
+
+
+@pytest.mark.parametrize("mask", [0o000, 0o022, 0o777])
+@pytest.mark.skipif(os.name != "posix", reason="POSIX scratch permission bits")
+def test_native_observation_scratch_is_private_and_readable_independently_of_umask(
+    mask: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = Source()
+    read = read_junit
+    modes: list[tuple[int, int]] = []
+
+    def inspected(paths: Iterable[Path]) -> dict[str, str]:
+        chosen = list(paths)
+        modes.extend((stat.S_IMODE(path.parent.stat().st_mode), stat.S_IMODE(path.stat().st_mode)) for path in chosen)
+        return read(chosen)
+
+    monkeypatch.setattr(admission, "read_junit", inspected)
+    previous = os.umask(mask)
+    try:
+        result = admit(source)
+    finally:
+        os.umask(previous)
+    assert result.receipt["status"] == "admitted"
+    assert modes == [(0o700, 0o600)]
+
+
+def test_native_observation_without_descriptor_chmod_keeps_the_portable_python_api(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = Source()
+    monkeypatch.delattr(os, "fchmod", raising=False)
+    assert admit(source).receipt["status"] == "admitted"

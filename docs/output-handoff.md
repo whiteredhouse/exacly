@@ -1,6 +1,6 @@
 # Reviewed executor output handoff
 
-The local handoff implements [REQ-032](../spec/exacly/automation.yaml). It connects a retained successful [executor attempt](bounded-executor.md) to an exact Git implementation revision. This is unreleased functionality on main.
+The local handoff implements [REQ-033](../spec/exacly/automation.yaml). It connects a retained successful [executor attempt](bounded-executor.md) to an exact Git implementation revision. This is unreleased functionality on main.
 
 The executor identifies collected artifact bytes. The handoff separately reviews how selected artifacts become source files, constructs the resulting Git tree and commit in trusted operator code, and conditionally publishes one selected local branch ref. The retained provenance identifies this byte-to-Git transformation; it does not authenticate tests, establish acceptance coverage or authorize evidence admission or completion.
 
@@ -108,7 +108,7 @@ Only ordinary files can be added or replaced. Existing ordinary-file modes are p
 exacly handoff local-git --request trusted/handoff-request.json --dry-run --json
 ```
 
-Dry-run is the default. Preview verifies current journal and repository identities, retained successful history, bounded artifact bytes, base objects and expected ref. It returns the exact path changes, proposed tree and commit and an `authorization_template`. It writes no Git objects, refs, handoff history, authoritative state or bindings. A preview or copied template is not approval.
+Dry-run is the default. Preview verifies current journal and repository identities, retained successful history, bounded artifact bytes, the complete base object closure (including unrelated files) and expected ref. It returns the exact path changes, proposed tree and commit and an `authorization_template`. It writes no Git objects, refs, handoff history, authoritative state or bindings. A preview or copied template is not approval.
 
 Independently review the selected receipt/build, artifact identities and destination changes, exact repository, base, ref, expected value, policy and commit metadata. Save the exact authorization object in protected operator storage, then explicitly apply it:
 
@@ -117,7 +117,7 @@ exacly handoff local-git --request trusted/handoff-request.json \
   --apply --authorization trusted/handoff-authorization.json --json
 ```
 
-Apply rechecks those exact facts. Changed artifact bytes, storage identity, policy, expected ref or other authorized input blocks new publication and requires a fresh reviewed proposal. Fixed Git plumbing uses a sanitized environment and sealed settings; it does not invoke candidate hooks, filters, credential helpers or network transports to construct the result.
+Apply rechecks those exact facts and the complete base before preparing any durable intent. Missing or corrupt base objects leave journal history, Git objects and refs unchanged. Changed artifact bytes, storage identity, policy, expected ref or other authorized input blocks new publication and requires a fresh reviewed proposal. Fixed Git plumbing uses a sanitized environment and sealed settings; it does not invoke candidate hooks, filters, credential helpers or network transports to construct the result.
 
 Before writing any result object or changing a ref, the handoff durably prepares the complete approved operation, exact Git object bytes and expected identities in its separate journal. It then writes and verifies the objects and updates only the selected local ref with compare-and-swap. A concurrent ref change conflicts without overwriting it. Successful publication retains an immutable provenance receipt. Exact replay returns the retained result without changing the executor's consumed attempt count or producing another commit.
 
@@ -158,7 +158,7 @@ Continue through separately reviewed binding supersession and any explicitly aut
 
 The end-to-end acceptance pilot uses real isolated execution and local Git publication with controlled trusted-evidence responses to test the composed flow and failure cases. That fixture establishes neither a live GitHub push nor a production producer run. The broader CAP-004/PROC-004 automation loop remains proposed until its supported composed behavior and evidence justify a lifecycle change.
 
-The optional `mise run check-core` development subset excludes the handoff contract, process-fault and end-to-end modules. Some controlled cases still require local POSIX process identity, while the end-to-end pilot requires real Bubblewrap. The remaining command, Git and storage cases do not establish the complete REQ-032 contract. Only the full required Linux checks refresh the model and enter the verification gate.
+The optional `mise run check-core` development subset excludes the handoff contract, process-fault and end-to-end modules. Some controlled cases still require local POSIX process identity, while the end-to-end pilot requires real Bubblewrap. The remaining command, Git and storage cases do not establish the complete REQ-033 contract. Only the full required Linux checks refresh the model and enter the verification gate.
 
 ## Python API
 

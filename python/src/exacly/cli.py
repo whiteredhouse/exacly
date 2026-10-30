@@ -6,6 +6,8 @@ exacly observe manual-qa PATH... --target FILE --state FILE [--revision REV] [--
 exacly evidence package --report FILE --out NEWDIR [--json]
 exacly evidence propose-policy github-actions --repository OWNER/REPO --revision SHA --proposal FILE ...
 exacly admit github-actions --trust-policy FILE --target FILE --run ID --attempt N --date YYYY-MM-DD --out DIR
+exacly composition validate --definition FILE --date YYYY-MM-DD [--json]
+exacly compose github-actions --definition FILE --selection FILE --date DATE --out NEWDIR [--readiness-junit] [--json]
 exacly reconcile github-actions --dry-run --plan FILE --action ID --policy FILE --trust-policy FILE --target FILE ...
 exacly complete github-actions --plan FILE --action ID --policy FILE --trust-policy FILE --target FILE ...
 exacly completions show|recover --ledger FILE --completion ID [--state FILE] [--json]
@@ -25,6 +27,7 @@ exacly executions audit --ledger FILE [--lock-timeout SECONDS] [--json]
 exacly isolation inspect --rootfs DIR [--json]
 exacly isolate --runtime-policy FILE [--inputs FILE] --out NEWDIR [--timeout SECONDS] [--json] -- COMMAND...
 exacly plan [-m PATH]... --policy FILE --target FILE --date YYYY-MM-DD [--json] [--out FILE]
+exacly gate [-m PATH]... --policy FILE --target FILE [--date YYYY-MM-DD] [--json] [--junit FILE --junit-id ID]
 exacly show|trace|impact|gaps [-m PATH]... [--json] ...; exacly mcp [-m PATH]...
 exacly view plan [--base REV] | site [--out DIR]
 exacly-validate and exacly-refresh are the first two under their names before 0.2.0, kept for one release
@@ -581,32 +584,35 @@ def view_main(args: argparse.Namespace) -> int:
     return 0
 
 
-def write_plan(out: Path, paths: list[Path], inputs: Iterable[Path], text: str) -> None:
+def write_derived(out: Path, paths: list[Path], inputs: Iterable[Path], text: str, *, option: str = "--out") -> None:
     """Save a derived artifact outside its inputs and model folders, replacing it atomically.
 
     A glob's static prefix is treated as a model folder too: a later recursive model read must not
-    accidentally load a saved plan. Resolving paths also protects inputs accessed through symlink aliases.
+    accidentally load a saved report. Resolving paths also protects inputs accessed through symlink aliases.
     """
     try:
         destination = out.resolve()
         # Atomic replacement replaces the final path entry, including a dangling symlink, rather than
         # following it. Guard that location as well as the symlink's resolved target.
         location = out.parent.resolve() / out.name
+        inputs = list(inputs)
+        if destination in {p.resolve() for p in inputs} or (
+            out.exists() and any(p.exists() and out.samefile(p) for p in inputs)
+        ):
+            raise ValueError(f"{option} cannot overwrite a model, state, policy or target input or its alias")
     except RuntimeError as error:
-        raise ValueError(f"--out cannot be resolved: {error}") from error
+        raise ValueError(f"{option} cannot be resolved: {error}") from error
     destinations = (destination, location)
-    if destination in {p.resolve() for p in inputs}:
-        raise ValueError("--out cannot overwrite a model, state, policy or target input")
     for path in paths:
         folder = static_part(path).resolve() if is_pattern(path) else path.resolve() if path.is_dir() else None
         if folder is not None and any(p.is_relative_to(folder) for p in destinations):
-            raise ValueError("--out must be outside model folders and model glob prefixes")
+            raise ValueError(f"{option} must be outside model folders and model glob prefixes")
     # A glob can traverse a symlink beyond its static prefix. Guard the real parent of each selected file.
     for path in paths:
         if is_pattern(path):
             for name in glob.glob(str(path)):
                 if Path(name).is_file() and any(p.is_relative_to(Path(name).resolve().parent) for p in destinations):
-                    raise ValueError("--out must be outside model folders and model glob prefixes")
+                    raise ValueError(f"{option} must be outside model folders and model glob prefixes")
     out.parent.mkdir(parents=True, exist_ok=True)
     temporary: Path | None = None
     try:
@@ -827,6 +833,9 @@ def write_admission(out: Path, inputs: Iterable[Path], trust_policy: dict[str, A
     The caller must validate trust_policy through admission.admit before invoking this helper. Model file
     declarations are remote Git paths; their corresponding local folders are excluded from output placement.
     """
+    from exacly.evidence_retention import admission_bundle, require_private_filesystem
+
+    require_private_filesystem()
     if os.path.lexists(out):
         raise ValueError("--out must be a new directory, not an existing path or symlink")
     try:
@@ -839,33 +848,7 @@ def write_admission(out: Path, inputs: Iterable[Path], trust_policy: dict[str, A
         raise ValueError("--out cannot overwrite the trust policy or target")
     if any(destination.is_relative_to(folder) for folder in folders):
         raise ValueError("--out must be outside model folders")
-    if result.receipt.get("status") not in {"admitted", "rejected"}:
-        raise ValueError("admission receipt has an invalid status")
-    if result.receipt["status"] == "admitted" and (
-        result.archive is None or result.report is None or result.state is None
-    ):
-        raise ValueError("admitted evidence must include its archive, report and state")
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix=f".{out.name}-", dir=out.parent) as temporary:
-        folder = Path(temporary)
-        folder.chmod(0o700)
-
-        def write(name: str, data: bytes) -> None:
-            path = folder / name
-            with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as file:
-                path.chmod(0o600)
-                file.write(data)
-
-        write("receipt.json", (json.dumps(result.receipt, indent=2, sort_keys=True, default=str) + "\n").encode())
-        if result.receipt["status"] == "admitted":
-            assert result.archive is not None and result.report is not None and result.state is not None
-            write("archive.zip", result.archive)
-            write("junit.xml", result.report)
-            write("state.json", (json.dumps(result.state, indent=2, sort_keys=True, default=str) + "\n").encode())
-        # Recheck immediately before publication so an ordinary repeat invocation never replaces a bundle.
-        if os.path.lexists(out):
-            raise ValueError("--out must be a new directory, not an existing path or symlink")
-        os.rename(folder, out)
+    admission_bundle(out, result)
 
 
 def write_reconciliation(
@@ -884,7 +867,7 @@ def write_reconciliation(
         folders = [Path(name).parent.resolve() for name in trust_policy["model"]["files"]]
         if any(path.is_relative_to(folder) for path in destinations for folder in folders):
             raise ValueError("--out must be outside the trust policy's declared model folders")
-        write_plan(out, [], inputs, json.dumps(report, indent=2, sort_keys=True, default=str) + "\n")
+        write_derived(out, [], inputs, json.dumps(report, indent=2, sort_keys=True, default=str) + "\n")
     except RuntimeError as error:
         raise ValueError(f"--out or its protected input paths cannot be resolved: {error}") from error
 
@@ -1094,7 +1077,17 @@ def exacly_main(argv: list[str] | None = None) -> int:
     parser_class = (
         PolicyDraftParser
         if argv[:2] == ["evidence", "propose-policy"]
-        or argv[:1] in (["dispatch"], ["dispatches"], ["execute"], ["executors"], ["handoff"], ["handoffs"])
+        or argv[:1]
+        in (
+            ["dispatch"],
+            ["dispatches"],
+            ["execute"],
+            ["executors"],
+            ["handoff"],
+            ["handoffs"],
+            ["composition"],
+            ["compose"],
+        )
         else argparse.ArgumentParser
     )
     parser = parser_class(
@@ -1115,6 +1108,32 @@ def exacly_main(argv: list[str] | None = None) -> int:
     commands.add_parser("validate", help="validate the model and print the section 11 report")
     commands.add_parser("refresh", help="write state for one context from what the bindings observe")
     commands.add_parser("observe", help="write state from an extension source, such as manual-qa observations")
+    composition_parser = commands.add_parser(
+        "composition", help="validate the complete independently reviewed composition definition offline"
+    )
+    composition_commands = composition_parser.add_subparsers(dest="composition_command", required=True)
+    validate_composition = composition_commands.add_parser(
+        "validate", help="validate required members, policies and model inputs without fetching evidence"
+    )
+    validate_composition.add_argument("--definition", required=True, type=Path, help="composition definition YAML/JSON")
+    validate_composition.add_argument("--date", required=True, type=dt.date.fromisoformat)
+    validate_composition.add_argument(
+        "--json", action="store_true", help="print validation and content identity as JSON"
+    )
+    compose = commands.add_parser(
+        "compose", help="admit and gate every required member of an independently approved composition"
+    )
+    compose.add_argument("source", choices=["github-actions"])
+    compose.add_argument("--definition", required=True, type=Path, help="approved composition definition YAML/JSON")
+    compose.add_argument("--selection", required=True, type=Path, help="complete immutable member run selections")
+    compose.add_argument("--date", required=True, type=dt.date.fromisoformat)
+    compose.add_argument("--out", required=True, type=Path, help="new private evidence and aggregate report directory")
+    compose.add_argument(
+        "--readiness-junit",
+        action="store_true",
+        help="retain derived readiness.xml inside --out, separately from producer JUnit reports",
+    )
+    compose.add_argument("--json", action="store_true", help="print the complete aggregate report as JSON")
     isolation_parser = commands.add_parser("isolation", help="inspect an optional local backend's runtime filesystem")
     isolation_commands = isolation_parser.add_subparsers(dest="isolation_command", required=True)
     isolation_inspect = isolation_commands.add_parser(
@@ -1542,6 +1561,8 @@ def exacly_main(argv: list[str] | None = None) -> int:
     gate.add_argument("--policy", required=True, type=Path, help="policy YAML/JSON outside the model folder")
     gate.add_argument("--target", required=True, type=Path, help="explicit implementation target YAML/JSON")
     gate.add_argument("--date", type=dt.date.fromisoformat, default=dt.date.today())
+    gate.add_argument("--junit", type=Path, help="save readiness JUnit XML outside model folders")
+    gate.add_argument("--junit-id", help="stable logical target/member ID, required with --junit")
     plan = commands.add_parser("plan", parents=[common], help="propose read-only verification work for a target")
     plan.add_argument("--policy", required=True, type=Path, help="verification-only readiness policy YAML/JSON")
     plan.add_argument("--target", required=True, type=Path, help="explicit implementation target YAML/JSON")
@@ -1645,6 +1666,64 @@ def exacly_main(argv: list[str] | None = None) -> int:
         if handoff_operation == "show":
             return 1 if handoff_report["status"] == "missing" else 0
         return 0 if handoff_report["status"] in {"ready", "published", "initialized", "recovered"} else 1
+    if args.command in {"composition", "compose"}:
+        from exacly import composition, composition_io, github_evidence
+
+        try:
+            loaded = composition_io.load_definition(args.definition, args.date)
+            if args.command == "composition":
+                report = loaded.prepared.as_dict()
+            else:
+                selection = composition_io.read_document(args.selection)
+                composition.validate_selection(loaded.prepared, selection, args.date)
+                output = composition_io.protect_output(args.out, [*loaded.paths, args.selection], loaded.model_folders)
+                token = os.environ.get("GH_TOKEN")
+                if not token or not token.strip():
+                    token = os.environ.get("GITHUB_TOKEN")
+                if not token or not token.strip():
+                    raise ValueError("set GH_TOKEN or GITHUB_TOKEN to authenticate GitHub Actions evidence retrieval")
+                try:
+                    client = github_evidence.GitHubClient(token)
+                except github_evidence.GitHubError:
+                    raise ValueError("GitHub credentials are invalid") from None
+
+                class CompositionSource:
+                    def get_json(self, path: str) -> dict[str, Any]:
+                        try:
+                            return client.get_json(path)
+                        except github_evidence.GitHubError as error:
+                            raise github_evidence.GitHubError(redact_tokens(str(error), github_tokens)) from None
+
+                    def download_artifact(self, repository: str, artifact_id: int) -> bytes:
+                        try:
+                            return client.download_artifact(repository, artifact_id)
+                        except github_evidence.GitHubError as error:
+                            raise github_evidence.GitHubError(redact_tokens(str(error), github_tokens)) from None
+
+                writer = composition_io.ResultWriter(output, loaded, selection, args.date)
+                composition_answer = composition.evaluate(
+                    CompositionSource(),
+                    loaded.prepared,
+                    selection,
+                    args.date,
+                    on_member=writer.member,
+                    retain_admissions=False,
+                )
+                report = composition_answer.report
+                writer.finish(report, readiness_junit=args.readiness_junit)
+        except (query.QueryError, ValueError, OSError, github_evidence.GitHubError) as error:
+            print(f"exacly {args.command}: {redact_tokens(str(error), github_tokens)}", file=sys.stderr)
+            return 2
+        if args.json:
+            print(json.dumps(report, indent=2, sort_keys=True, default=str))
+        elif args.command == "composition":
+            print(f"Composition definition: {report['definition']['name']}\nDigest: {report['definition_digest']}")
+            print("Validation identifies supplied content; independent approval remains required.")
+        else:
+            print(f"Composition {report['definition']['name']}: {report['result']}")
+            for member in report["members"]:
+                print(f"  {member['id']}: {member['status']} — {member['reason']}")
+        return 0 if args.command == "composition" or report["result"] == "satisfied" else 1
     if args.command in {"execute", "executors"}:
         from exacly import executor, executor_store
 
@@ -2287,11 +2366,13 @@ def exacly_main(argv: list[str] | None = None) -> int:
         return 0 if report["status"] == "ready" else 1
     if args.command == "admit":
         from exacly import admission, github_evidence
+        from exacly.evidence_retention import require_private_filesystem
 
         token = os.environ.get("GH_TOKEN")
         if not token or not token.strip():
             token = os.environ.get("GITHUB_TOKEN")
         try:
+            require_private_filesystem()
             if os.path.lexists(args.out):
                 raise ValueError("--out must be a new directory, not an existing path or symlink")
             trust_policy = read(args.trust_policy)
@@ -2321,7 +2402,7 @@ def exacly_main(argv: list[str] | None = None) -> int:
             answer = planning.create(documents, read(args.policy), Target(read(args.target)), args.date)
             saved = json.dumps(answer, indent=2, sort_keys=True, default=str) + "\n"
             if args.out is not None:
-                write_plan(args.out, paths, [*(Path(name) for name in documents), args.policy, args.target], saved)
+                write_derived(args.out, paths, [*(Path(name) for name in documents), args.policy, args.target], saved)
         except (query.QueryError, ValueError, OSError) as error:
             print(f"exacly plan: {error}", file=sys.stderr)
             return 2
@@ -2329,10 +2410,23 @@ def exacly_main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "gate":
         try:
+            if (args.junit is None) != (args.junit_id is None):
+                raise ValueError("--junit and --junit-id must be supplied together")
             target = Target(read(args.target))
-            model = query.load(load(args.model or [DEFAULT_MODEL]), args.date)
+            paths = args.model or [DEFAULT_MODEL]
+            documents = load(paths)
+            model = query.load(documents, args.date)
             answer = policy.evaluate(model, read(args.policy), target)
-        except (query.QueryError, ValueError) as error:
+            if args.junit is not None:
+                xml = policy.as_junit(answer, namespace=model.graph.namespace, report_id=args.junit_id)
+                write_derived(
+                    args.junit,
+                    paths,
+                    [*(Path(name) for name in documents), args.policy, args.target],
+                    xml,
+                    option="--junit",
+                )
+        except (query.QueryError, ValueError, OSError, RuntimeError) as error:
             print(f"exacly gate: {error}", file=sys.stderr)
             return 2
         print(json.dumps(answer, indent=2, default=str) if args.json else policy.as_text(answer))

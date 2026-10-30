@@ -460,6 +460,9 @@ def prepare(
         and sum(map(len, selected.values())) <= MAX_OBJECT_BYTES,
         "handoff files exceed their byte bound",
     )
+    # A reviewed proposal must have a complete, valid base before durable preparation can start.
+    # Mapped ancestors alone cannot establish that unrelated source remains publishable.
+    _verify_closure(path, base, budget)
     objects: dict[str, tuple[str, bytes]] = {}
     raw_bytes = 0
     changes: list[Doc] = []

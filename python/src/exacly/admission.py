@@ -12,6 +12,7 @@ import datetime as dt
 import hashlib
 import io
 import json
+import os
 import re
 import stat
 import tempfile
@@ -256,18 +257,42 @@ def model_files(source: Source, base: str, selection: Doc, date: dt.date) -> Doc
             documents[path] = yaml.safe_load(blob(source, base, entries, path).decode("utf-8"))
         except (UnicodeDecodeError, yaml.YAMLError):
             raise Rejected("approved model file cannot be parsed") from None
-    require(not any(is_state(doc) for doc in documents.values()), "model files cannot supply observed state")
-    require(
-        all(isinstance(doc, dict) and doc.get("exacly") == "0.2.0" for doc in documents.values()),
-        "GitHub admission requires a 0.2 model",
-    )
+    try:
+        _validate_model_documents(documents, selection, date)
+    except ValueError as error:
+        raise Rejected(str(error)) from error
+    return documents
+
+
+def _validate_model_documents(documents: Any, selection: Doc, date: dt.date) -> query.Model:
+    if type(date) is not dt.date:
+        raise ValueError("an explicit evaluation date is required")
+    if not isinstance(documents, dict) or set(documents) != set(selection["files"]):
+        raise ValueError("model documents must exactly match the approved model file selection")
+    if any(is_state(doc) for doc in documents.values()):
+        raise ValueError("model files cannot supply observed state")
+    if not all(isinstance(doc, dict) and doc.get("exacly") == "0.2.0" for doc in documents.values()):
+        raise ValueError("GitHub admission requires a 0.2 model")
     try:
         loaded = query.load(documents, date, revision=selection["revision"])
-    except query.QueryError:
-        raise Rejected("approved model does not match the config schema") from None
-    require(not loaded.report.errors, "approved model does not conform")
-    require(config_digest(documents) == selection["digest"], "approved model content digest does not match")
-    return documents
+    except query.QueryError as error:
+        raise ValueError("approved model does not match the config schema") from error
+    if loaded.report.errors:
+        raise ValueError("approved model does not conform")
+    if config_digest(documents) != selection["digest"]:
+        raise ValueError("approved model content digest does not match")
+    return loaded
+
+
+def validate_model(policy_doc: Any, documents: Any, date: dt.date) -> query.Model:
+    """Validate supplied config against an approved policy, without accessing a source.
+
+    File names, config-only contents, conformance and the policy's semantic content digest must
+    all match. The result authenticates no origin and grants no policy approval; live admission
+    still checks the approved remote model independently before deriving observations.
+    """
+    chosen = validate_policy(policy_doc)
+    return _validate_model_documents(copy.deepcopy(documents), chosen["model"], date)
 
 
 def pages(source: Source, path: str, field: str) -> list[Doc]:
@@ -495,8 +520,15 @@ def observe_report(documents: Doc, report: bytes, run: Run) -> Doc:
     """
     require(isinstance(report, bytes) and len(report) <= REPORT_LIMIT, "report exceeds the permitted size")
     with tempfile.TemporaryDirectory(prefix="exacly-admission-") as scratch:
-        path = Path(scratch) / "junit.xml"
-        path.write_bytes(report)
+        folder = Path(scratch)
+        folder.chmod(0o700)
+        path = folder / "junit.xml"
+        with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as stream:
+            if hasattr(os, "fchmod"):
+                os.fchmod(stream.fileno(), 0o600)
+            else:
+                path.chmod(0o600)
+            stream.write(report)
         results = read_junit([path])
     require(
         not (run.job_status == "success" and "failed" in results.values()),
@@ -515,8 +547,13 @@ def observe_report(documents: Doc, report: bytes, run: Run) -> Doc:
     return observed
 
 
-def admit(source: Source, policy_doc: Any, target: Target, run_id: int, attempt: int, date: dt.date) -> AdmissionResult:
-    """Fetch live provenance and retained bytes before producing fresh observations; never accept supplied state."""
+def validate_request(policy_doc: Any, target: Target, run_id: int, attempt: int, date: dt.date) -> tuple[Doc, Doc]:
+    """Validate one complete source-admission request without source or filesystem access.
+
+    Return independent policy and target snapshots. This preserves the source-only target
+    contract; generic query targets with builds, platforms or abbreviated SHAs are unsupported.
+    Validation is not policy approval or an admission decision.
+    """
     chosen = validate_policy(policy_doc)
     selection = Target(copy.deepcopy(target.data)).data
     if type(date) is not dt.date or type(run_id) is not int or run_id < 1 or type(attempt) is not int or attempt < 1:
@@ -529,6 +566,12 @@ def admit(source: Source, policy_doc: Any, target: Target, run_id: int, attempt:
         )
     if selection["model_revision"] != chosen["model"]["revision"]:
         raise ValueError("target model revision must match the independently approved trust policy")
+    return chosen, selection
+
+
+def admit(source: Source, policy_doc: Any, target: Target, run_id: int, attempt: int, date: dt.date) -> AdmissionResult:
+    """Fetch live provenance and retained bytes before producing fresh observations; never accept supplied state."""
+    chosen, selection = validate_request(policy_doc, target, run_id, attempt, date)
     repository = chosen["repository"]["full_name"]
     selected_branch = chosen["branch"]
     selected_workflow = chosen["workflow"]

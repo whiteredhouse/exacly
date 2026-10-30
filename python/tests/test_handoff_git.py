@@ -118,6 +118,25 @@ def test_preview_changes_no_repository_bytes_and_preserves_unrelated_source(repo
     git.synchronize(path, "refs/heads/reviewed")
 
 
+@pytest.mark.parametrize("damage", ["missing", "corrupt"])
+def test_preparation_rejects_invalid_unrelated_base_objects_without_writing(
+    repository: tuple[Path, str], damage: str
+) -> None:
+    path, base = repository
+    identity = command(path, "ls-tree", base, "keep.bin").split()[2].decode()
+    source = path / "objects" / identity[:2] / identity[2:]
+    if damage == "missing":
+        source.unlink()
+    else:
+        source.write_bytes(zlib.compress(b"blob 7\0changed"))
+    before = {item.relative_to(path): item.read_bytes() for item in path.rglob("*") if item.is_file()}
+    with pytest.raises(ValueError, match="trusted Git operation failed"):
+        prepared(path, base)
+    after = {item.relative_to(path): item.read_bytes() for item in path.rglob("*") if item.is_file()}
+    assert after == before
+    assert git.read_ref(path, "refs/heads/base") == base
+
+
 def test_existing_executable_mode_is_preserved_and_new_files_are_not_executable(repository: tuple[Path, str]) -> None:
     path, base = repository
     proposal = git.prepare(path, base, {"src/verify.sh": b"new script\n"}, author=AUTHOR, message="Reviewed")

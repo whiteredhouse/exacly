@@ -228,7 +228,7 @@ records:
           - "python/tests/test_coordinator_backends.py::*"
           - "python/tests/test_executor_local.py::*"
 
-  - id: REQ-032
+  - id: REQ-033
     type: Requirement
     name: Hand reviewed executor artifacts to an exact Git revision
     description: Retained successful artifacts become a host-constructed source revision through separately authorized recoverable local ref publication.
@@ -245,7 +245,7 @@ records:
       - The first local-git-v1 adapter accepts only an explicitly initialized owner-private bare SHA-1 Git repository with a retained initialization identity and reviewed sealed configuration. Its separate private handoff journal pins that repository identity and the canonical storage scope; ordinary operations never initialize, replace or silently migrate either resource.
       - Read the selected successful attempt from its canonical initialized executor journal and validate its retained contract, immutable receipt, build identity and exact artifact roster. Retain the complete source contract and require its digest to match the receipt authorization before using its approved model, context or input target; the base revision must equal that retained input target revision. Imported receipt JSON and candidate revision claims do not establish handoff authority.
       - A closed reviewed policy pins the handoff and executor journal paths and identities, repository path and identity and literal permitted destination paths or directory prefixes. Candidate output cannot select another repository, broaden allowed paths or replace protected operator resources.
-      - Read-only preview checks the actual source objects, expected destination ref and bounded safely opened artifact bytes, then returns the exact mapped changes, proposed tree and commit and separate authorization template without writing objects, refs, journal history, state or bindings.
+      - Read-only preview and each newly authorized apply validate the complete base object closure, including unrelated files, before returning a ready proposal or preparing durable intent; missing or corrupt objects leave the journal, Git objects and refs unchanged. Preview checks the expected destination ref and bounded safely opened artifact bytes, then returns the exact mapped changes, proposed tree and commit and separate authorization template without writing objects, refs, journal history, state or bindings.
       - New publication requires separate exact authorization pinning the policy, initialized storage scope, execution and attempt, retained receipt and build, base revision, expected destination value, path mapping, artifact identities and deterministic commit metadata. Changed preconditions reject the request rather than infer renewed approval.
       - Map only explicitly selected bounded regular-file artifacts to permitted normalized source paths. Reject traversal, ambiguous or colliding mappings and paths targeting or traversing symbolic links, submodules or unsafe destination components; preserve unrelated base tree entries and existing regular-file modes, using mode 100644 for new ordinary files. The first adapter supplies no deletion, executable-bit selection, checkout or working-tree mutation.
       - Trusted operator code constructs the exact Git blobs, tree and single-parent commit from the pinned base and approved artifact bytes. Fixed Git plumbing uses a sanitized execution environment and sealed repository settings; candidate-controlled hooks, configuration, filters, replacement objects, alternates, credential helpers and network access cannot influence publication.
@@ -311,7 +311,7 @@ records:
     interfaces: [exacly isolate command, exacly isolation inspect command, exacly.isolation Python API]
     implementation_ref: { locator: python/src/exacly/isolation.py }
 
-  - id: APP-018
+  - id: APP-019
     type: Application
     name: Reviewed output handoff
     description: Explicit local artifact-to-Git preview, separately authorized publication and durable inspection and recovery commands.
@@ -371,7 +371,7 @@ records:
     identifiers: [execution ID, execution attempt ID, attempt ordinal, journal initialization ID, task and binding identity, adapter, authorization digest, output build identity]
     steward: exacly-maintainers
 
-  - id: INFO-009
+  - id: INFO-010
     type: Information
     name: Output handoff provenance
     description: Reviewed artifact mappings and exact Git object identities with immutable local publication and recovery history.
@@ -407,7 +407,7 @@ records:
     purpose: Retain durable dispatch intent before remote effects and immutable reconciliation, registration, supersession and explicit resolution history, with bounded locks and explicit interrupted-transaction recovery; existing execution ledgers retain their formats.
     operational_ref: { locator: docs/durable-dispatch.md }
 
-  - id: INF-006
+  - id: INF-007
     type: Infrastructure
     name: Private local Git handoff storage
     description: Separately initialized owner-private handoff journal and sealed bare SHA-1 Git destination under operator control.
@@ -427,23 +427,23 @@ relationships:
   - { source: REQ-026, type: supports, target: PROC-004 }
   - { source: REQ-027, type: supports, target: PROC-004 }
   - { source: REQ-031, type: supports, target: PROC-004 }
-  - { source: REQ-032, type: supports, target: PROC-004 }
+  - { source: REQ-033, type: supports, target: PROC-004 }
   - { source: APP-012, type: implements, target: REQ-024 }
   - { source: APP-013, type: implements, target: REQ-026 }
   - { source: APP-016, type: implements, target: REQ-025 }
   - { source: APP-014, type: implements, target: REQ-027 }
   - { source: APP-014, type: implements, target: REQ-031 }
-  - { source: APP-018, type: implements, target: REQ-032 }
+  - { source: APP-019, type: implements, target: REQ-033 }
   - { source: PROC-004, type: uses, target: APP-007, conditions: Uses existing read-only planning to select a goal before authorization. }
   - { source: PROC-004, type: uses, target: APP-012 }
   - { source: PROC-004, type: uses, target: APP-013, conditions: Only when new external work is explicitly authorized. }
   - { source: PROC-004, type: uses, target: APP-014, conditions: Only when candidate execution is explicitly authorized and isolation is established. }
-  - { source: PROC-004, type: uses, target: APP-018, conditions: Only when a retained successful executor output is separately approved for local Git handoff. }
-  - { source: APP-018, type: depends_on, target: APP-014, conditions: Reads the exact checked successful attempt and host-derived artifact identity without launching another worker or resetting its budget. }
-  - { source: APP-018, type: depends_on, target: INF-006, conditions: Requires explicit initialized private storage and a sealed bare repository before any authorized publication. }
-  - { source: APP-018, type: reads, target: INFO-008 }
-  - { source: APP-018, type: writes, target: INFO-009 }
-  - { source: INF-006, type: stores, target: INFO-009, role: system_of_record }
+  - { source: PROC-004, type: uses, target: APP-019, conditions: Only when a retained successful executor output is separately approved for local Git handoff. }
+  - { source: APP-019, type: depends_on, target: APP-014, conditions: Reads the exact checked successful attempt and host-derived artifact identity without launching another worker or resetting its budget. }
+  - { source: APP-019, type: depends_on, target: INF-007, conditions: Requires explicit initialized private storage and a sealed bare repository before any authorized publication. }
+  - { source: APP-019, type: reads, target: INFO-008 }
+  - { source: APP-019, type: writes, target: INFO-010 }
+  - { source: INF-007, type: stores, target: INFO-010, role: system_of_record }
   - { source: APP-012, type: depends_on, target: APP-008, conditions: Fresh live evidence admission remains required before each new completion evaluation. }
   - { source: APP-012, type: depends_on, target: APP-009, conditions: Reuses saved-action contract checks without treating an advisory preview as completion authority. }
   - { source: APP-012, type: depends_on, target: APP-006, conditions: Evaluates the selected goal against merged current state and reports whole-policy readiness separately. }

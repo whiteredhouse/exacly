@@ -6,10 +6,11 @@ This reference describes **0.6.0**, for product context, evidence-based
 verification and recoverable local task completion. Verification and completion
 run in an operator-controlled environment. That release excludes candidate
 isolation, task dispatch and executor supervision (REQ-025–027).
-The [isolation](#isolate-a-candidate-command) and
+The [isolation](#isolate-a-candidate-command),
 [dispatch](#dispatch-approved-verification-work),
-[executor](#run-a-bounded-local-executor) and
-[output handoff](#hand-executor-artifacts-to-a-git-revision) sections describe additional
+[bounded executor](#run-a-bounded-local-executor),
+[output handoff](#hand-executor-artifacts-to-a-git-revision) and
+[composition](#compose-required-admissions-and-gates) sections describe additional
 unreleased functionality on main. Review the
 [release notes and upgrade paths](../CHANGELOG.md) for report-format changes and
 explicit ledger-copy upgrades.
@@ -19,6 +20,7 @@ explicit ledger-copy upgrades.
 - [`exacly evidence package`](#package-verification-evidence) prepares a producer's manifest/JUnit evidence bundle.
 - [`exacly evidence propose-policy github-actions`](#draft-a-producer-policy) drafts a producer-policy candidate for independent review.
 - [`exacly admit github-actions`](#admit-github-actions-evidence) checks a live CI run against an approved producer policy before deriving verification state.
+- [`exacly composition validate` and `exacly compose github-actions`](#compose-required-admissions-and-gates) validate an approved required-member definition and freshly evaluate every member's admission and readiness gate.
 - [`exacly show`, `trace`, `impact` and `gaps`](#questions) answer questions about the model, and [`exacly view`](#views) renders them for people.
 - [`exacly assess`](#assess-an-implementation-target) projects observations onto an explicit implementation and scope.
 - [`exacly gate`](#evaluate-readiness-policy) evaluates a named readiness policy against that target, separately from conformance.
@@ -510,6 +512,94 @@ For an admission decision, the new output directory contains `receipt.json`. An 
 
 The receipt establishes only the checked evidence origin and target applicability. It records `test_honesty_verified: false`, `coverage_verified: false` and `self_authenticating: false`: a trusted producer can run weak or misleading checks, and a copied or edited receipt is not independently authenticated. Changes to acceptance coverage still need review. Retain admission output in protected storage or revalidate the live source before using it for a later decision. This command does not sign receipts, dispatch work or close pending tasks.
 
+### Supported preflight validation
+
+**Unreleased functionality on main.**
+
+The pure Python helpers `admission.validate_request(policy_doc, target, run_id,
+attempt, date)` and `admission.validate_model(policy_doc, documents, date)` expose
+the native request and approved-model checks without source access. The first
+returns copied validated policy and target dictionaries; the second returns the
+validated `query.Model`. Named model documents must match the trust policy's
+exact approved file set and config digest and contain no observed state.
+`policy.validate_policy(model, policy_doc)` validates readiness-policy shape,
+Requirement references and duplicate checks, returning a copied policy. Native
+admission and readiness evaluation reuse these checks.
+
+## Compose required admissions and gates
+
+**Unreleased functionality on main.**
+
+A composition defines an independently reviewed set of required members, each
+with its own producer trust policy, approved model and readiness policy. A
+separate invocation selection pins that definition's content digest and supplies
+an exact run, attempt and source target for every member. Whole-input validation
+finishes before evidence retrieval, including approved model digests and any
+explicitly scoped equality constraints.
+
+```sh
+exacly composition validate --definition trusted/native-composition.yaml \
+  --date 2026-10-30 --json
+
+composition_output=$(mktemp -d)
+exacly compose github-actions --definition trusted/native-composition.yaml \
+  --selection native-selection.json --date 2026-10-30 \
+  --out "$composition_output/invocation" --json
+```
+
+Validation computes identity for independent review; it grants no approval. The
+evaluation uses `GH_TOKEN`, falling back to `GITHUB_TOKEN`, and performs fresh
+native admission and a separate gate for every required member. Each member
+keeps its original namespace, context and evidence. An admitted failing or
+incomplete observation still blocks readiness. A complete aggregate succeeds
+only when every required admission is accepted and every gate is satisfied.
+
+The new private output retains `report.json` and native member bundles under
+`members/ID/`, including `gate.json` for admitted members. Directories use `0700`
+and files use `0600` independently of umask. An interrupted or incomplete report
+cannot establish aggregate success. Reruns use a new output directory and freshly
+admit every member; old partial successes remain diagnostic. Exit codes are 0
+for a complete satisfied aggregate, 1 for a complete blocked aggregate and 2 for
+invalid inputs or output errors.
+
+Add the boolean `--readiness-junit` option to save `OUT/readiness.xml` for CI:
+
+```sh
+exacly compose github-actions --definition trusted/native-composition.yaml \
+  --selection native-selection.json --date 2026-10-30 \
+  --out reports/composition --readiness-junit --json
+```
+
+This separate report describes the computed readiness evaluation. Member
+`junit.xml` files retain the original producer results. Every required member has
+a verdict case, including a blocking case for rejected admission; gates that ran
+also retain their native prerequisite cases. Unknown readiness is a failure,
+never a skipped test. Stable member selectors use
+`exacly.composition/v1/<composition-name>/<member-id>/verdict`, with identity
+components percent-encoded. Native gate selectors keep their namespace, policy,
+record and dimension, using `COMPOSITION_NAME/MEMBER_ID` as the logical report ID.
+Revisions, policy versions and digests remain metadata.
+
+The XML is bounded and published atomically before the final complete aggregate
+marker. Requested report errors return 2; a missing or incomplete `report.json`
+cannot establish success. In Python, `composition.as_junit(result.report)` renders
+the same XML without further evaluation or source access. See the
+[composition guide](../docs/admission-composition.md#readiness-junit) for limits,
+failure handling and explicit observation-binding semantics. These reports do
+not authenticate evidence origin or prove a fresh product test ran; avoid a
+circular binding that uses a gate's own generated report to satisfy that gate.
+
+The Python API provides `MemberInputs`, `validate_definition`,
+`validate_selection` and `evaluate` through `exacly.composition`. The CLI streams
+completed members to disk before releasing their binary payloads. Python callers
+retain full native admission results by default; `retain_admissions=False` with
+a synchronous `on_member` callback opts into the same streaming behavior. See the
+[composition guide](../docs/admission-composition.md) for both document schemas,
+path resolution, scoped repository/model equality, supported validation APIs,
+retained output and consumer responsibilities. Required platforms, external
+release inventories and policy approval remain consumer decisions. Composition
+publishes no authoritative state and grants no completion or deployment authority.
+
 ## Questions
 
 `exacly` answers questions about a model from its config and state, as text for people or JSON (`--json`) for agents and other tools. It reads `spec/exacly` unless `-m PATH` names other documents or folders.
@@ -612,7 +702,7 @@ The repository uses [mise](https://mise.jdx.dev/) for its tools (Python and uv) 
 | `mise run check` | Full tests, lint, type checks, examples, model refresh and verification gate |
 | `mise run check-core` | Runs the development subset, lint, type checks and examples without refreshing state or evaluating the verification policy |
 
-Use `check-core` when developing core functionality without the supported Linux isolation runtime. It omits selected local execution, ownership and handoff test modules and cannot establish REQ-025/027 verification or the complete REQ-031/032 contracts. Controlled coordinator substitution cases remain in this subset. Some handoff contract and process-fault cases require local POSIX process identity even with controlled candidate execution; the end-to-end handoff pilot requires real Bubblewrap. Full CI continues to run `check`, including those checks and the verification gate; subset results never replace its `reports/junit.xml` and never enter the gate.
+Use `check-core` when developing core functionality without the supported Linux isolation runtime. It omits selected local execution, ownership and handoff test modules and cannot establish REQ-025/027 verification or the complete REQ-031/033 contracts. Controlled coordinator substitution cases remain in this subset. Some handoff contract and process-fault cases require local POSIX process identity even with controlled candidate execution; the end-to-end handoff pilot requires real Bubblewrap. Full CI continues to run `check`, including those checks and the verification gate; subset results never replace its `reports/junit.xml` and never enter the gate.
 
 To try a model against your working copy, run `uv run exacly validate path/to/spec/exacly`.
 
@@ -669,6 +759,61 @@ Each check names a Requirement and requires `verification` (passed) or `delivery
 Exit status is 0 only for `satisfied`; 1 for `not_satisfied` or `unknown`; 2 for invalid policy, target, or unreadable/schema-invalid input. Unknown readiness can therefore block CI without pretending a test failed. Expired negative evidence is retained historically but cannot establish a current failure. A recorded negative assessment without evidence can still express a failure by its required reason, as allowed by the specification.
 
 Reports identify policy name/version, selected target, as-of date, individual checks, evidence, excluded assessments, and missing bindings. Delivery environment defaults to target context when omitted; verification without environment establishes only the selected source-level result. An environment-specific gate requires environment-specific verification evidence. A source check plus publication gate does not establish production behavior. The command evaluates only the explicit policy; it is not a general proof of release safety, artifact provenance, or complete acceptance-criteria coverage.
+
+### Export readiness as JUnit
+
+This option is available on main ahead of the next package release; it is not included in 0.6.0.
+
+Use the paired `--junit FILE` and `--junit-id LABEL` options when CI or an explicitly reviewed observation binding needs a standard test report. The XML serializes the same computed readiness evaluation; it does not run another evaluator. Text remains the default stdout format, and `--json` can retain the full native report alongside the XML:
+
+```sh
+mkdir -p reports
+exacly gate -m spec/exacly --policy policies/main-readiness.yaml \
+  --target targets/main.yaml --date 2026-10-30 \
+  --junit reports/readiness.xml --junit-id main \
+  --json > reports/readiness.json
+```
+
+The command keeps readiness exit statuses: 0 for satisfied, 1 for not satisfied or unknown, and 2 for invalid input or report-output errors. Retain both files in CI even when readiness blocks success.
+
+Each testcase represents one declared Requirement/dimension prerequisite. Only `satisfied` passes. `not_satisfied` and `unknown` produce distinct failure types and retain their native readiness reasons; missing, expired, incomplete or inapplicable evidence is never exported as a skipped testcase. A readable but nonconforming model produces unknown checks and exit 1. Invalid policy, target, unreadable or schema-invalid inputs produce no XML and exit 2.
+
+`--junit-id` names the logical target or composition member for reporting; it does not select or validate the actual assessment target. Reuse a label for successive evaluations of the same logical target, and choose distinct labels for independent targets whose reports may be combined, such as `linux-arm64` and `linux-amd64`. The `exacly-case` testcase property supplies this stable selector to Exacly's JUnit observer:
+
+```text
+exacly.gate/v1/<namespace>/<policy-name>/<junit-id>/<record>/<dimension>
+```
+
+Each component after the prefix is percent-encoded from its UTF-8 bytes, including separators and glob metacharacters. The record is its canonical unqualified ID. The classname contains the prefix through `junit-id`, and the testcase name contains the record and dimension; `exacly-case` takes precedence over their usual joined identifier. Policy version, evaluation date, context and model/implementation revisions remain metadata so that new observations do not silently change the binding selector. Do not put credentials in a label.
+
+For namespace `billing`, policy `main-readiness`, label `main` and the `REQ-001` verification prerequisite, a separate consumer Requirement can explicitly bind to the upstream gate's evaluation:
+
+```yaml
+observe:
+  tests:
+    workflow: .github/workflows/readiness.yml
+    job: evaluate
+    cases:
+      - "exacly.gate/v1/billing/main-readiness/main/REQ-001/verification"
+```
+
+This binding observes the evaluation in that workflow and job; it does not import or relabel the original product-test assessments.
+
+Suite properties retain `exacly.report.kind=readiness-evaluation`, namespace, label, policy name/version, evaluation date and overall readiness. Common target identity fields are retained as `exacly.target.*`; `exacly.target.digest` identifies the complete target, including build identities, without copying arbitrary build payloads. `exacly.native_report.digest` identifies the full native report. These content digests do not authenticate it. Case properties retain the canonical record, dimension, assessed state and readiness result, with applicable and excluded evidence references labeled separately. Keep the full JSON report and original admitted evidence when detailed assessments, exclusions, missing bindings or provenance must be inspected.
+
+Both digests use SHA-256 over canonical JSON: sorted keys, compact `(',', ':')` separators, `ensure_ascii=True` and `allow_nan=False`, encoded as ASCII (equivalently UTF-8 for that escaped output). To compare a retained JSON report, parse and canonicalize it first; hashing the pretty-printed file bytes gives a different content identity.
+
+Each check retains up to four distinct applicable evidence references as `exacly.evidence.N` and, separately, up to four distinct excluded references as `exacly.excluded_evidence.N`, with a reason of at most 512 bytes in `exacly.excluded_evidence.N.reason`. Excluded references explain observations such as expired or wrong-target evidence; they are diagnostic and never treated as applicable or positive support. Each reference is at most 1,024 UTF-8 bytes. Both categories accept HTTP(S) URLs without credentials or invalid ports, and nonempty relative paths without a scheme, host, absolute root, backslash or parent traversal, including percent-decoded variants. Control characters, whitespace and surrogates are rejected. Query strings and fragments are stripped; unsupported references are omitted.
+
+XML display text replaces invalid XML characters; testcase selectors preserve the original identity bytes through encoding and are never truncated. Each identity component is limited to 1,024 UTF-8 bytes, reports to 4,096 checks and rendered XML to 8 MiB. Failure diagnostics are bounded to 4 KiB with a 512-byte message; validation findings use a bounded suite diagnostic. These limits keep XML a reporting view rather than an unbounded copy of source output. Exceeding identity, check-count or report-size limits is a report-output error.
+
+Keep XML output outside recursively loaded model directories and away from config, state, policy and target inputs. Unsafe paths and failed writes return 2 before the normal result is printed; model inputs are not changed. Use a fresh output path or clean a prior report before invocation. Invalid inputs emit no XML and do not turn an earlier report into a result for the failed invocation.
+
+A passing JUnit case establishes only that the selected prerequisite was satisfied by the supplied native evaluation. It does not authenticate evidence origin, prove a fresh product test ran or establish delivery beyond a declared applicable delivery check. A consumer must explicitly review its observation binding and preserve the original model namespace, target, policy and evidence references. Exacly's ordinary JUnit observer does not enforce this gate metadata or infer those identities from it; do not relabel upstream state into another namespace or broaden its applicability. Never use the generated report as the evidence that satisfies the gate which generated it.
+
+This output option evaluates one explicit target. It does not add multi-target composition, approve producer policies, update bindings or write model state.
+
+In Python, `exacly.policy.as_junit(report, namespace="billing", report_id="main")` serializes the already computed native report using the supplied model namespace and logical-target label.
 
 ## Plan verification work
 

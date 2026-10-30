@@ -8,7 +8,9 @@ import io
 import json
 import shutil
 import tempfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import Any
 
 from exacly.cli import exacly_main
 
@@ -45,6 +47,23 @@ def run(example: Path) -> dict[str, str]:
         )
         question = ["-m", str(model), "-m", str(state)]
         gate = ["gate", *question, "--target", str(target), "--policy", str(policy), "--json"]
+        readiness_xml = root / "readiness.xml"
+
+        def gated(expected: int = 0) -> dict[str, Any]:
+            native = json.loads(call(gate, expected))
+            reported: dict[str, Any] = json.loads(
+                call([*gate, "--junit", str(readiness_xml), "--junit-id", "installed-wheel"], expected)
+            )
+            if native != reported:
+                raise RuntimeError("JUnit output changed the native readiness report")
+            suites = ET.parse(readiness_xml).getroot()
+            cases = list(suites.iter("testcase"))
+            failures = list(suites.iter("failure"))
+            if len(cases) != 1 or list(suites.iter("skipped")) or len(failures) != expected:
+                raise RuntimeError("JUnit did not faithfully report the readiness decision")
+            if expected and not failures[0].get("type", "").endswith(str(reported["result"])):
+                raise RuntimeError("JUnit lost the native blocking readiness status")
+            return reported
 
         def observe(result: str, observed_revision: str = revision, *, include_skipped: bool = False) -> None:
             skipped_case = (
@@ -81,20 +100,20 @@ def run(example: Path) -> dict[str, str]:
         observe("")
         call(["validate", str(model), str(state)])
         assessment = json.loads(call(["assess", "REQ-001", *question, "--target", str(target), "--json"]))
-        good = json.loads(call(gate))
+        good = gated()
         if assessment["status"] != {"verification": "passed", "delivery": "not_observed"}:
             raise RuntimeError(f"unexpected pre-delivery state: {assessment['status']}")
         if good["result"] != "satisfied":
             raise RuntimeError(f"verification gate did not pass: {good}")
         observe('<failure message="incorrect invoice total"/>')
-        failed = json.loads(call(gate, 1))
+        failed = gated(1)
         observe("", "b" * 40)
-        changed = json.loads(call(gate, 1))
+        changed = gated(1)
         observe("<skipped/>")
-        skipped = json.loads(call(gate, 1))
+        skipped = gated(1)
         observe("", include_skipped=True)
         call(["validate", str(model), str(state)])
-        mixed = json.loads(call(gate, 1))
+        mixed = gated(1)
         incomplete = json.loads(call(["assess", "REQ-001", *question, "--target", str(target), "--json"]))
         gaps = json.loads(call(["gaps", *question, "--json"]))
         if incomplete["status"]["verification"] != "inconclusive" or not any(

@@ -17,6 +17,7 @@ Exacly models itself, following the layout in section 13 of the specification. C
 - [`understanding.yaml`](understanding.yaml) covers answering questions about a model: the `exacly` command's show, trace, impact and gaps.
 - [`planning.yaml`](planning.yaml) covers target-specific verification plans.
 - [`admission.yaml`](admission.yaml) covers drafting producer-policy candidates and live GitHub evidence admission under an independently approved policy.
+- [`composition.yaml`](composition.yaml) covers approved required-member definitions, whole-input preflight and fresh per-member admission/readiness evaluation with retained aggregate decisions.
 - [`evidence-packaging.yaml`](evidence-packaging.yaml) covers the installed evidence producer and its shared manifest-format contract.
 - [`reconciliation.yaml`](reconciliation.yaml) covers read-only completion previews.
 - [`executions.yaml`](executions.yaml) covers operator registrations and the private execution ledger.
@@ -49,6 +50,15 @@ choice. REQ-019 also requires admission bundles to use POSIX `0700` directories
 and `0600` files, independently of the caller's umask. These are current
 contracts; verification and release claims still come from observed state.
 
+REQ-032 and APP-018 cover the composition commands and `exacly.composition` API.
+The definition binds required member roles to their approved policy and model
+inputs; every invocation pins that identity and selects all required runs and
+targets explicitly. INFO-009 records the per-member and aggregate decisions in
+INF-006, a new private output bundle separate from authoritative state and the
+execution ledgers. The [composition guide](../../docs/admission-composition.md)
+describes unreleased functionality on main. Active lifecycle identifies the
+implemented contract; matching observations establish verification and delivery.
+
 - Browse the [published model and observations](https://whiteredhouse.github.io/exacly/project/) for the checked baseline on main. Branch proposals appear there after merge and successful CI publication.
 - Read [`automation.yaml`](automation.yaml) for the automation contracts and process steps, the [durable dispatch guide](../../docs/durable-dispatch.md) for approved GitHub task creation and recovery, the [bounded executor guide](../../docs/bounded-executor.md) for local attempt supervision, the [output handoff guide](../../docs/output-handoff.md) for reviewed artifact-to-Git publication, the [local Bubblewrap backend contract](../../docs/candidate-isolation.md#linux-bubblewrap-v1-backend-contract) for the current isolation implementation, and the dated [plan/apply research](../../docs/automated-plan-apply-research.md) for the original design.
 - Run `exacly show RECORD`, `exacly trace RECORD` or `exacly gaps` from the repository root to inspect the local checkout. Preview a branch's model with `exacly view site --out reports/model-site`.
@@ -65,7 +75,7 @@ The [bounded local executor](../../python/README.md#run-a-bounded-local-executor
 
 REQ-031 covers the coordinator's explicit [backend contracts](../../docs/coordinator-interfaces.md) for attempt storage, invocation ownership and worker lifecycle. APP-014 consumes the composed protocols throughout execution, inspection and recovery; its local defaults retain the existing CLI, policy and history formats. Shared reference cases establish interface semantics, while the real local runtime and crash tests establish backend behavior. Distributed scope remains unsupported by protocol `0.1.0` and needs independently verified fencing and migration guarantees before another coordinator can be supported.
 
-REQ-032 and APP-018 cover [reviewed output handoff](../../docs/output-handoff.md): selected artifacts from a retained successful attempt become an exact source commit through separately authorized local Git publication. The handoff pins initialized private journal and repository identities, approved base and destination paths, retained artifact bytes and commit metadata; prepared object bytes and compare-and-swap ref publication support replay and model-independent recovery. INFO-009 describes its provenance and INF-006 its separate private journal and bare Git storage. Binding replacement, remote publication, evidence admission and completion keep their separate authorization. CAP-004 and PROC-004 remain proposed; a tested local handoff does not by itself establish the whole automation loop or a live remote producer.
+REQ-033 and APP-019 cover [reviewed output handoff](../../docs/output-handoff.md): selected artifacts from a retained successful attempt become an exact source commit through separately authorized local Git publication. The handoff pins initialized private journal and repository identities, approved base and destination paths, retained artifact bytes and commit metadata; prepared object bytes and compare-and-swap ref publication support replay and model-independent recovery. INFO-010 describes its provenance and INF-007 its separate private journal and bare Git storage. Binding replacement, remote publication, evidence admission and completion keep their separate authorization. CAP-004 and PROC-004 remain proposed; a tested local handoff does not by itself establish the whole automation loop or a live remote producer.
 
 When implementing a proposal, update its lifecycle and planned references, review the acceptance tests and observation bindings, and update the [verification policy](../../ci/verification.yaml) in the same change. CI checks that this policy covers every active Requirement; successful verification still requires matching observations.
 
@@ -75,7 +85,7 @@ When implementing a proposal, update its lifecycle and planned references, revie
 
 `mise run check` runs the same refresh locally and on pull requests, writing to `reports/state/main.json` without committing anything. A proposed change can show its effect on state this way, but never stores it. Validation in CI reads that fresh state rather than the committed one, so a change that removes a record isn't blocked by state from before it.
 
-The optional `mise run check-core` developer subset writes a separate test report and runs without provisioning the local Bubblewrap backend. It omits selected local execution, ownership and handoff test modules, does not refresh state or enter the verification gate, and establishes neither REQ-025/027 verification nor the complete REQ-031/032 contracts. Controlled coordinator substitution cases remain in the subset; local ownership, handoff contract and process-fault cases using POSIX process identity, and the real isolated handoff pilot require the complete Linux checks.
+The optional `mise run check-core` developer subset writes a separate test report and runs without provisioning the local Bubblewrap backend. It omits selected local execution, ownership and handoff test modules, does not refresh state or enter the verification gate, and establishes neither REQ-025/027 verification nor the complete REQ-031/033 contracts. Controlled coordinator substitution cases remain in the subset; local ownership, handoff contract and process-fault cases using POSIX process identity, and the real isolated handoff pilot require the complete Linux checks.
 
 Refresh and manual-QA observation use a shared conditional atomic writer for local state files. A command captures the earlier file before computing observations, then checks that it is unchanged under a parent-directory lock before replacing it. A conflict leaves the newer state in place and requires another observation. This local file protocol is separate from the workflow's Git push check and from execution-ledger transactions.
 
