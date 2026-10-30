@@ -25,6 +25,7 @@ exacly executions audit --ledger FILE [--lock-timeout SECONDS] [--json]
 exacly isolation inspect --rootfs DIR [--json]
 exacly isolate --runtime-policy FILE [--inputs FILE] --out NEWDIR [--timeout SECONDS] [--json] -- COMMAND...
 exacly plan [-m PATH]... --policy FILE --target FILE --date YYYY-MM-DD [--json] [--out FILE]
+exacly gate [-m PATH]... --policy FILE --target FILE [--date YYYY-MM-DD] [--json] [--junit FILE --junit-id ID]
 exacly show|trace|impact|gaps [-m PATH]... [--json] ...; exacly mcp [-m PATH]...
 exacly view plan [--base REV] | site [--out DIR]
 exacly-validate and exacly-refresh are the first two under their names before 0.2.0, kept for one release
@@ -581,32 +582,35 @@ def view_main(args: argparse.Namespace) -> int:
     return 0
 
 
-def write_plan(out: Path, paths: list[Path], inputs: Iterable[Path], text: str) -> None:
+def write_derived(out: Path, paths: list[Path], inputs: Iterable[Path], text: str, *, option: str = "--out") -> None:
     """Save a derived artifact outside its inputs and model folders, replacing it atomically.
 
     A glob's static prefix is treated as a model folder too: a later recursive model read must not
-    accidentally load a saved plan. Resolving paths also protects inputs accessed through symlink aliases.
+    accidentally load a saved report. Resolving paths also protects inputs accessed through symlink aliases.
     """
     try:
         destination = out.resolve()
         # Atomic replacement replaces the final path entry, including a dangling symlink, rather than
         # following it. Guard that location as well as the symlink's resolved target.
         location = out.parent.resolve() / out.name
+        inputs = list(inputs)
+        if destination in {p.resolve() for p in inputs} or (
+            out.exists() and any(p.exists() and out.samefile(p) for p in inputs)
+        ):
+            raise ValueError(f"{option} cannot overwrite a model, state, policy or target input or its alias")
     except RuntimeError as error:
-        raise ValueError(f"--out cannot be resolved: {error}") from error
+        raise ValueError(f"{option} cannot be resolved: {error}") from error
     destinations = (destination, location)
-    if destination in {p.resolve() for p in inputs}:
-        raise ValueError("--out cannot overwrite a model, state, policy or target input")
     for path in paths:
         folder = static_part(path).resolve() if is_pattern(path) else path.resolve() if path.is_dir() else None
         if folder is not None and any(p.is_relative_to(folder) for p in destinations):
-            raise ValueError("--out must be outside model folders and model glob prefixes")
+            raise ValueError(f"{option} must be outside model folders and model glob prefixes")
     # A glob can traverse a symlink beyond its static prefix. Guard the real parent of each selected file.
     for path in paths:
         if is_pattern(path):
             for name in glob.glob(str(path)):
                 if Path(name).is_file() and any(p.is_relative_to(Path(name).resolve().parent) for p in destinations):
-                    raise ValueError("--out must be outside model folders and model glob prefixes")
+                    raise ValueError(f"{option} must be outside model folders and model glob prefixes")
     out.parent.mkdir(parents=True, exist_ok=True)
     temporary: Path | None = None
     try:
@@ -861,7 +865,7 @@ def write_reconciliation(
         folders = [Path(name).parent.resolve() for name in trust_policy["model"]["files"]]
         if any(path.is_relative_to(folder) for path in destinations for folder in folders):
             raise ValueError("--out must be outside the trust policy's declared model folders")
-        write_plan(out, [], inputs, json.dumps(report, indent=2, sort_keys=True, default=str) + "\n")
+        write_derived(out, [], inputs, json.dumps(report, indent=2, sort_keys=True, default=str) + "\n")
     except RuntimeError as error:
         raise ValueError(f"--out or its protected input paths cannot be resolved: {error}") from error
 
@@ -1491,6 +1495,8 @@ def exacly_main(argv: list[str] | None = None) -> int:
     gate.add_argument("--policy", required=True, type=Path, help="policy YAML/JSON outside the model folder")
     gate.add_argument("--target", required=True, type=Path, help="explicit implementation target YAML/JSON")
     gate.add_argument("--date", type=dt.date.fromisoformat, default=dt.date.today())
+    gate.add_argument("--junit", type=Path, help="save readiness JUnit XML outside model folders")
+    gate.add_argument("--junit-id", help="stable logical target/member ID, required with --junit")
     plan = commands.add_parser("plan", parents=[common], help="propose read-only verification work for a target")
     plan.add_argument("--policy", required=True, type=Path, help="verification-only readiness policy YAML/JSON")
     plan.add_argument("--target", required=True, type=Path, help="explicit implementation target YAML/JSON")
@@ -2248,7 +2254,7 @@ def exacly_main(argv: list[str] | None = None) -> int:
             answer = planning.create(documents, read(args.policy), Target(read(args.target)), args.date)
             saved = json.dumps(answer, indent=2, sort_keys=True, default=str) + "\n"
             if args.out is not None:
-                write_plan(args.out, paths, [*(Path(name) for name in documents), args.policy, args.target], saved)
+                write_derived(args.out, paths, [*(Path(name) for name in documents), args.policy, args.target], saved)
         except (query.QueryError, ValueError, OSError) as error:
             print(f"exacly plan: {error}", file=sys.stderr)
             return 2
@@ -2256,10 +2262,23 @@ def exacly_main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "gate":
         try:
+            if (args.junit is None) != (args.junit_id is None):
+                raise ValueError("--junit and --junit-id must be supplied together")
             target = Target(read(args.target))
-            model = query.load(load(args.model or [DEFAULT_MODEL]), args.date)
+            paths = args.model or [DEFAULT_MODEL]
+            documents = load(paths)
+            model = query.load(documents, args.date)
             answer = policy.evaluate(model, read(args.policy), target)
-        except (query.QueryError, ValueError) as error:
+            if args.junit is not None:
+                xml = policy.as_junit(answer, namespace=model.graph.namespace, report_id=args.junit_id)
+                write_derived(
+                    args.junit,
+                    paths,
+                    [*(Path(name) for name in documents), args.policy, args.target],
+                    xml,
+                    option="--junit",
+                )
+        except (query.QueryError, ValueError, OSError, RuntimeError) as error:
             print(f"exacly gate: {error}", file=sys.stderr)
             return 2
         print(json.dumps(answer, indent=2, default=str) if args.json else policy.as_text(answer))
