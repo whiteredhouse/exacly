@@ -247,7 +247,19 @@ def test_rootfs_concurrent_write_is_not_captured_as_reviewed_content(
     assert mutated
 
 
-@pytest.mark.parametrize("attack", ["shared_namespace", "capability", "privileges", "network", "extra", "integer_true"])
+@pytest.mark.parametrize(
+    "attack",
+    [
+        "shared_namespace",
+        "capability",
+        "privileges",
+        "network",
+        "extra",
+        "integer_true",
+        "performance_monitoring",
+        "missing_performance_monitoring",
+    ],
+)
 def test_failed_attestation_is_never_treated_as_verified(attack: str) -> None:
     host = {key: f"{key}:[1]" for key in isolation._NAMESPACES}
     facts: dict[str, Any] = {
@@ -264,6 +276,7 @@ def test_failed_attestation_is_never_treated_as_verified(attack: str) -> None:
         "keyrings_denied": True,
         "unsupported_socket_families_denied": True,
         "async_io_denied": True,
+        "performance_monitoring_denied": True,
     }
     assert isolation._attestation(copy.deepcopy(facts), host) == facts
     if attack == "shared_namespace":
@@ -276,6 +289,10 @@ def test_failed_attestation_is_never_treated_as_verified(attack: str) -> None:
         facts["network"] = "host"
     elif attack == "extra":
         facts["approved"] = True
+    elif attack == "performance_monitoring":
+        facts["performance_monitoring_denied"] = False
+    elif attack == "missing_performance_monitoring":
+        del facts["performance_monitoring_denied"]
     else:
         facts["verified"] = 1
     with pytest.raises(isolation.IsolationError):

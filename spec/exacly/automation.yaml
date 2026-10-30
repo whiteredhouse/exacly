@@ -96,14 +96,14 @@ records:
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-29"
+    last_reviewed_at: "2026-10-30"
     statement: >-
       Before running candidate-controlled code, enforce an execution boundary that denies access to
       the operator's ledger, authoritative state and policy originals, privileged credentials and
       control interfaces, while providing only explicitly permitted inputs and capabilities.
     acceptance_criteria:
       - Explicit candidate execution authorizes only the selected argument vector, reviewed backend and runtime policy, immutable input snapshots and new output destination; it grants no dispatch, verification, completion, release or deployment authority.
-      - Candidate processes and their descendants cannot read or modify the operator's execution ledger, completion journal, authoritative state, policy originals or privileged credentials through filesystem, environment, process, kernel credential facilities or control interfaces.
+      - Candidate processes and their descendants cannot read or modify the operator's execution ledger, completion journal, authoritative state, policy originals or privileged credentials through filesystem, environment, process, performance-monitoring, kernel credential facilities or control interfaces.
       - Enforce separation through an independently enforced runtime boundary with a reviewed contract; same-user directory permissions, path checks, a separate checkout or a successful version probe alone do not establish isolation.
       - Verify the selected runtime's identity and permitted inputs against reviewed policy before execution; candidate-controlled configuration cannot add capabilities, replace required protections or expose operator runtime files and interfaces.
       - Approved criteria and permitted source inputs are supplied as explicit immutable path-to-bytes snapshots; input paths cannot escape that snapshot, and no implicit repository traversal or environment inheritance supplies additional inputs.
@@ -112,7 +112,7 @@ records:
       - Completion, timeout, output limits and supervisor termination stop candidate processes and descendants according to the backend contract; actual termination is verified before artifact collection, including after normal candidate exit. Per-run cleanup limits do not establish durable retry or concurrency budgets.
       - Collect bounded logs and artifacts without following candidate-controlled paths into operator resources or accepting unsafe file types; invalid setup or unsafe artifacts publish no successful bundle, and publishing a new private bundle never overwrites an existing destination.
       - Reports identify the selected backend, reviewed runtime and supplied snapshot identities and verified boundary facts separately from untrusted candidate exit status, logs and artifacts; content identity and successful execution do not authenticate evidence, prove output provenance or authorize completion.
-      - Real integration tests for each supported backend attempt forbidden reads, writes, inherited-descriptor access, host process access, kernel credential access and host network or socket access from candidate processes and descendants; they also verify immutable permitted inputs, safe output exchange, failed setup and descendant cleanup without substituting mocked or skipped runtime checks.
+      - Real integration tests for each supported backend attempt forbidden reads, writes, inherited-descriptor access, host process access, cross-boundary performance monitoring, kernel credential access and host network or socket access from candidate processes and descendants; they also verify immutable permitted inputs, safe output exchange, failed setup and descendant cleanup without substituting mocked or skipped runtime checks.
       - Each supported backend declares its required protections, trusted components and exclusions in a reviewed contract. The current local linux-bubblewrap-v1 backend must satisfy docs/candidate-isolation.md#linux-bubblewrap-v1-backend-contract in full; another backend needs its own reviewed contract and real verification before support can be claimed.
       - Trusted local completion of existing work does not require launching candidate code; this isolation requirement becomes mandatory before an executor runs candidate-controlled code, while durable dispatch and executor attempt supervision retain their own requirements.
     verification_method: Real integration tests of the currently supported local Linux Bubblewrap backend for namespace and kernel-interface denials, descendants, input immutability, safe artifacts, failed setup and termination, plus policy, snapshot, publication and CLI contract tests; these establish no support for another backend.

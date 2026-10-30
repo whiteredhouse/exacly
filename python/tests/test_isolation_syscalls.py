@@ -14,11 +14,13 @@ import platform
 import signal
 import subprocess
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 import pytest
-from exacly import isolation
+from exacly import _isolation_seccomp, isolation
 from isolation_fixtures import isolation_runtime as isolation_runtime
 
 
@@ -46,6 +48,108 @@ def candidate(
     assert report["status"] == "completed", (report, (out / "stderr.bin").read_bytes())
     assert report["isolation"]["namespace_terminated"] is True
     return report, dict(json.loads((out / "artifacts/result.json").read_bytes()))
+
+
+def test_compiled_filter_denies_performance_monitoring_in_a_disposable_process() -> None:
+    # Null attributes cannot open a performance event, even on a permissive host. Installing
+    # the actual compiled filter affects only this child, never the test runner or host policy.
+    # An outer host filter may already return EPERM; that is not a reason to skip this check.
+    script = """
+import ctypes,json,os,sys
+class Program(ctypes.Structure):
+    _fields_=[('length',ctypes.c_ushort),('instructions',ctypes.c_void_p)]
+libc=ctypes.CDLL(None,use_errno=True)
+libc.syscall.restype=ctypes.c_long
+libc.prctl.argtypes=[ctypes.c_int,ctypes.c_ulong,ctypes.c_ulong,ctypes.c_ulong,ctypes.c_ulong]
+def attempt():
+    ctypes.set_errno(0)
+    value=libc.syscall(int(sys.argv[2]),ctypes.c_void_p(None),-1,0,-1,0)
+    return {'value':value,'errno':ctypes.get_errno()}
+before=attempt()
+encoded=os.pread(int(sys.argv[1]),1024*1024,0)
+assert encoded and len(encoded)%8==0
+instructions=ctypes.create_string_buffer(encoded)
+program=Program(len(encoded)//8,ctypes.addressof(instructions))
+assert libc.prctl(38,1,0,0,0)==0,ctypes.get_errno()
+assert libc.prctl(22,2,ctypes.addressof(program),0,0)==0,ctypes.get_errno()
+print(json.dumps({'before':before,'filtered':attempt()}))
+"""
+    with _isolation_seccomp.native_filter() as policy:
+        assert "perf_event_open" in policy.description["denied_syscalls"]
+        completed = subprocess.run(
+            [sys.executable, "-I", "-c", script, str(policy.fd), str(policy.syscalls["perf_event_open"])],
+            pass_fds=(policy.fd,),
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    assert completed.returncode == 0, completed.stderr
+    facts = json.loads(completed.stdout)
+    assert facts["before"]["value"] == -1, facts
+    assert facts["filtered"] == {"value": -1, "errno": errno.EPERM}, facts
+
+
+def test_candidate_and_descendant_cannot_open_performance_monitoring_events(
+    isolation_runtime: isolation.Runtime, tmp_path: Path
+) -> None:
+    script = """
+import ctypes,json,os
+number=json.load(open('/inputs/parameters.json'))['number']
+libc=ctypes.CDLL(None,use_errno=True)
+libc.syscall.restype=ctypes.c_long
+def attempts():
+    results={}
+    for name,pid,cpu in [('current_task',0,-1),('system_wide',-1,0),('namespace_init',1,-1)]:
+        ctypes.set_errno(0)
+        value=libc.syscall(number,ctypes.c_void_p(None),pid,cpu,-1,0)
+        results[name]={'value':value,'errno':ctypes.get_errno()}
+    return results
+own=attempts()
+child=os.fork()
+if child==0:
+    open('/outputs/descendant.json','w').write(json.dumps(attempts()))
+    os._exit(0)
+_,status=os.waitpid(child,0)
+assert os.waitstatus_to_exitcode(status)==0
+open('/outputs/result.json','w').write(json.dumps({
+  'candidate':own,'descendant':json.load(open('/outputs/descendant.json'))}))
+"""
+    # Every probe has null event attributes, so omitting the denial cannot start monitoring.
+    report, facts = candidate(
+        isolation_runtime, tmp_path, script, {"number": native_syscalls("perf_event_open")["perf_event_open"]}
+    )
+    assert report["isolation"]["performance_monitoring_denied"] is True
+    assert "perf_event_open" in report["isolation"]["syscall_policy"]["denied_syscalls"]
+    expected = {name: {"value": -1, "errno": errno.EPERM} for name in ("current_task", "system_wide", "namespace_init")}
+    assert facts == {"candidate": expected, "descendant": expected}
+
+
+def test_failed_performance_monitoring_probe_blocks_candidate_in_the_actual_launch(
+    isolation_runtime: isolation.Runtime, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    compile_filter = _isolation_seccomp.native_filter
+    getpid = native_syscalls("getpid")["getpid"]
+
+    @contextmanager
+    def successful_syscall_as_performance_probe() -> Iterator[_isolation_seccomp.NativeFilter]:
+        with compile_filter() as policy:
+            # Fault-inject a harmless successful syscall into the trusted probe configuration.
+            # This makes the real bootstrap observe a missing denial regardless of host perf
+            # restrictions, without removing another launch protection or creating an event.
+            yield dataclasses.replace(policy, syscalls={**policy.syscalls, "perf_event_open": getpid})
+
+    monkeypatch.setattr(_isolation_seccomp, "native_filter", successful_syscall_as_performance_probe)
+    with pytest.raises(isolation.IsolationError, match="performance monitoring is not denied"):
+        isolation.run(
+            isolation_runtime,
+            [isolation_runtime.python, "-c", "open('/outputs/candidate-started','w').write('started')"],
+            {},
+            tmp_path / "bundle",
+            timeout=5,
+        )
+    assert not (tmp_path / "bundle").exists()
+    assert not list(tmp_path.glob(".exacly-isolation-*"))
 
 
 def test_candidate_and_descendant_cannot_read_or_change_operator_keyring_credentials(

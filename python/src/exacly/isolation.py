@@ -338,6 +338,7 @@ def _attestation(value: Any, host: Mapping[str, str]) -> Doc:
         "pid_namespace_init",
         "syscalls_filtered",
         "keyrings_denied",
+        "performance_monitoring_denied",
         "unsupported_socket_families_denied",
         "async_io_denied",
     }
