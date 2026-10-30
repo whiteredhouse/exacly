@@ -561,7 +561,10 @@ for a complete satisfied aggregate, 1 for a complete blocked aggregate and 2 for
 invalid inputs or output errors.
 
 The Python API provides `MemberInputs`, `validate_definition`,
-`validate_selection` and `evaluate` through `exacly.composition`. See the
+`validate_selection` and `evaluate` through `exacly.composition`. The CLI streams
+completed members to disk before releasing their binary payloads. Python callers
+retain full native admission results by default; `retain_admissions=False` with
+a synchronous `on_member` callback opts into the same streaming behavior. See the
 [composition guide](../docs/admission-composition.md) for both document schemas,
 path resolution, scoped repository/model equality, supported validation APIs,
 retained output and consumer responsibilities. Required platforms, external

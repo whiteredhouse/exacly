@@ -1548,7 +1548,12 @@ def exacly_main(argv: list[str] | None = None) -> int:
 
                 writer = composition_io.ResultWriter(output, loaded, selection, args.date)
                 composition_answer = composition.evaluate(
-                    CompositionSource(), loaded.prepared, selection, args.date, on_member=writer.member
+                    CompositionSource(),
+                    loaded.prepared,
+                    selection,
+                    args.date,
+                    on_member=writer.member,
+                    retain_admissions=False,
                 )
                 report = composition_answer.report
                 writer.finish(report)

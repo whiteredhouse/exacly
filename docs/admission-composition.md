@@ -200,6 +200,12 @@ missing, inapplicable, rejected or unavailable evidence cannot establish a
 satisfied aggregate. Normal member rejection does not discard successful members
 or stop the remaining independent members from producing diagnostics.
 
+The CLI writes each member's evidence before starting the next admission, then
+releases that member's in-memory archive and report payloads. Binary evidence does
+not accumulate across the whole invocation. Approved model inputs and aggregate
+gate results are still retained in memory and scale with their contents and the
+number of members.
+
 Member models and state remain separate even when they use the same context.
 Exacly neither combines same-context state documents nor relabels another model's
 namespace to satisfy the consumer's gate.
@@ -283,6 +289,32 @@ performs no source calls. `evaluate` validates the complete selection again befo
 fresh admission and returns the aggregate plus per-member native admission
 results. Callers that retain results must preserve the same completeness and
 freshness rules as the CLI.
+
+By default, `evaluate` preserves every native `AdmissionResult` in
+`result.admissions`, including its archive and JUnit bytes. Applications that
+persist evidence as each member finishes can opt into the streaming mode used by
+the CLI:
+
+```python
+result = composition.evaluate(
+    source,
+    prepared,
+    selection,
+    date,
+    on_member=retain_member,
+    retain_admissions=False,
+)
+```
+
+`retain_member(member_report, admission_result)` must synchronously retain the
+required proof and return `None`. Async and generator callbacks are rejected;
+returning deferred work does not complete the handoff. If it raises, evaluation
+stops without returning a complete aggregate. Streaming requires a callable callback and
+returns an empty `result.admissions`; the aggregate report and on-disk evidence
+layout are unchanged. The evaluator releases the member's binary payloads before
+the next admission begins. A callback or source that keeps its own references
+remains responsible for that memory. This mode bounds retained binary evidence,
+not total process memory or the aggregate report size.
 
 The supported `admission.validate_request`, `admission.validate_model` and
 `policy.validate_policy` helpers expose the single-target preflight checks reused

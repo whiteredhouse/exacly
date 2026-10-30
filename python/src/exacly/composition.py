@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import copy
 import datetime as dt
+import inspect
 import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import PurePosixPath
-from typing import Any
+from typing import Any, cast
 
 import jsonschema
 
@@ -319,6 +320,7 @@ def evaluate(
     date: dt.date,
     *,
     on_member: Callable[[Doc, admission.AdmissionResult], None] | None = None,
+    retain_admissions: bool = True,
 ) -> CompositionResult:
     """Freshly admit and gate every required member, sequentially, without publishing state.
 
@@ -328,7 +330,28 @@ def evaluate(
     propagate; a caller must never publish a completed success for an interrupted invocation.
     ``complete`` means every required evaluator returned. Evidence paths describe the supported
     retention layout; this pure API does not claim that a caller has written those files.
+
+    By default the result retains every native admission and its evidence bytes. With
+    ``retain_admissions=False``, a synchronous ``on_member`` callback is required: after it
+    returns ``None``, this evaluator releases that member's native result before the next admission.
+    Streaming callbacks must finish synchronously; lazy callbacks and returned awaitables or
+    generators are rejected rather than treated as completed retention.
+    The returned admissions mapping is empty. Approved model snapshots and aggregate gate
+    metadata still scale with the composition; this does not bound the caller or source's memory.
     """
+    if type(retain_admissions) is not bool:
+        raise ValueError("retain_admissions must be a boolean")
+    if on_member is not None and not callable(on_member):
+        raise ValueError("on_member must be a callable retention callback")
+    if not retain_admissions and on_member is None:
+        raise ValueError("streaming admission retention requires an on_member callback")
+    if not retain_admissions and any(
+        inspect.iscoroutinefunction(callback)
+        or inspect.isasyncgenfunction(callback)
+        or inspect.isgeneratorfunction(callback)
+        for callback in (on_member, type(on_member).__call__)
+    ):
+        raise ValueError("streaming admission retention requires a synchronous on_member callback")
     invocation = validate_selection(prepared, selection, date)
     definition = invocation.definition
     identities = {member.id: member for member in definition.members}
@@ -341,7 +364,8 @@ def evaluate(
         admitted = admission.admit(
             source, member.inputs.trust_policy, target, selected["run"], selected["attempt"], date
         )
-        admissions[identifier] = admitted
+        if retain_admissions:
+            admissions[identifier] = admitted
         gate = None
         if admitted.receipt["status"] == "admitted" and admitted.state is not None:
             model = query.load(
@@ -350,6 +374,7 @@ def evaluate(
                 revision=target.data["model_revision"],
             )
             gate = policy.evaluate(model, member.inputs.readiness_policy, target)
+            del model
         satisfied = gate is not None and gate["result"] == "satisfied"
         evidence = {"receipt": f"members/{identifier}/receipt.json"}
         if admitted.receipt["status"] == "admitted":
@@ -379,7 +404,17 @@ def evaluate(
         }
         results.append(report)
         if on_member is not None:
-            on_member(copy.deepcopy(report), copy.deepcopy(admitted))
+            callback_result = cast(Callable[[Doc, admission.AdmissionResult], object], on_member)(
+                copy.deepcopy(report), copy.deepcopy(admitted)
+            )
+            if not retain_admissions and callback_result is not None:
+                if inspect.iscoroutine(callback_result) or inspect.isgenerator(callback_result):
+                    callback_result.close()
+                raise ValueError("streaming on_member callback must finish synchronously and return None")
+            del callback_result
+        # Drop the original before evaluating the next admission's RHS. Omitting it from
+        # `admissions` alone would keep the previous evidence alive during that source call.
+        del admitted
     report = {
         "schema_version": VERSION,
         "operation": "compose",

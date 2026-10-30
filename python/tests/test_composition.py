@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import base64
 import copy
+import gc
 import json
+import warnings
+import weakref
+from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 from urllib.parse import parse_qs, unquote, urlsplit
 
 import pytest
@@ -536,7 +540,10 @@ def test_every_new_evaluation_rechecks_live_metadata_and_downloads_all_selected_
     assert len(fixture.source.downloads) == 7
 
 
-def test_interrupted_member_retention_never_returns_success_and_next_invocation_admits_afresh() -> None:
+@pytest.mark.parametrize("retain_admissions", [True, False])
+def test_interrupted_member_retention_never_returns_success_and_next_invocation_admits_afresh(
+    retain_admissions: bool,
+) -> None:
     fixture = example()
     prepared = fixture.prepare()
     completed_members = []
@@ -547,7 +554,14 @@ def test_interrupted_member_retention_never_returns_success_and_next_invocation_
         raise OSError("output destination became unavailable")
 
     with pytest.raises(OSError, match="destination became unavailable"):
-        composition.evaluate(fixture.source, prepared, fixture.selection, WHEN, on_member=retain)
+        composition.evaluate(
+            fixture.source,
+            prepared,
+            fixture.selection,
+            WHEN,
+            on_member=retain,
+            retain_admissions=retain_admissions,
+        )
     assert completed_members == [PLATFORMS[0]]
     assert fixture.source.downloads == [("acme/native", 800)]
     retried = composition.evaluate(fixture.source, prepared, fixture.selection, WHEN)
@@ -556,7 +570,10 @@ def test_interrupted_member_retention_never_returns_success_and_next_invocation_
     assert fixture.source.downloads == [("acme/native", 800), *[("acme/native", 800 + i) for i in range(4)]]
 
 
-def test_retention_callback_cannot_rewrite_returned_admission_or_aggregate_decisions() -> None:
+@pytest.mark.parametrize("retain_admissions", [True, False])
+def test_retention_callback_cannot_rewrite_returned_admission_or_aggregate_decisions(
+    retain_admissions: bool,
+) -> None:
     fixture = example()
 
     def mutate(member: dict[str, Any], admitted: admission.AdmissionResult) -> None:
@@ -565,13 +582,216 @@ def test_retention_callback_cannot_rewrite_returned_admission_or_aggregate_decis
         assert admitted.state is not None
         admitted.state.clear()
 
-    result = composition.evaluate(fixture.source, fixture.prepare(), fixture.selection, WHEN, on_member=mutate)
+    result = composition.evaluate(
+        fixture.source,
+        fixture.prepare(),
+        fixture.selection,
+        WHEN,
+        on_member=mutate,
+        retain_admissions=retain_admissions,
+    )
     assert result.report["result"] == "satisfied"
     assert all(member["status"] == "satisfied" for member in result.report["members"])
+    assert bool(result.admissions) is retain_admissions
     for admitted in result.admissions.values():
         assert admitted.receipt["status"] == "admitted"
         assert admitted.state is not None
         assert admitted.state["namespace"] == "acme-native"
+
+
+def test_default_api_retains_all_evidence_and_ignores_legacy_callback_return_values() -> None:
+    fixture = example()
+
+    def callback(member: dict[str, Any], admitted: admission.AdmissionResult) -> object:
+        return {"written": member["id"]}
+
+    result = composition.evaluate(
+        fixture.source, fixture.prepare(), fixture.selection, WHEN, on_member=cast(Any, callback)
+    )
+    assert result.report["complete"] is True and result.report["result"] == "satisfied"
+    assert set(result.admissions) == set(PLATFORMS)
+    for identifier, admitted in result.admissions.items():
+        assert admitted.archive == fixture.fixtures[identifier].archive
+        assert admitted.report == fixture.fixtures[identifier].report
+        assert admitted.state is not None and admitted.state["namespace"] == "acme-native"
+
+
+def test_maximum_member_stream_releases_results_and_binary_owners_before_the_next_admission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Track actual native results, excluding the fixture source's original archive cache.
+
+    The bytes subclasses retain identical verified contents and emulate immutable bytes during
+    deepcopy. Their lifetime counters detect binary owners independently from result objects;
+    this avoids platform-sensitive RSS thresholds and allocator-dependent benchmarks.
+    """
+    fixture = example()
+    original_members = fixture.definition["members"]
+    original_selections = fixture.selection["members"]
+    fixture.definition["members"] = []
+    inputs = {}
+    selected = []
+    for index in range(composition.MAX_MEMBERS):
+        base = index % len(PLATFORMS)
+        identifier = f"{PLATFORMS[base]}-{index:02d}"
+        fixture.definition["members"].append({**original_members[base], "id": identifier})
+        inputs[identifier] = fixture.inputs[PLATFORMS[base]]
+        selected.append({**original_selections[base], "id": identifier})
+    fixture.inputs = inputs
+    prepared = fixture.prepare()
+    fixture.selection = {
+        "schema_version": "0.1.0",
+        "definition_digest": prepared.digest,
+        "members": selected,
+    }
+    native_admit = admission.admit
+    result_refs: list[weakref.ReferenceType[admission.AdmissionResult]] = []
+    callback_refs: list[weakref.ReferenceType[admission.AdmissionResult]] = []
+    binary_owners: set[int] = set()
+    seen: list[str] = []
+    peak_owners = 0
+
+    class TrackedEvidence(bytes):
+        def __deepcopy__(self, memo: dict[int, Any]) -> TrackedEvidence:
+            return self
+
+        def __del__(self) -> None:
+            binary_owners.discard(id(self))
+
+    def tracked_admit(*args: Any, **kwargs: Any) -> admission.AdmissionResult:
+        nonlocal peak_owners
+        gc.collect()
+        assert all(reference() is None for reference in result_refs)
+        assert all(reference() is None for reference in callback_refs)
+        assert not binary_owners, "previous member binary evidence survived into the next native admission"
+        admitted = native_admit(*args, **kwargs)
+        assert admitted.receipt["status"] == "admitted"
+        assert admitted.archive is not None and admitted.report is not None
+        admitted.archive = TrackedEvidence(admitted.archive)
+        admitted.report = TrackedEvidence(admitted.report)
+        binary_owners.update((id(admitted.archive), id(admitted.report)))
+        peak_owners = max(peak_owners, len(binary_owners))
+        result_refs.append(weakref.ref(admitted))
+        return admitted
+
+    def retain(member: dict[str, Any], admitted: admission.AdmissionResult) -> None:
+        seen.append(member["id"])
+        callback_refs.append(weakref.ref(admitted))
+        assert admitted.archive is not None and admitted.report is not None
+        assert sha256(admitted.archive) == admitted.receipt["origin"]["archive_digest"]
+        assert sha256(admitted.report) == admitted.receipt["origin"]["report_digest"]
+        assert len(binary_owners) == 2
+
+    monkeypatch.setattr(admission, "admit", tracked_admit)
+    result = composition.evaluate(
+        fixture.source, prepared, fixture.selection, WHEN, on_member=retain, retain_admissions=False
+    )
+    gc.collect()
+    assert result.admissions == {}
+    assert result.report["complete"] is True and result.report["result"] == "satisfied"
+    assert len(result.report["members"]) == composition.MAX_MEMBERS
+    assert seen == [member["id"] for member in fixture.definition["members"]]
+    assert len(fixture.source.downloads) == composition.MAX_MEMBERS
+    assert all(reference() is None for reference in [*result_refs, *callback_refs])
+    assert peak_owners == 2 and not binary_owners
+
+
+@pytest.mark.parametrize("mode", [None, "false", 0, 1])
+def test_invalid_retention_mode_fails_before_any_native_source_call(mode: Any) -> None:
+    fixture = example()
+    with pytest.raises(ValueError, match="retain_admissions must be a boolean"):
+        composition.evaluate(fixture.source, fixture.prepare(), fixture.selection, WHEN, retain_admissions=mode)
+    assert fixture.source.calls == [] and fixture.source.downloads == []
+
+
+@pytest.mark.parametrize("callback", [None, 42])
+def test_streaming_requires_a_callable_sink_before_any_native_source_call(callback: Any) -> None:
+    fixture = example()
+    with pytest.raises(ValueError, match="callback"):
+        composition.evaluate(
+            fixture.source,
+            fixture.prepare(),
+            fixture.selection,
+            WHEN,
+            on_member=callback,
+            retain_admissions=False,
+        )
+    assert fixture.source.calls == [] and fixture.source.downloads == []
+
+
+@pytest.mark.parametrize("kind", ["coroutine", "generator", "async-generator"])
+@pytest.mark.parametrize("callable_object", [False, True])
+def test_streaming_rejects_known_lazy_sinks_before_any_native_source_call(
+    kind: str,
+    callable_object: bool,
+) -> None:
+    fixture = example()
+
+    async def coroutine(member: dict[str, Any], admitted: admission.AdmissionResult) -> None:
+        raise AssertionError("an asynchronous sink must not execute")
+
+    def generator(member: dict[str, Any], admitted: admission.AdmissionResult) -> Iterator[None]:
+        raise AssertionError("a generator sink must not execute")
+        yield None
+
+    async def async_generator(member: dict[str, Any], admitted: admission.AdmissionResult) -> AsyncIterator[None]:
+        raise AssertionError("an asynchronous generator sink must not execute")
+        yield None
+
+    callbacks = {"coroutine": coroutine, "generator": generator, "async-generator": async_generator}
+    callback: Any = callbacks[kind]
+    if callable_object:
+        callback = type("LazySink", (), {"__call__": staticmethod(callback)})()
+    with pytest.raises(ValueError, match="synchronous"):
+        composition.evaluate(
+            fixture.source,
+            fixture.prepare(),
+            fixture.selection,
+            WHEN,
+            on_member=callback,
+            retain_admissions=False,
+        )
+    assert fixture.source.calls == [] and fixture.source.downloads == []
+
+
+@pytest.mark.parametrize("kind", ["coroutine", "generator", "async-generator", "value"])
+def test_streaming_rejects_lazy_or_noncompletion_values_from_synchronous_wrappers(kind: str) -> None:
+    fixture = example()
+
+    async def coroutine() -> None:
+        raise AssertionError("a returned coroutine must not execute")
+
+    def generator() -> Iterator[None]:
+        raise AssertionError("a returned generator must not execute")
+        yield None
+
+    async def async_generator() -> AsyncIterator[None]:
+        raise AssertionError("a returned asynchronous generator must not execute")
+        yield None
+
+    def callback(member: dict[str, Any], admitted: admission.AdmissionResult) -> object:
+        if kind == "coroutine":
+            return coroutine()
+        if kind == "generator":
+            return generator()
+        if kind == "async-generator":
+            return async_generator()
+        return 7
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(ValueError, match="finish synchronously and return None"):
+            composition.evaluate(
+                fixture.source,
+                fixture.prepare(),
+                fixture.selection,
+                WHEN,
+                on_member=cast(Any, callback),
+                retain_admissions=False,
+            )
+        gc.collect()
+    assert fixture.source.downloads == [("acme/native", 800)]
+    assert not [warning for warning in caught if issubclass(warning.category, RuntimeWarning)]
 
 
 def test_prepared_contract_snapshots_caller_owned_policies_and_model_documents() -> None:

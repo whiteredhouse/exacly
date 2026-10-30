@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from exacly import composition_io, evidence_retention, github_evidence
+from exacly import composition, composition_io, evidence_retention, github_evidence
 from exacly.cli import exacly_main
 from test_admission import ATTEMPT, BASE, MODEL_FILE, READINESS, RUN_ID, Source
 from test_applicability import WHEN, A, B
@@ -136,10 +136,22 @@ def test_all_members_use_separate_admitted_states_and_retain_exact_output(
 ) -> None:
     args, _, output, source = scenario(tmp_path)
     tokens = backend(monkeypatch, source)
+    evaluate = composition.evaluate
+    evaluated: list[composition.CompositionResult] = []
+
+    def streamed_evaluation(*args: Any, **kwargs: Any) -> composition.CompositionResult:
+        assert kwargs.get("retain_admissions") is False
+        result = evaluate(*args, **kwargs)
+        assert result.admissions == {}
+        evaluated.append(result)
+        return result
+
+    monkeypatch.setattr(composition, "evaluate", streamed_evaluation)
     assert exacly_main(args) == 0
     printed = capsys.readouterr()
     report = json.loads(printed.out)
     assert report == json.loads((output / "report.json").read_text())
+    assert len(evaluated) == 1 and evaluated[0].report == report
     assert report["complete"] is True and report["result"] == "satisfied"
     assert len(report["members"]) == 4 and source.index == 3 and tokens == [TOKEN]
     for member, native in zip(report["members"], source.sources, strict=True):
