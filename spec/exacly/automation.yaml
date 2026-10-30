@@ -1,4 +1,4 @@
-# Automation contracts for local completion, isolation, durable dispatch and bounded executor supervision.
+# Automation contracts for local completion, isolation, dispatch, executor supervision and output handoff.
 # Lifecycle describes the supported contract; observed verification and release remain separate.
 exacly: "0.2.0"
 
@@ -228,6 +228,41 @@ records:
           - "python/tests/test_coordinator_backends.py::*"
           - "python/tests/test_executor_local.py::*"
 
+  - id: REQ-032
+    type: Requirement
+    name: Hand reviewed executor artifacts to an exact Git revision
+    description: Retained successful artifacts become a host-constructed source revision through separately authorized recoverable local ref publication.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-30"
+    statement: >-
+      Given one retained successful executor attempt, an approved artifact-to-source mapping and
+      exact local Git destination, preview and separately authorize construction and publication
+      of one content-identified implementation revision while preserving execution history,
+      unrelated source content and independent evidence and completion authority.
+    acceptance_criteria:
+      - The first local-git-v1 adapter accepts only an explicitly initialized owner-private bare SHA-1 Git repository with a retained initialization identity and reviewed sealed configuration. Its separate private handoff journal pins that repository identity and the canonical storage scope; ordinary operations never initialize, replace or silently migrate either resource.
+      - Read the selected successful attempt from its canonical initialized executor journal and validate its retained contract, immutable receipt, build identity and exact artifact roster. Retain the complete source contract and require its digest to match the receipt authorization before using its approved model, context or input target; the base revision must equal that retained input target revision. Imported receipt JSON and candidate revision claims do not establish handoff authority.
+      - A closed reviewed policy pins the handoff and executor journal paths and identities, repository path and identity and literal permitted destination paths or directory prefixes. Candidate output cannot select another repository, broaden allowed paths or replace protected operator resources.
+      - Read-only preview checks the actual source objects, expected destination ref and bounded safely opened artifact bytes, then returns the exact mapped changes, proposed tree and commit and separate authorization template without writing objects, refs, journal history, state or bindings.
+      - New publication requires separate exact authorization pinning the policy, initialized storage scope, execution and attempt, retained receipt and build, base revision, expected destination value, path mapping, artifact identities and deterministic commit metadata. Changed preconditions reject the request rather than infer renewed approval.
+      - Map only explicitly selected bounded regular-file artifacts to permitted normalized source paths. Reject traversal, ambiguous or colliding mappings and paths targeting or traversing symbolic links, submodules or unsafe destination components; preserve unrelated base tree entries and existing regular-file modes, using mode 100644 for new ordinary files. The first adapter supplies no deletion, executable-bit selection, checkout or working-tree mutation.
+      - Trusted operator code constructs the exact Git blobs, tree and single-parent commit from the pinned base and approved artifact bytes. Fixed Git plumbing uses a sanitized execution environment and sealed repository settings; candidate-controlled hooks, configuration, filters, replacement objects, alternates, credential helpers and network access cannot influence publication.
+      - Before any Git object or ref write, durably prepare the complete authorized handoff, exact required object bytes and resulting identities in the separate initialized journal. Storage and repository coordination use deterministic ordered locks, bounded waits and checked private resources without changing executor or binding/completion journal formats.
+      - Publish only the explicitly selected local branch ref by compare-and-swap against either the authorized base revision or an authorized absent destination. A changed ref conflicts without overwriting it, changing another ref or treating a clock or stale preview as publication authority.
+      - A durable immutable provenance receipt identifies the source executor attempt, original build and selected artifact roster and mapping, repository identity, base and resulting tree/commit, local destination ref and authorization. It proves this trusted byte-to-tree handoff rather than test honesty, acceptance coverage or a later revision's provenance.
+      - Exact replay returns the retained result without consuming another executor attempt, constructing a different commit or repeating a successful publication. Preserve prepared intent and receipt history through interruption; a different request cannot reuse the same immutable handoff identity.
+      - Explicit model-independent recovery validates retained object bytes and the initialized repository and journal, publishes only while the exact authorized before-ref remains, finalizes only when the exact proposed after-ref is present, and reports conflict for any third value. Missing required base objects or uncertain publication facts remain unresolved; recovery never replaces divergent refs or rereads changed candidate output as authority.
+      - Ordinary journal operations refuse interrupted SQLite sidecars. Separately authorized journal-only repair preserves protected exact backups before recovery and grants no Git publication, execution, budget-reset, state, evidence or completion authority.
+      - Handoff returns the resulting source target with the retained approved model revision and context. Binding supersession, remote push, producer execution, evidence admission, completion, release and deployment remain separately authorized; no local handoff result alone removes pending work or supplies a successful verification claim.
+      - End-to-end acceptance coverage connects a reviewed plan, durable dispatch, real isolated execution and reviewed handoff to separately associated trusted source evidence and completion. Wrong-revision evidence, changed artifacts, stale refs, replay and interrupted publication remain distinguishable, with unrelated work and authoritative execution and completion history preserved.
+    verification_method: Handoff contract, sealed local Git plumbing, journal, command and process-fault tests plus an end-to-end pilot using real isolated execution and controlled trusted-evidence responses; no live remote publication is inferred from the controlled evidence fixture.
+    observe:
+      tests:
+        cases:
+          - "python/tests/test_handoff*.py::*"
+
   - id: APP-012
     type: Application
     name: Verification completion reconciler
@@ -275,6 +310,18 @@ records:
     responsibility: For explicitly requested local execution, launch through installed Bubblewrap, verify the reviewed runtime, immutable inputs and actual boundary, and retain bounded untrusted results without operator authority.
     interfaces: [exacly isolate command, exacly isolation inspect command, exacly.isolation Python API]
     implementation_ref: { locator: python/src/exacly/isolation.py }
+
+  - id: APP-018
+    type: Application
+    name: Reviewed output handoff
+    description: Explicit local artifact-to-Git preview, separately authorized publication and durable inspection and recovery commands.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-30"
+    responsibility: Validate retained successful executor artifacts and exact local source scope, construct approved Git objects, publish one local ref conditionally and retain provenance and recoverable history without evidence or completion authority.
+    interfaces: [exacly handoff local-git command, exacly handoffs init-repository/init/show/recover/recover-journal commands, exacly.handoff Python API]
+    implementation_ref: { locator: python/src/exacly/handoff.py }
 
   - id: INFO-004
     type: Information
@@ -324,6 +371,18 @@ records:
     identifiers: [execution ID, execution attempt ID, attempt ordinal, journal initialization ID, task and binding identity, adapter, authorization digest, output build identity]
     steward: exacly-maintainers
 
+  - id: INFO-009
+    type: Information
+    name: Output handoff provenance
+    description: Reviewed artifact mappings and exact Git object identities with immutable local publication and recovery history.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-30"
+    definition: Versioned handoff identity, pinned journal and repository instances, selected executor attempt and successful receipt/build, approved base, artifact roster and destination mapping, exact commit metadata and prepared object bytes, expected and resulting local ref values and durable provenance receipt. These records establish the approved byte-to-Git handoff without authenticating tests, remote publication or task completion.
+    identifiers: [handoff ID, journal initialization ID, repository initialization ID, execution ID and attempt ordinal, executor receipt digest, output build identity, artifact path and digest, base and result Git tree and commit, local destination ref, authorization digest]
+    steward: exacly-maintainers
+
   - id: INF-004
     type: Infrastructure
     name: Local Bubblewrap execution runtime
@@ -348,6 +407,18 @@ records:
     purpose: Retain durable dispatch intent before remote effects and immutable reconciliation, registration, supersession and explicit resolution history, with bounded locks and explicit interrupted-transaction recovery; existing execution ledgers retain their formats.
     operational_ref: { locator: docs/durable-dispatch.md }
 
+  - id: INF-006
+    type: Infrastructure
+    name: Private local Git handoff storage
+    description: Separately initialized owner-private handoff journal and sealed bare SHA-1 Git destination under operator control.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-10-30"
+    kind: Local private SQLite journal and bare Git object/ref storage
+    purpose: Retain exact approved object bytes and immutable handoff history before conditional local ref publication, with bounded coordination and explicit interrupted-journal repair, independently of existing executor and completion stores.
+    operational_ref: { locator: docs/output-handoff.md }
+
 relationships:
   - { source: CAP-004, type: contributes_to, target: OUT-001 }
   - { source: PROC-004, type: uses_capability, target: CAP-004 }
@@ -356,15 +427,23 @@ relationships:
   - { source: REQ-026, type: supports, target: PROC-004 }
   - { source: REQ-027, type: supports, target: PROC-004 }
   - { source: REQ-031, type: supports, target: PROC-004 }
+  - { source: REQ-032, type: supports, target: PROC-004 }
   - { source: APP-012, type: implements, target: REQ-024 }
   - { source: APP-013, type: implements, target: REQ-026 }
   - { source: APP-016, type: implements, target: REQ-025 }
   - { source: APP-014, type: implements, target: REQ-027 }
   - { source: APP-014, type: implements, target: REQ-031 }
+  - { source: APP-018, type: implements, target: REQ-032 }
   - { source: PROC-004, type: uses, target: APP-007, conditions: Uses existing read-only planning to select a goal before authorization. }
   - { source: PROC-004, type: uses, target: APP-012 }
   - { source: PROC-004, type: uses, target: APP-013, conditions: Only when new external work is explicitly authorized. }
   - { source: PROC-004, type: uses, target: APP-014, conditions: Only when candidate execution is explicitly authorized and isolation is established. }
+  - { source: PROC-004, type: uses, target: APP-018, conditions: Only when a retained successful executor output is separately approved for local Git handoff. }
+  - { source: APP-018, type: depends_on, target: APP-014, conditions: Reads the exact checked successful attempt and host-derived artifact identity without launching another worker or resetting its budget. }
+  - { source: APP-018, type: depends_on, target: INF-006, conditions: Requires explicit initialized private storage and a sealed bare repository before any authorized publication. }
+  - { source: APP-018, type: reads, target: INFO-008 }
+  - { source: APP-018, type: writes, target: INFO-009 }
+  - { source: INF-006, type: stores, target: INFO-009, role: system_of_record }
   - { source: APP-012, type: depends_on, target: APP-008, conditions: Fresh live evidence admission remains required before each new completion evaluation. }
   - { source: APP-012, type: depends_on, target: APP-009, conditions: Reuses saved-action contract checks without treating an advisory preview as completion authority. }
   - { source: APP-012, type: depends_on, target: APP-006, conditions: Evaluates the selected goal against merged current state and reports whole-policy readiness separately. }

@@ -7,7 +7,9 @@ verification and recoverable local task completion. Verification and completion
 run in an operator-controlled environment. That release excludes candidate
 isolation, task dispatch and executor supervision (REQ-025–027).
 The [isolation](#isolate-a-candidate-command) and
-[dispatch](#dispatch-approved-verification-work) sections describe additional
+[dispatch](#dispatch-approved-verification-work),
+[executor](#run-a-bounded-local-executor) and
+[output handoff](#hand-executor-artifacts-to-a-git-revision) sections describe additional
 unreleased functionality on main. Review the
 [release notes and upgrade paths](../CHANGELOG.md) for report-format changes and
 explicit ledger-copy upgrades.
@@ -28,6 +30,7 @@ explicit ledger-copy upgrades.
 - [`exacly reconcile github-actions --dry-run`](#preview-verification-reconciliation) previews whether fresh admitted evidence satisfies a selected plan action's verification goal.
 - [`exacly complete github-actions` and `exacly completions show` / `recover`](#complete-registered-verification-work) complete one registered local task from admitted evidence and inspect or resolve interrupted completion.
 - [`exacly isolate`](#isolate-a-candidate-command) runs one explicitly authorized command through a verified Linux boundary and retains untrusted outputs.
+- [`exacly handoff local-git` and `exacly handoffs`](#hand-executor-artifacts-to-a-git-revision) preview and separately authorize local artifact-to-Git publication with retained provenance and recovery.
 - [`exacly mcp`](#mcp-server) answers show, trace, impact and gaps questions for coding agents.
 
 ```sh
@@ -609,7 +612,7 @@ The repository uses [mise](https://mise.jdx.dev/) for its tools (Python and uv) 
 | `mise run check` | Full tests, lint, type checks, examples, model refresh and verification gate |
 | `mise run check-core` | Runs the development subset, lint, type checks and examples without refreshing state or evaluating the verification policy |
 
-Use `check-core` when developing core functionality without the supported Linux isolation runtime. It omits local execution and ownership test modules and cannot establish REQ-025/027 verification or the complete REQ-031 contract. Controlled coordinator substitution cases remain in this subset. Full CI continues to run `check`, including real execution checks and the verification gate; subset results never replace its `reports/junit.xml` and never enter the gate.
+Use `check-core` when developing core functionality without the supported Linux isolation runtime. It omits selected local execution, ownership and handoff test modules and cannot establish REQ-025/027 verification or the complete REQ-031/032 contracts. Controlled coordinator substitution cases remain in this subset. Some handoff contract and process-fault cases require local POSIX process identity even with controlled candidate execution; the end-to-end handoff pilot requires real Bubblewrap. Full CI continues to run `check`, including those checks and the verification gate; subset results never replace its `reports/junit.xml` and never enter the gate.
 
 To try a model against your working copy, run `uv run exacly validate path/to/spec/exacly`.
 
@@ -744,6 +747,18 @@ Explicitly initialize the private attempt companion with `exacly executors init 
 A successful result retains a task reference, output paths and a host-derived content build identity. Candidate status, logs and files remain untrusted, and execution never changes state, pending work, evidence admission or completion receipts. See the [bounded executor guide](../docs/bounded-executor.md) for initialization, full policy and authorization flow, explicit retries, cancellation, recovery, storage boundaries and the Python API.
 
 The Python coordinator consumes public attempt-storage, invocation-ownership and worker-lifecycle protocols through an optional trusted `backends=` bundle; default calls and the CLI select the existing local adapters. [Coordinator backend contracts](../docs/coordinator-interfaces.md) describe the interfaces, shared conformance cases, strict local history compatibility and explicit migration requirements. Protocol `0.1.0` accepts one local-machine coordination domain; distributed ownership and remote provider support require separately reviewed and verified contracts.
+
+## Hand executor artifacts to a Git revision
+
+**Unreleased functionality on main.**
+
+`exacly handoff local-git --request FILE` previews selected artifacts from one retained successful executor attempt against a pinned base commit and policy-defined permitted paths. It verifies exact artifact bytes and returns the proposed changes, tree, commit and authorization template without writing objects, refs or history. `--apply --authorization FILE` requires separate review of that exact operation.
+
+The `local-git-v1` adapter constructs the approved objects in trusted operator code and updates one selected local branch ref by compare-and-swap. Its destination is an explicitly initialized private bare SHA-1 Git repository, with a separate private journal retaining exact prepared object bytes before publication. Stale refs, changed artifacts and unsupported paths block new publication. Unrelated base content and existing regular-file modes are preserved.
+
+`exacly handoffs init-repository` and `init` initialize the repository and journal separately. `show` inspects retained history, while `recover` publishes only the exact prepared result when the authorized before-ref remains or finalizes an already published exact after-ref. A third ref value conflicts. `recover-journal --authorize-recovery` preserves a protected backup before journal-only SQLite repair. Recovery needs no current model or candidate output and never resets executor limits.
+
+The resulting source target and provenance receipt connect selected executor bytes to the constructed commit. Binding supersession, remote push, trusted producer execution, evidence admission and completion remain separately authorized. See the [output handoff guide](../docs/output-handoff.md) for initialization, policy/request and authorization formats, artifact mappings, immutable metadata and interruption recovery.
 
 ## Register execution bindings
 

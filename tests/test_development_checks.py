@@ -18,6 +18,9 @@ BACKEND_TESTS = {
     "python/tests/test_executor_cli.py",
     "python/tests/test_executor_interfaces.py",
     "python/tests/test_executor_local.py",
+    "python/tests/test_handoff.py",
+    "python/tests/test_handoff_faults.py",
+    "python/tests/test_handoff_end_to_end.py",
 }
 
 
