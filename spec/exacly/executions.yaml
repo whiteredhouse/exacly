@@ -75,14 +75,14 @@ records:
   - id: INF-003
     type: Infrastructure
     name: Private execution ledger
-    description: An operator-selected protected SQLite ledger with explicit operational or audit-only schema selection and opt-in semantic indexing.
+    description: Operator-selected protected SQLite binding and completion storage with explicit schema selection, opt-in semantic indexing and a separately initialized executor-attempt companion.
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-29"
+    last_reviewed_at: "2026-10-30"
     kind: Local SQLite storage
-    purpose: Retain immutable bindings, supersession history and watermarks; preserve admitted completion history in operational versions 2 and 4, indexed integrity in explicitly activated version 4 and separate audit-only version-3 copies under operator control.
-    operational_ref: { locator: "Operator-selected protected SQLite file supplied through --ledger." }
+    purpose: Retain immutable bindings, supersession history and watermarks; preserve admitted completion history in operational versions 2 and 4, indexed integrity in explicitly activated version 4 and separate audit-only version-3 copies under operator control. Retain bounded executor attempts in an explicitly initialized private companion pinned to that ledger without changing existing database formats.
+    operational_ref: { locator: "Operator-selected protected SQLite binding file supplied through --ledger; separate executor companion and recovery described in docs/bounded-executor.md." }
 
 relationships:
   - { source: REQ-021, type: supports, target: PROC-002 }

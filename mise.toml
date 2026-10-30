@@ -19,12 +19,16 @@ description = "Run the development test subset without the Linux isolation backe
 depends = ["sync"]
 # Keep this subset separate from the full report consumed by model and verification.
 run = [
-    "echo 'Development subset only: isolation backend tests excluded; no model refresh or verification evidence.'",
+    "echo 'Development subset only: local execution backend tests excluded; no model refresh or verification evidence.'",
     """uv run --locked pytest spec/tests python/tests tests \
       --ignore=python/tests/test_execution_isolation.py \
       --ignore=python/tests/test_isolation_syscalls.py \
       --ignore=python/tests/test_isolation_contract.py \
       --ignore=python/tests/test_isolation_cli.py \
+      --ignore=python/tests/test_executor.py \
+      --ignore=python/tests/test_executor_faults.py \
+      --ignore=python/tests/test_executor_runtime.py \
+      --ignore=python/tests/test_executor_cli.py \
       --junitxml=reports/core-junit.xml""",
 ]
 
@@ -77,6 +81,6 @@ description = "Everything CI runs"
 depends = ["verification"]
 
 [tasks.check-core]
-description = "Development checks without isolation backend verification or model refresh"
+description = "Development checks without local execution backend verification or model refresh"
 depends = ["test-core", "lint", "typecheck", "examples"]
-run = "echo 'Core development checks passed; isolation backend and full verification remain unchecked.'"
+run = "echo 'Core development checks passed; local execution backend and full verification remain unchecked.'"
