@@ -214,6 +214,74 @@ def test_delivery_relative_references_are_retained_without_queries_or_unsafe_pat
     }
 
 
+@pytest.mark.parametrize("excluded_by", ["expired", "wrong_target"])
+def test_unknown_cases_locate_excluded_evidence_without_treating_it_as_support(excluded_by: str) -> None:
+    docs = documents()
+    evidence = docs["state"]["records"]["REQ-1"]["assessments"][0]["evidence"][0]
+    evidence["locator"] = "https://ci.test/verification/123?token=secret#private"
+    if excluded_by == "expired":
+        evidence["expires_at"] = "2026-10-25"
+    value = report(docs, **({"revision": B} if excluded_by == "wrong_target" else {}))
+    native = next(check for check in value["checks"] if check["dimension"] == "verification")
+    assert native["result"] == "unknown" and not native["evidence"] and native["excluded"]
+    before = copy.deepcopy(value)
+    root = render(value)
+    case = next(case for case in root.iter("testcase") if properties(case)["exacly.dimension"] == "verification")
+    metadata = properties(case)
+    assert metadata["exacly.excluded_evidence.1"] == "https://ci.test/verification/123"
+    assert metadata["exacly.excluded_evidence.1.reason"] == native["excluded"][0]["reason"]
+    assert not any(key.startswith("exacly.evidence.") for key in metadata)
+    assert metadata["exacly.readiness.result"] == "unknown"
+    failure = case.find("failure")
+    assert failure is not None and failure.attrib["type"] == "exacly.readiness.unknown"
+    assert {case_id(case) for case in root.iter("testcase")} == {
+        case_id(case) for case in render(report()).iter("testcase")
+    }
+    assert value == before
+
+
+def test_excluded_references_and_reasons_have_separate_privacy_and_size_bounds() -> None:
+    value = report(revision=B)
+    verification = next(check for check in value["checks"] if check["dimension"] == "verification")
+    verification["evidence"] = [{"locator": "https://ci.test/applicable"}]
+    verification["excluded"] = [
+        {
+            "reason": "Mismatch https://user:password@private.test/run?token=secret " + "é" * 1000,
+            "assessment": {
+                "evidence": [
+                    {"locator": "https://user:password@private.test/run"},
+                    {"locator": "file:///private/operator.txt"},
+                    {"locator": "https://ci.test/bad\x00path"},
+                    {"locator": "https://ci.test/excluded/0?token=duplicate"},
+                    *[{"locator": f"https://ci.test/excluded/{index}?token=secret#private"} for index in range(10)],
+                ]
+            },
+        }
+    ]
+    root = render(value)
+    case = next(case for case in root.iter("testcase") if properties(case)["exacly.dimension"] == "verification")
+    metadata = properties(case)
+    assert metadata["exacly.evidence.1"] == "https://ci.test/applicable"
+    assert {
+        key: val
+        for key, val in metadata.items()
+        if key.startswith("exacly.excluded_evidence.") and not key.endswith(".reason")
+    } == {
+        f"exacly.excluded_evidence.{index + 1}": f"https://ci.test/excluded/{index}"
+        for index in range(policy.JUNIT_MAX_REFERENCES)
+    }
+    for key, reason in metadata.items():
+        if key.startswith("exacly.excluded_evidence.") and key.endswith(".reason"):
+            assert len(reason.encode()) <= 512
+            assert "[truncated]" in reason
+            assert all(secret not in reason for secret in ("password", "token=", "#private"))
+    assert all(
+        secret not in json.dumps(metadata)
+        for secret in ("password", "token=", "#private", "/private/operator.txt", "bad\\u0000path")
+    )
+    assert metadata["exacly.readiness.result"] == "unknown"
+
+
 @pytest.mark.parametrize("bad", [None, {}, {"policy": {}, "target": {}}, {"policy": [], "target": {}}])
 def test_malformed_or_empty_native_reports_do_not_become_passing_suites(bad: Any) -> None:
     with pytest.raises(ValueError):

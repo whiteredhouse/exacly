@@ -327,6 +327,29 @@ def as_junit(report: Doc, *, namespace: str, report_id: str) -> str:
                     break
         for number, reference in enumerate(references, start=1):
             _junit_property(case_properties, f"exacly.evidence.{number}", reference)
+        excluded = check.get("excluded", [])
+        if not isinstance(excluded, list):
+            raise ValueError("JUnit requires native excluded observations")
+        excluded_references: dict[str, str] = {}
+        for exclusion in excluded:
+            if len(excluded_references) == JUNIT_MAX_REFERENCES:
+                break
+            assessment = exclusion.get("assessment") if isinstance(exclusion, dict) else None
+            if not isinstance(assessment, dict):
+                continue
+            evidence = assessment.get("evidence", [])
+            reason = exclusion.get("reason")
+            if not isinstance(evidence, list) or not isinstance(reason, str):
+                raise ValueError("JUnit requires native excluded evidence and reasons")
+            for entry in evidence:
+                reference = _junit_reference(entry.get("locator")) if isinstance(entry, dict) else None
+                if reference is not None and reference not in excluded_references:
+                    excluded_references[reference] = reason
+                    if len(excluded_references) == JUNIT_MAX_REFERENCES:
+                        break
+        for number, (reference, reason) in enumerate(excluded_references.items(), start=1):
+            _junit_property(case_properties, f"exacly.excluded_evidence.{number}", reference)
+            _junit_property(case_properties, f"exacly.excluded_evidence.{number}.reason", _junit_text(reason, 512))
         if check["result"] != "satisfied":
             failure = ET.SubElement(
                 case,
