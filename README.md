@@ -74,10 +74,10 @@ Exacly borrows the plan and apply loop from infrastructure as code, and the spec
 | **Refresh** | Observe the real system and write state: assessments per environment and the evidence behind them. | [`exacly refresh`](python/README.md#refresh), from test results; [`exacly observe manual-qa`](python/README.md#manual-verification), from manual checks people commit |
 | **Ask** | Show a record, trace why it exists and what realizes it, list what a change affects and what the model is missing. | [`exacly`](python/README.md#questions) show, trace, impact and gaps; [views](python/README.md#views) as a pull request plan and a site; an [MCP server and skill](#with-coding-agents) for agents |
 | **Plan** | Propose the next observation or investigation for each verification prerequisite in a policy, against an explicit implementation target. | [`exacly plan`](python/README.md#plan-verification-work), read-only verification proposals; delivery planning remains planned |
-| **Register work** | Bind an existing pending task to a reviewed verification plan and output target in an operator-controlled ledger. | [`exacly executions register`](python/README.md#register-execution-bindings), with explicit [ledger diagnosis, backup and recovery](python/README.md#maintain-an-execution-ledger); task dispatch remains planned |
+| **Register work** | Bind an existing pending task to a reviewed verification plan and output target in an operator-controlled ledger. | [`exacly executions register`](python/README.md#register-execution-bindings), with explicit [ledger diagnosis, backup and recovery](python/README.md#maintain-an-execution-ledger); [durable dispatch](docs/durable-dispatch.md) has separate authorization |
 | **Apply** | Dispatch an authorized plan action as traceable work for a person, agent or workflow. | [Proposed automation](spec/exacly/README.md#automation-roadmap) |
 | **Reconcile** | Check whether a selected plan action's verification goal is satisfied by fresh admitted evidence, optionally checking its registered pending-task binding. | [`exacly reconcile github-actions --dry-run`](python/README.md#preview-verification-reconciliation), read-only preview |
-| **Compose evidence** | Freshly admit and gate every required member under its own approved producer and model contract, preserving individual evidence and an aggregate decision. | [`exacly composition validate` and `compose github-actions`](python/README.md#compose-required-admissions-and-gates), unreleased functionality on main |
+| **Compose evidence** | Freshly admit and gate every required member under its own approved producer and model contract, preserving individual evidence and an aggregate decision. | [`exacly composition validate` and `compose github-actions`](python/README.md#compose-required-admissions-and-gates), part of the 0.7.0rc1 candidate |
 | **Complete** | Complete one registered local verification task from fresh admitted evidence and merged current state, retaining a recoverable intent and completion receipt. | [`exacly complete github-actions`](python/README.md#complete-registered-verification-work), with explicit local authorization; new ledgers are completion-ready, and existing version-1 ledgers need a [copy-only upgrade](python/README.md#upgrade-a-ledger-for-completion) |
 
 See [Exacly's model](spec/exacly/README.md) for record lifecycles, traceability and observed verification and delivery.
@@ -127,6 +127,19 @@ An unpinned install selects the latest stable release. See the
 [release notes and upgrade paths](CHANGELOG.md) before using existing ledger
 files or consuming JSON reports with this version.
 
+The **0.7.0rc1 release candidate** adds separately authorized GitHub task
+dispatch, isolated bounded local execution, reviewed artifact-to-Git handoff,
+evidence composition and JUnit readiness reports. Opt into the consumer trial
+with an exact prerelease pin:
+
+```sh
+uvx --from 'exacly==0.7.0rc1' exacly validate spec/examples/0.2/invoice-reminders
+```
+
+The candidate's local runtime and storage requirements are in the
+[package reference](python/README.md). Remote source publication and unattended
+end-to-end automation remain future work.
+
 In your own project, keep config in `spec/exacly/` and pass the commit it was validated at with `--revision "$(git rev-parse HEAD)"`.
 
 ## With coding agents
@@ -159,7 +172,7 @@ The repository uses [mise](https://mise.jdx.dev/) for Python, uv and tasks. Run 
 mise run check
 ```
 
-For core development without the supported Linux isolation runtime, run `mise run check-core`. It runs a development subset plus lint, type checks and examples, writing `reports/core-junit.xml` without refreshing state or evaluating readiness. It excludes the four local backend test modules and does not verify candidate isolation. Full Linux CI still runs `mise run check` with the real boundary tests. See the [development tasks](python/README.md#development).
+For core development without the supported Linux isolation runtime, run `mise run check-core`. It runs a development subset plus lint, type checks and examples, writing `reports/core-junit.xml` without refreshing state or evaluating readiness. It omits selected local runtime, ownership and handoff test modules and does not establish their complete contracts. Full Linux CI still runs `mise run check` with the real boundary tests. See the [development tasks](python/README.md#development).
 
 The check also evaluates [`ci/verification.yaml`](ci/verification.yaml) against a target for the checked commit. It requires verification of every active Requirement, independently of delivery. The model binds stable test-case IDs rather than a workflow name, so both the Spec and Release workflows can supply those results. Results and the selected target are written under `reports/`. See [release notes](CHANGELOG.md) for package changes.
 
@@ -184,3 +197,4 @@ Each part of Exacly has its own version, tagged as `<part>-vX.Y.Z`, as release-p
 | 0.4.0: independent verification, explicit assessment targets and readiness policies | 0.1, 0.2 |
 | 0.5.0: incomplete execution of case-bound tests gives inconclusive verification | 0.1, 0.2 |
 | 0.6.0: operator-controlled verification work, installed producer tools and recoverable local completion | 0.1, 0.2 |
+| 0.7.0rc1 candidate: durable dispatch, isolated local execution and Git handoff, evidence composition and JUnit reporting | 0.1, 0.2 |

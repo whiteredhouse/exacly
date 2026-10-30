@@ -1,6 +1,6 @@
 # Compose evidence admission and readiness
 
-**Unreleased functionality on main.**
+**Part of the `0.7.0rc1` release candidate.**
 
 A composition checks every member of an independently reviewed required set. Each
 member keeps its own producer trust policy, approved model, explicit source target

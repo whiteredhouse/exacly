@@ -1,18 +1,136 @@
 # Package release notes
 
-## Unreleased
+## 0.7.0rc1 — release candidate
 
-- `exacly handoff local-git` previews and separately authorizes artifact-to-Git publication from a retained successful executor attempt. Preview and new apply validate the full base object closure before preparing any intent. The first adapter pins a reviewed base, permitted source paths and initialized private bare SHA-1 repository, constructs exact Git objects in trusted code and updates one local branch ref conditionally. A separate handoff journal retains prepared object bytes and immutable provenance for replay and model-independent recovery. `exacly handoffs` initializes and inspects storage and explicitly recovers interrupted work. Remote push, binding changes, evidence admission and completion retain their separate authorization.
-- `exacly compose github-actions --readiness-junit` optionally writes a separate private `readiness.xml` beside the aggregate. Every required member has a stable verdict case, including members rejected before gating; executed gates reuse native prerequisite reporting. Unknown outcomes remain blocking failures, producer JUnit bytes are preserved, and incomplete or inconsistent reports cannot yield a passing subset. The public `composition.as_junit(report)` serializer performs no further evaluation. Requested XML output must be retained before the complete aggregate is published; output failures remain invocation errors.
-- `exacly composition validate` checks a required-member definition and its resolved approved policies and model inputs without GitHub access. `exacly compose github-actions` pins that definition's digest, validates every exact member selection before source reads, then uses native admission and readiness evaluation independently for each member. Scoped repository/model constraints preserve original namespaces; all required gates must pass. New private output retains native evidence and an atomic aggregate that distinguishes incomplete diagnostics from final success. The CLI streams saved member payloads instead of accumulating archive and report bytes; Python callers retain full native results by default and can opt into synchronous streaming retention. Every rerun performs fresh admission; producer policies, platform and external release inventories remain consumer responsibilities. Supported pure admission-request, approved-model and readiness-policy validation APIs share the native checks. These commands are unreleased functionality on main.
-- `exacly gate --junit FILE --junit-id LABEL` optionally exports the native readiness evaluation as JUnit XML alongside text or JSON. Versioned testcase selectors include an explicit stable logical-target label; mutable policy versions and target revisions remain metadata. Unknown prerequisites remain blocking failures, distinct from known unmet prerequisites. Invalid input or unsafe/failed report output returns 2; reporting grants no evidence-origin, fresh-test, delivery or state-writing authority.
-- The executor coordinator consumes public attempt-storage, invocation-ownership and worker-lifecycle protocols through an explicit trusted Python backend bundle. Default local adapters preserve the existing CLI, policies and journal formats. Callback identities and event order are checked before durable append so malformed adapter callbacks cannot block inspection or recovery. Common conformance and substitution cases cover reservation, budgets, ownership, cancellation and recovery; protocol `0.1.0` accepts one local-machine domain and requires a separately verified contract before distributed coordination or another provider is supported.
-- `exacly execute local` previews or separately authorizes one bounded local snapshot command for an active registered verification task. Durable attempts and fixed shared concurrency live in an explicitly initialized private companion journal without changing existing binding/completion ledger formats. The supervisor uses the verified Bubblewrap launcher, enforces a full-worker wall-clock budget, retains host-derived content build identities and supports model-independent inspection, cancellation and recovery through `executors` commands. Explicit retries remain within the retained budget; no repository effects, evidence admission, pending-work removal or completion authority are granted.
-- `exacly dispatches resolve` previews stale partial-registration history and exact current state, pending and binding facts, then requires separate reviewed authorization to append a terminal journal-only `resolved` receipt. Resolution preserves current work and remote tasks, leaves registration unfinalized and keeps the prohibition on another create for that dispatch identity. `dispatches recover-journal --authorize-recovery` repairs a protected interrupted outbox transaction with a retained backup, without reusing a stale model or changing state or bindings.
-- `exacly dispatch github-issues` previews or explicitly creates one reviewed verification task with a separate private dispatch journal, stable identity and bounded recovery. A possibly sent create is never blindly repeated; confirmed work is associated with pending verification and an execution binding through recoverable conditional state publication. `dispatches init`, `show`, `recover` and `supersede` retain controlled history without changing execution-ledger formats or granting evidence, completion or executor authority.
-- The optional local Bubblewrap backend denies `perf_event_open` for candidate processes and descendants, preventing CPU-wide performance monitoring from crossing the runtime boundary on permissive hosts. A harmless denial probe must pass before candidate execution; the protection does not depend on or change the host's `perf_event_paranoid` setting.
-- `exacly isolate` provides the optional local `linux-bubblewrap-v1` backend for the runtime-neutral candidate-isolation contract. It runs one explicitly authorized command with a reviewed detached root filesystem, immutable input snapshots and a verified namespace gate before execution. The launcher clears inherited authority, denies host network and operator interfaces, applies a fixed syscall filter protecting kernel keyrings and socket-family limits, cleans up descendants and safely collects bounded untrusted logs and regular artifacts into a new private bundle. `exacly isolation inspect` identifies runtime content for independent review; it grants no execution or completion authority. Core model and completion commands do not require the backend. REQ-025 is verified through real Linux integration cases, while durable dispatch and executor attempt supervision retain their separate contracts.
-- `mise run check-core` offers a development subset without the local backend's test modules. Its separate `reports/core-junit.xml` report is not used for state refresh or full verification; required Linux CI still runs the complete isolation suite and verification gate.
+This candidate adds separately authorized task dispatch, isolated local execution
+and reviewed artifact-to-Git handoff, plus composition of trusted evidence and
+JUnit readiness reporting. The latest stable release remains 0.6.0; select
+`exacly==0.7.0rc1` explicitly for a candidate trial.
+
+### Changes since 0.6.0
+
+- **Isolate a candidate command.** `exacly isolate` and the optional
+  `linux-bubblewrap-v1` backend use a reviewed detached root filesystem,
+  immutable input snapshots and a verified namespace gate. The launcher clears
+  inherited authority, denies host network and operator interfaces, applies a
+  fixed syscall filter, and collects bounded untrusted logs and regular
+  artifacts into a new private bundle. Kernel keyring, socket-family and
+  `perf_event_open` restrictions are checked before candidate execution;
+  Exacly does not change host kernel settings to make a launch succeed.
+- **Dispatch reviewed work durably.** `exacly dispatch github-issues` previews
+  or explicitly creates one GitHub task and associates confirmed work with
+  pending verification and an execution binding. A private journal retains
+  intent before remote effects; an ambiguous create is never blindly repeated.
+  `dispatches` commands initialize, inspect, recover and supersede dispatches.
+  Separately authorized `resolve` records stale partial registration without
+  changing work or remote tasks. Journal recovery retains a protected backup.
+- **Bound execution attempts.** `exacly execute local` previews or separately
+  authorizes one snapshot command for an active registered verification task.
+  A private companion journal retains durable attempts, retry budgets and shared
+  concurrency limits. The supervisor enforces the complete worker's wall-clock
+  budget, retains host-derived output build identities, and provides offline
+  inspection, cancellation and recovery through `executors` commands. Execution
+  does not change repository source, admit evidence or complete pending work.
+- **Compose coordinator backends.** Public attempt-storage, invocation-ownership
+  and worker-lifecycle protocols support a trusted Python backend bundle.
+  Callback identities, event order and terminal outcomes are checked before
+  durable append, preserving readable history when an adapter misbehaves.
+  Protocol `0.1.0` supports one `local-machine` domain and the existing local
+  adapter. Another provider or distributed ownership requires a separately
+  reviewed contract and real backend verification.
+- **Hand reviewed artifacts to Git.** `exacly handoff local-git` previews exact
+  mapped changes, a tree and a commit from one retained successful executor
+  attempt. Separate authorization permits publication to one local branch in
+  an explicitly initialized private bare SHA-1 repository. Trusted code validates
+  the complete base, bounded selected artifact bytes, allowed paths and expected
+  ref before preparing intent; missing or corrupt base objects leave storage
+  unchanged. A separate journal retains exact prepared object bytes and
+  provenance for immutable replay and model-independent recovery. Conditional
+  ref publication preserves divergent work and unrelated base files.
+- **Compose evidence and gates.** `exacly composition validate` checks an
+  approved required-member definition offline. `exacly compose github-actions`
+  performs fresh native admission and readiness evaluation for every explicitly
+  selected member under its own approved producer and model contract. Every
+  required gate must pass. Private output retains native evidence and an atomic
+  aggregate, distinguishes incomplete work from success and preserves original
+  namespaces. The CLI streams saved binary evidence; Python callers can retain
+  native payloads or select synchronous streaming retention. Required platform
+  inventories and external release identities remain consumer responsibilities.
+- **Report readiness as JUnit.** `exacly gate --junit FILE --junit-id LABEL`
+  exports the existing native evaluation with stable versioned case selectors.
+  `compose github-actions --readiness-junit` adds private `readiness.xml` with a
+  verdict for every required member, including rejected admissions. Unknown
+  prerequisites remain blocking failures. The serializers perform no extra
+  evaluation or admission, and output failures return an invocation error.
+- **Keep partial development checks separate.** `mise run check-core` omits
+  selected local runtime, ownership and handoff modules. Its separate JUnit
+  report does not refresh model state or establish full verification. Required
+  Linux CI and release checks still run the complete suite and verification gate.
+
+### Supported scope and runtime
+
+Core model, planning, admission and completion commands do not require
+Bubblewrap. Local isolation and execution need the supported Linux kernel
+features, Bubblewrap 0.8 or later, system libseccomp and an independently reviewed
+detached Python runtime. The [isolation guide](docs/candidate-isolation.md)
+describes the actual prerequisites and operator-managed AppArmor setup. A missing
+protection stops execution before candidate code starts; there is no host fallback.
+The boundary relies on the trusted host kernel, runtime and operator and does
+not provide cgroup resource containment or distributed execution.
+
+Dispatch, execution and handoff use separate explicitly initialized private
+journals. Handoff additionally requires sealed private bare Git storage with the
+complete reviewed base already imported. It supports adding or replacing
+ordinary files, preserves existing modes and unrelated entries, and performs no
+checkout or implicit fetch. Remote publication, binding supersession, trusted
+producer execution, evidence admission, completion, release and deployment retain
+their separate authorization.
+
+CAP-004 and PROC-004 remain proposed. Releasing these components does not
+establish unattended end-to-end automation. The local acceptance pilot uses real
+isolated execution and controlled producer responses; it does not establish a
+live remote publication or production producer run.
+
+### Formats and upgrading from 0.6.0
+
+The package version is independent of specification, report and storage versions.
+Existing `0.1` product maps and `0.2` config/state remain readable. Existing
+binding/completion ledgers keep their formats; opening an existing store never
+silently migrates, activates or repairs it.
+
+| New contract | Version in 0.7.0rc1 |
+| --- | --- |
+| Isolation policy/report and dispatch contract/report | `0.1.0` |
+| Executor contract/report and coordinator backend protocol | `0.1.0` |
+| Local Git handoff request, policy and provenance/report | `0.1.0` |
+| Composition definition, selection and aggregate report | `0.1.0` |
+| Dispatch, executor and handoff SQLite journals | Separate schema-version-1 stores |
+| Readiness JUnit case selectors | `exacly.gate/v1/...` and `exacly.composition/v1/...` |
+
+Retain the original saved plans, policies and normalized state destinations for
+registered completion and historical replay. New plans identify tool version
+`0.7.0rc1` and can have different digests; they do not replace the registered
+originals. Producer workflow changes, including package pins, require regenerated
+and independently reviewed producer-policy candidates.
+
+Existing version-1 ledgers still require the explicit copy-only upgrade before
+completion; version 2 needs no profile activation. Version-4 profiles identify
+actual validation code, schemas, installed dependency artifacts and runtime.
+Those inputs may change when upgrading or recreating the environment; the version
+label and README alone do not invalidate a profile. A recognized stale profile
+permits read-only fresh validation but blocks new operational writes until an
+explicit copy-only refresh:
+
+```sh
+exacly executions activate --ledger SOURCE --out NEW_DIR
+```
+
+Review the output, then explicitly select
+`NEW_DIR/operational/ledger.sqlite3` as the one canonical operational ledger.
+Activation preserves the source and historical proof, performs no automatic
+cutover and does not resolve prepared completion work. Version 3 remains
+audit-only; unsupported or corrupt inputs require their existing diagnostic and
+recovery procedures.
 
 
 ## 0.6.0 — 2026-10-29

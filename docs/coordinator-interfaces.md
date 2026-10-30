@@ -1,6 +1,6 @@
 # Coordinator backend contracts
 
-The coordinator uses explicit interfaces for attempt storage, invocation ownership and worker lifecycle. [REQ-031](../spec/exacly/automation.yaml) defines their obligations. `exacly.executor_interfaces` supplies the Python protocols and composition types; `exacly.executor_local` supplies the supported local implementations. This is unreleased functionality on main.
+The coordinator uses explicit interfaces for attempt storage, invocation ownership and worker lifecycle. [REQ-031](../spec/exacly/automation.yaml) defines their obligations. `exacly.executor_interfaces` supplies the Python protocols and composition types; `exacly.executor_local` supplies the supported local implementations. This is part of the `0.7.0rc1` release candidate.
 
 These interfaces provide tested extension points for another coordinator implementation. Protocol version `0.1.0` supports one `local-machine` coordination domain. The production backend remains the private SQLite companion, exclusive local ownership and verified Linux Bubblewrap worker described in the [bounded executor guide](bounded-executor.md). Remote providers and distributed ownership require their own reviewed contract and real verification before support can be claimed.
 
