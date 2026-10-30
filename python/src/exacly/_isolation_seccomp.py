@@ -16,7 +16,15 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
-DENIED = ("keyctl", "add_key", "request_key", "io_uring_setup", "io_uring_register", "io_uring_enter")
+DENIED = (
+    "keyctl",
+    "add_key",
+    "request_key",
+    "perf_event_open",
+    "io_uring_setup",
+    "io_uring_register",
+    "io_uring_enter",
+)
 SOCKET_FAMILIES = {1: "AF_UNIX", 2: "AF_INET", 10: "AF_INET6"}
 _ALLOW = 0x7FFF0000
 _ERRNO = 0x00050000

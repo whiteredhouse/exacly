@@ -46,6 +46,14 @@ def main() -> None:
             libc.syscall(config["syscalls"][name], 0, 0, 0) == -1 and ctypes.get_errno() == errno.EPERM,
             "required privileged syscall denial is missing",
         )
+    # CPU-wide perf events can cross PID namespaces on permissive hosts. A NULL attribute
+    # pointer cannot open an event, even if this required denial is accidentally absent.
+    ctypes.set_errno(0)
+    require(
+        libc.syscall(config["syscalls"]["perf_event_open"], ctypes.c_void_p(None), -1, 0, -1, 0) == -1
+        and ctypes.get_errno() == errno.EPERM,
+        "performance monitoring is not denied",
+    )
     ctypes.set_errno(0)
     require(
         libc.syscall(config["syscalls"]["socket"], 40, 1, 0) == -1 and ctypes.get_errno() == errno.EAFNOSUPPORT,
@@ -88,6 +96,7 @@ def main() -> None:
         "pid_namespace_init": True,
         "syscalls_filtered": True,
         "keyrings_denied": True,
+        "performance_monitoring_denied": True,
         "unsupported_socket_families_denied": True,
         "async_io_denied": True,
     }
