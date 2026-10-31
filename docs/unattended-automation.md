@@ -101,3 +101,16 @@ leased Git transport plus a separately authorized atomic operation-marker ref, o
 service with retained correlation. The current one-destination grant does not authorize such a marker.
 Never implement the proof by echoing the requested operation ID. REQ-037 remains proposed pending
 that concrete adapter, exact approved producer selection and live transport acceptance.
+
+## Controlled foundation integration
+
+`python/tests/test_unattended_foundations_integration.py` connects the fixed snapshot-inventory
+recipe to real native isolated execution, exact local Git handoff, the controlled remote protocol,
+current-state association and native completion. Explicit trusted fixture decisions reserve costs
+before effects. Wrong-revision evidence keeps work pending; a distinct fresh controlled producer run
+is necessary for completion. Replays preserve unrelated state and the original objective's budget.
+
+The test requires the supported Bubblewrap runtime and must fail if that boundary is unavailable.
+Its remote and producer transports are controlled test doubles. It supplies no standing-policy
+evaluator, whole-workflow controller, resource containment or live GitHub acceptance. Run it in the
+existing full supported-runtime CI; local collection/setup checks alone establish no execution result.
