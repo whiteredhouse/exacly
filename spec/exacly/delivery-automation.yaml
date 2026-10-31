@@ -1,0 +1,210 @@
+# Later proposed automation: implementation planning and separately authorized delivery effects.
+# This is not a prerequisite for the first verification pilot and does not extend REQ-018.
+exacly: "0.2.0"
+
+records:
+  - id: CAP-005
+    type: Capability
+    name: Plan and deliver approved product changes
+    description: Propose implementation work and coordinate separately delegated merge, publication and deployment stages.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-31"
+    scope: Later implementation planning and delivery through approved external agents and workflows; each stage requires its own authority and applicable observations. These stages are not prerequisites for the first verification pilot and do not broaden CAP-004 or the existing verification-only planner.
+
+  - id: PROC-005
+    type: Process
+    name: Plan and deliver a separately authorized product change
+    description: The later process from independently approved product intent to specifically delegated delivery effects and their observed results.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-31"
+    perspective: business
+    actors: [Operator, Exacly, Independent reviewer, External agent, Delivery workflow, Trusted observer]
+    trigger: An operator separately delegates implementation planning or a delivery stage under reviewed scope and limits
+    steps:
+      - Select the requested stage, approved intent, unchanged criteria, exact inputs and its independently granted authority
+      - Distinguish an established behavior gap from absent or inconclusive observations before proposing implementation work
+      - Retain a traceable decomposition and independently review proposed changes to criteria, bindings or delivery policy
+      - Invoke only the external agent or workflow authorized for the exact repository, revision, artifact and destination
+      - Observe the resulting merged commit, published artifact or deployed environment against the selected contract
+      - Retain separate stage receipts and reconcile uncertain effects before retrying, progressing or applying an authorized rollback
+    completion: The selected authorized stage has its declared result, retained lineage and applicable observations for any resulting delivery effect
+    exceptions:
+      - Verification delegation, executor success and earlier stage receipts do not authorize a later stage
+      - Changed criteria, repository heads, artifact identities or destination scope require a new applicable decision
+      - Missing required reviews, checks or observations blocks progression without manufacturing a successful result
+      - An uncertain external outcome requires reconciliation; rollback and retries stay within separately granted authority
+
+  - id: REQ-040
+    type: Requirement
+    name: Propose implementation work from approved product intent
+    description: Later implementation planning and decomposition remain distinct from verification-gap planning and execution authority.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-31"
+    statement: Given separately authorized product-planning scope and independently approved intent and criteria, propose traceable implementation work and dependencies without changing the approved contract or performing delivery effects.
+    acceptance_criteria:
+      - Missing, expired, skipped or inconclusive evidence remains an observation gap; implementation work requires an approved behavior gap or an investigated finding, rather than assuming missing evidence means missing code.
+      - Each proposed task identifies its Requirement, approved criteria, dependencies, immutable input identities, intended output scope and observable completion conditions; unresolved design choices remain explicit blockers.
+      - Generated acceptance criteria, tests, observation bindings and policy changes are proposals requiring independent review; neither the planner nor its executor can approve a weaker contract for its own result.
+      - Retain the proposal and dependency graph with stable identities and approved model, criteria, policy and target fingerprints; changed inputs require explicit revision or supersession before execution uses the proposal.
+      - People or external agents perform implementation under separately bounded execution authority; approving a proposal grants no merge, release or deployment authority and establishes no verified implementation result.
+    verification_method: Future implementation-planning contract tests; these bindings do not select an implemented or currently passing planner.
+    observe:
+      tests:
+        cases:
+          - "python/tests/test_implementation_planning.py::test_missing_evidence_is_not_an_implementation_gap"
+          - "python/tests/test_implementation_planning.py::test_decomposition_preserves_approved_criteria_and_dependencies"
+          - "python/tests/test_implementation_planning.py::test_changed_contract_requires_independent_review_and_supersession"
+          - "python/tests/test_implementation_planning.py::test_proposal_grants_no_execution_or_delivery_authority"
+
+  - id: REQ-041
+    type: Requirement
+    name: Merge a pull request under separate delivery authority
+    description: Later unattended merging uses an independently delegated merge policy and exact checked repository identities.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-31"
+    statement: Merge only a pull request covered by separate approved merge authority, after resolving its exact head and base and satisfying the repository's required checks and reviews without bypass.
+    acceptance_criteria:
+      - Resolve independently granted merge scope to the repository, pull request, exact head and base, allowed method and applicable approval decision immediately before the effect; verification, execution and handoff authority alone cannot authorize merging.
+      - Require current checks and reviews applicable to that exact head and base under the approved branch policy; changed heads or bases invalidate stale decisions, and automation cannot bypass protection, dismiss required review or weaken required checks.
+      - Preserve the approved criteria and observation bindings; generated tests or a successful executor cannot approve their own meaning or substitute for independently required review.
+      - Persist the conditional merge intent and stable effect identity before invoking the approved external merge workflow; retain the actual resulting commit and remote receipt, and reconcile an uncertain outcome before another request.
+      - A merged pull request establishes only the recorded repository effect; the resulting merged commit needs fresh applicable observations before later readiness or delivery claims, and merging grants no publication or deployment authority.
+    verification_method: Future automatic-merge contract and changed-head, review, protection and uncertain-outcome tests.
+    observe:
+      tests:
+        cases:
+          - "python/tests/test_automatic_merge.py::test_exact_head_and_base_need_separate_merge_authority"
+          - "python/tests/test_automatic_merge.py::test_required_checks_reviews_and_protection_cannot_be_bypassed"
+          - "python/tests/test_automatic_merge.py::test_uncertain_merge_is_reconciled_before_retry"
+          - "python/tests/test_automatic_merge.py::test_merged_commit_requires_fresh_observations"
+
+  - id: REQ-042
+    type: Requirement
+    name: Publish an approved release through its owning workflow
+    description: Later release publication is an independently authorized immutable artifact effect, separate from merging and deployment.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-31"
+    statement: Publish only the independently approved artifact and source identities to an explicitly authorized immutable release version and destination through an approved publisher workflow.
+    acceptance_criteria:
+      - Publication authority identifies the publisher, destination, immutable version, source revision and exact artifact digests or build identities; merge and verification authority do not grant tag, registry or release-writing capability.
+      - Require applicable verification and the approved provenance for the selected artifact bytes; missing identities block publication, and the adapter cannot silently rebuild, substitute artifacts or turn source tests into artifact acceptance.
+      - Invoke only the separately configured and approved owning release workflow; automation cannot assume ownership of an existing tag workflow, modify that workflow or approve its producer policy as part of publication.
+      - Persist a stable effect intent before publication and refuse replacing an existing tag or version; an exact replay must establish the same remote content, while an uncertain outcome is reconciled before any retry rather than moving a tag or overwriting a release.
+      - Retain the actual version, artifact, destination and publisher receipt with their identities; publication alone does not establish deployment, operational health or verification of another revision, and authoritative observations remain independently produced.
+    verification_method: Future release-publication identity, workflow-ownership, immutable-version and uncertain-effect tests.
+    observe:
+      tests:
+        cases:
+          - "python/tests/test_release_publication.py::test_publication_needs_exact_artifact_version_and_destination_authority"
+          - "python/tests/test_release_publication.py::test_publisher_cannot_rebuild_or_take_ownership_of_a_workflow"
+          - "python/tests/test_release_publication.py::test_existing_version_and_uncertain_publication_cannot_be_overwritten"
+          - "python/tests/test_release_publication.py::test_publication_is_not_deployment_or_operational_evidence"
+
+  - id: REQ-043
+    type: Requirement
+    name: Deploy an approved artifact with environment-specific authority
+    description: Later deployment and rollback use independently delegated environment scope and fresh observations of the actual rollout.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-31"
+    statement: Invoke a deployment workflow only for an independently authorized artifact, application and environment, and evaluate completion from fresh applicable operational observations of its actual result.
+    acceptance_criteria:
+      - Resolve separate deployment authority to the exact artifact or build, application, environment, approved workflow, rollout strategy and limits; publication, source verification and another environment's authorization cannot grant this scope.
+      - Check the selected artifact, approved criteria and current environment preconditions before dispatch; retain conditional intent and actual rollout identity, and reconcile stale state or an uncertain external outcome before retrying or starting conflicting work.
+      - Implement and verify an independently approved environment-specific deployment and runtime observer and evaluation contract before claiming operational readiness; the current native gate handles verification and delivery only, and workflow success cannot replace that future contract or justify unsupported state.
+      - Require fresh trusted environment-specific deployment and operational observations for the resulting revision or build and declared evaluation window; a workflow's success, source-level checks or another environment's health cannot establish this result.
+      - Rollback requires its own explicit or predelegated conditions, exact permitted prior artifact and environment scope; observe the actual partial rollout before acting, and never infer blind rollback or unbounded retries from a failure.
+      - Retain partial and terminal effects, observations and recovery decisions without relabeling evidence or weakening criteria; missing or unhealthy results remain blocked or failed even when the workflow finishes, and unresolved conditions stop further progression with an actionable reason.
+    verification_method: Future environment-scope, rollout-applicability, partial-failure and authorized-rollback tests.
+    observe:
+      tests:
+        cases:
+          - "python/tests/test_deployment_automation.py::test_environment_and_artifact_need_separate_deployment_authority"
+          - "python/tests/test_deployment_automation.py::test_current_rollout_needs_fresh_environment_specific_observations"
+          - "python/tests/test_deployment_automation.py::test_uncertain_or_partial_rollout_is_reconciled_before_retry"
+          - "python/tests/test_deployment_automation.py::test_rollback_is_bounded_and_requires_its_own_authority"
+
+  - id: APP-024
+    type: Application
+    name: Implementation planner
+    description: The later proposal and decomposition adapter for separately approved product-change intent.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-31"
+    responsibility: Produce traceable implementation proposals through people or external agents, retaining independent review and immutable input lineage without extending the verification-only planner or performing delivery effects.
+    interfaces: [Planned implementation-planning interface, Planned proposal-review interface]
+    implementation_ref: { locator: python/src/exacly/implementation_planning.py, planned: true }
+
+  - id: APP-025
+    type: Application
+    name: Delivery workflow adapter
+    description: The later adapter for separately authorized merge, release-publication and environment-deployment workflows.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-31"
+    responsibility: Invoke only independently approved external delivery workflows for exact permitted identities, retain conditional effects and receipts, and integrate explicitly approved deployment and runtime observation contracts without granting itself policy, verification or broader delivery authority.
+    interfaces: [Planned pull-request merge adapter, Planned release-publisher adapter, Planned deployment and rollback adapter]
+    implementation_ref: { locator: python/src/exacly/delivery_automation.py, planned: true }
+
+  - id: INFO-013
+    type: Information
+    name: Implementation proposals
+    description: Later reviewed product-change decompositions and their approved criteria and input lineage.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-31"
+    definition: Versioned implementation proposals with requirement and criterion mappings, dependency graph, unresolved decisions, approved model and policy fingerprints, immutable source and target scope, independent review decisions and explicit revisions or supersession; a proposal grants no execution or delivery authority.
+    identifiers: [proposal ID and revision, Requirement IDs, criterion fingerprints, dependency identities, model and policy digests, source and target identities, review decision identity]
+    steward: exacly-maintainers
+
+  - id: INFO-014
+    type: Information
+    name: Delivery effects and receipts
+    description: Later separately authorized repository, release and deployment effects with exact identities and observed outcomes.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-31"
+    definition: Versioned per-stage authorization decisions, durable conditional intents, external workflow and effect identities, exact pull-request heads and bases or artifact/version/environment scope, actual resulting commits and destinations, retained receipts and applicable observation references, with uncertain-outcome, retry and separately authorized rollback history; earlier stage outcomes never imply later authority.
+    identifiers: [effect ID and stage, authorization digest, proposal revision, repository and pull-request identity, expected head and base, resulting commit, artifact digest, immutable release version, destination and environment, workflow run, observation and receipt digests]
+    steward: exacly-maintainers
+
+relationships:
+  - { source: CAP-005, type: contributes_to, target: OUT-001 }
+  - { source: PROC-005, type: uses_capability, target: CAP-005 }
+  - { source: PROC-005, type: uses, target: APP-024, conditions: Later implementation planning needs separate approved scope and is not required by the first verification pilot. }
+  - { source: PROC-005, type: uses, target: APP-025, conditions: Each merge or publication or deployment stage requires its own independently granted authority. }
+  - { source: REQ-040, type: supports, target: PROC-005 }
+  - { source: REQ-041, type: supports, target: PROC-005 }
+  - { source: REQ-042, type: supports, target: PROC-005 }
+  - { source: REQ-043, type: supports, target: PROC-005 }
+  - { source: APP-024, type: implements, target: REQ-040 }
+  - { source: APP-025, type: implements, target: REQ-041 }
+  - { source: APP-025, type: implements, target: REQ-042 }
+  - { source: APP-025, type: implements, target: REQ-043 }
+  - { source: APP-024, type: reads, target: INFO-001 }
+  - { source: APP-024, type: reads, target: INFO-002 }
+  - { source: APP-024, type: writes, target: INFO-013 }
+  - { source: APP-024, type: depends_on, target: APP-003, conditions: Distinguishes target-specific observations and missing proof from an independently approved behavior gap. }
+  - { source: APP-025, type: reads, target: INFO-001 }
+  - { source: APP-025, type: reads, target: INFO-002 }
+  - { source: APP-025, type: reads, target: INFO-013, conditions: Only a separately approved proposal revision explicitly selected by the delivery contract is authoritative. }
+  - { source: APP-025, type: writes, target: INFO-014 }
+  - { source: APP-025, type: depends_on, target: APP-006, conditions: Existing readiness evaluation checks only the explicitly selected prerequisites and grants no delivery authority. }
+  - { source: APP-025, type: depends_on, target: INF-008, conditions: Merge and release and deployment effects use separate protected authority namespaces or journals and cannot reuse a verification-pilot grant. }
+  - { source: INF-008, type: stores, target: INFO-013, role: system_of_record, conditions: Retains independently reviewed proposal artifacts when selected; read-only proposal generation requires no initialized coordination journal. }
+  - { source: INF-008, type: stores, target: INFO-014, role: system_of_record, conditions: Proposed delivery history retains distinct protected merge and release and deployment effect scopes without broadening an existing journal's authority. }
