@@ -77,3 +77,27 @@ registration. Intent, receipt and successful replay synchronize the pinned journ
 The 25 controlled integration/fault cases include duplicate processes, exits on both sides of the
 native binding write, divergent state and failed directory synchronization. They establish this
 association primitive, not the complete REQ-038 fresh-evidence and native-completion workflow.
+
+## Durable remote publication protocol
+
+`exacly.remote_publication` retains exact native published handoff provenance and separately scoped
+remote intent in an initialized private journal. Trusted configuration selects a `RemoteTransport`
+implementation and pins its identity, immutable remote repository ID, destination, expected old
+revision, exact handoff commit/tree/receipt and native journal identities. The one-shot authorization
+excludes base-history import: the remote base must already exist, and only the retained handoff delta
+may be supplied. Native publication, evidence, merge, release and deployment remain separate effects.
+
+The journal synchronizes prepared and sent intent before a single checked transport request.
+After an uncertain send, recovery only discovers. It cannot resend because discovery is empty or the
+old ref remains. Publication requires exact objects, destination and independently established stable
+operation correlation. Directory synchronization also gates historical replay after a prior error.
+The 39 controlled protocol/fault tests include process loss, duplicate processes, drift and failed
+intent/sent/receipt synchronization; no remote network is used.
+
+This foundation has no concrete GitHub transport or approved CI run selector. GitHub REST ref updates
+do not expose atomic expected-old compare-and-swap, so a pre-read followed by REST PATCH is insufficient.
+Plain Git refs also cannot prove this protocol's operation identity. A concrete adapter could use
+leased Git transport plus a separately authorized atomic operation-marker ref, or a reviewed external
+service with retained correlation. The current one-destination grant does not authorize such a marker.
+Never implement the proof by echoing the requested operation ID. REQ-037 remains proposed pending
+that concrete adapter, exact approved producer selection and live transport acceptance.
