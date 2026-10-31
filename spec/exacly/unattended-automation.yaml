@@ -50,10 +50,10 @@ records:
       - Recheck expiry and revocation before new effects or retries. Revocation prevents new grants and requests cancellation where supported; it does not claim to recall an already sent remote request, erase history or invent permission for a new effect under the name of recovery.
       - Changes to acceptance criteria, observation bindings, trusted verifier or observer code, producer policy or the delegation itself require independent review and a new approved contract. A permitted product-source path does not authorize weakening the checks deciding success, including Exacly's own pinned observer source.
       - Merge, release, deployment, destruction and unsupported runtime capabilities require separate explicit contracts; the first verification delegation does not inherit them. Unknown decisions and unavailable authorizer or budget storage stop new effects with an inspectable escalation.
-    verification_method: Future delegation-scope, protected-path, budget, revocation and exact-authorization compatibility tests.
+    verification_method: Objective-accounting and fault tests cover the local accounting foundation; delegation-scope, protected-path, revocation and native exact-authorization compatibility acceptance remain future work.
     observe:
       tests:
-        cases: ["python/tests/test_standing_authorization.py::*", "python/tests/test_standing_authorization_faults.py::*"]
+        cases: ["python/tests/test_standing_authorization.py::*", "python/tests/test_standing_authorization_faults.py::*", "python/tests/test_standing_authorization_scope.py::*"]
 
   - id: REQ-036
     type: Requirement
@@ -169,13 +169,13 @@ records:
   - id: APP-021
     type: Application
     name: Standing effect authorizer
-    description: Planned trusted evaluator of independently approved delegation and exact current effect proposals.
+    description: Local objective-accounting foundation for a planned trusted evaluator of independently approved delegation and exact current effect proposals.
     owner: exacly-maintainers
     lifecycle: proposed
     evidence: []
     last_reviewed_at: "2026-10-31"
     responsibility: Issue and retain exact one-shot decisions within protected scope and objective-wide budgets without granting authority to candidate templates or approving policy drift.
-    interfaces: [Planned trusted standing-authority integration, Planned exacly.automation_authorization Python API]
+    interfaces: [Objective accounting through exacly.standing_authorization, Planned trusted standing-authority integration, Planned exacly.automation_authorization Python API]
     implementation_ref: { locator: python/src/exacly/automation_authorization.py, planned: true }
 
   - id: APP-022
@@ -217,7 +217,7 @@ records:
   - id: INFO-012
     type: Information
     name: Standing delegation and exact authorization decisions
-    description: Planned protected approved delegation content, scope and budget history with its exact per-effect grants or denials.
+    description: Protected local objective accounting and retained trusted decisions; independent delegation evaluation and native effect grants remain planned.
     owner: exacly-maintainers
     lifecycle: proposed
     evidence: []
@@ -229,14 +229,14 @@ records:
   - id: INF-008
     type: Infrastructure
     name: Protected automation coordination storage
-    description: Planned private operator storage for new workflow and delegation coordination records.
+    description: Private operator storage for the local objective-accounting foundation; workflow and standing-policy coordination remain planned.
     owner: exacly-maintainers
     lifecycle: proposed
     evidence: []
     last_reviewed_at: "2026-10-31"
     kind: Planned protected local control-plane journal storage
     purpose: Retain initialized scoped workflow, remote-effect and authorization history in separately protected stores or namespaces while existing dispatch, executor, handoff, binding and completion journals retain their own formats and authority; no distributed guarantees or silent migrations follow from this proposal.
-    operational_ref: { locator: docs/unattended-automation.md, planned: true }
+    operational_ref: { locator: docs/unattended-automation.md }
 
 relationships:
   - { source: REQ-034, type: supports, target: PROC-004 }
