@@ -1,0 +1,282 @@
+# Proposed unattended verification contracts. These records describe future behavior, not shipped commands.
+# The existing per-effect primitives retain their own authority, journals and verification contracts.
+exacly: "0.2.0"
+
+records:
+  - id: REQ-034
+    type: Requirement
+    name: Resume approved verification workflows without an attending operator
+    description: Coordinate existing verification primitives through a durable, bounded whole-workflow controller.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-31"
+    statement: >-
+      Given an explicitly selected verification objective, approved model and policies, and independently
+      delegated authority, coordinate eligible work from planning through observation-confirmed completion,
+      preserving cross-phase identity and recovering unfinished effects before starting new ones.
+    acceptance_criteria:
+      - A versioned workflow contract pins the objective, original goal and input target, approved model, criteria and observation bindings, policies, canonical stores and initialized coordination identities; the first supported scope is one local-machine coordination domain.
+      - Persist phase intent and correlations to native plans, tasks, bindings, attempts, handoffs, remote operations, run selections and completion receipts before effects. Existing component journals remain authoritative for their effects; controller progress neither replaces them nor pretends that different stores share one atomic transaction.
+      - Duplicate schedules and events coalesce by durable workflow and effect identity. Restart inspects and reconciles unfinished component operations before retrying; an ambiguous external outcome cannot authorize a duplicate effect or silently become a successful phase.
+      - Reassess current applicability and recheck the exact state, active binding, policy and delegated authority before each new effect. Changed criteria, trust policies, bindings, unsupported scope or conflicting external state pauses the workflow for explicit replanning, supersession or review.
+      - Select investigation, evidence collection or a configuration escalation from the existing planner; missing evidence does not establish missing implementation. Already satisfied work is superseded without unnecessary execution and its history remains inspectable.
+      - Waiting, polling and retries use bounded deadlines and backoff. Consume and reconcile the standing authorizer's authoritative objective-wide attempt, time and model-service reservations alongside native component limits; replans, new action IDs, successive revisions, binding supersession or another journal or policy version cannot replenish consumed or reserved capacity.
+      - Expose durable status, pause, cancellation, recovery and actionable escalation for unavailable infrastructure, failed CI, exhausted budgets and stale contracts. Cancellation and revocation stop new effects while preserving uncertain in-flight effects and their separately approved recovery semantics.
+      - Reobserve after completion before selecting more work. Only native admitted evidence and completion may establish satisfied work; a controller phase, worker exit, published commit, merged PR or passing report alone cannot remove pending work.
+    verification_method: Future whole-workflow, event deduplication, restart, budget and concurrency acceptance tests.
+    observe:
+      tests:
+        cases: ["python/tests/test_unattended_controller.py::*", "python/tests/test_unattended_controller_faults.py::*"]
+
+  - id: REQ-035
+    type: Requirement
+    name: Delegate exact effects under bounded standing authorization
+    description: Permit routine unattended effects through independently approved policy without weakening one-shot authorization.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-31"
+    statement: >-
+      Let a trusted authorizer evaluate current effect proposals against a protected independently approved
+      standing policy and retain exact one-shot decisions within its declared scope, lifetime and total budgets.
+    acceptance_criteria:
+      - Trusted operator configuration selects an independently approved delegation and its authority; candidate inputs, a policy filename, a saved plan, content digests and copied authorization templates cannot approve themselves or select a different authorizer.
+      - The closed versioned delegation identifies eligible objectives and actions, adapters and capabilities, source and protected paths, repository and destination identities, permitted effects, expiry, revocation and finite objective-wide budgets. Missing or ambiguous permissions deny new effects.
+      - Derive exact grants for existing effect APIs and invocations only after independently checking current facts and the standing scope. Preserve native per-attempt, per-handoff and dispatch authorization documents where they exist, and scoped explicit registration or completion invocations where those are the native authorization mechanism; retain all stale-precondition checks without an approval-bypass flag or blanket retry permission.
+      - Journal the delegation identity, effect proposal and current preconditions, decision, reason, exact authorization content, budget reservation and subsequent outcome before releasing authority. Replayed, stale or differently scoped proposals cannot consume one approval as permission for another effect.
+      - Atomically check and reserve objective-wide budgets with each exact grant under concurrent requests. The authorizer owns this accounting; controller progress references and reconciles the same reservations rather than maintaining a separate replenishable counter, and uncertain effects retain their reservation until the native outcome is established.
+      - Track consumed and uncertain effects across crashes, replans, changed action IDs, output revisions and superseded bindings. A changed policy version, new workflow alias or replacement store cannot reset the logical objective's budget or forget a possibly sent request.
+      - Recheck expiry and revocation before new effects or retries. Revocation prevents new grants and requests cancellation where supported; it does not claim to recall an already sent remote request, erase history or invent permission for a new effect under the name of recovery.
+      - Changes to acceptance criteria, observation bindings, trusted verifier or observer code, producer policy or the delegation itself require independent review and a new approved contract. A permitted product-source path does not authorize weakening the checks deciding success, including Exacly's own pinned observer source.
+      - Merge, release, deployment, destruction and unsupported runtime capabilities require separate explicit contracts; the first verification delegation does not inherit them. Unknown decisions and unavailable authorizer or budget storage stop new effects with an inspectable escalation.
+    verification_method: Future delegation-scope, protected-path, budget, revocation and exact-authorization compatibility tests.
+    observe:
+      tests:
+        cases: ["python/tests/test_standing_authorization.py::*", "python/tests/test_standing_authorization_faults.py::*"]
+
+  - id: REQ-036
+    type: Requirement
+    name: Integrate one concrete external worker through the approved execution boundary
+    description: Delegate repair or evidence work to an actual reviewed command or coding-agent integration.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-31"
+    statement: >-
+      Supply one concrete trusted-selected worker integration with exact approved snapshots and bounded
+      capabilities, retaining real execution outcomes and artifact identities without giving candidate code
+      operator, repository publication, evidence or completion authority.
+    acceptance_criteria:
+      - Deliver and document a usable reviewed worker configuration or model-service broker, with real acceptance tests for its lifecycle; compatible protocol types and a provider self-report alone do not establish a supported integration or physical runtime boundary.
+      - Prepare immutable source and task snapshots from the exact approved repository and base revision under permitted paths, retaining byte identities and separate approved model identity. Candidate paths and revision claims cannot redirect snapshot selection or execute checkout hooks and filters in operator storage.
+      - Reuse the existing isolation, attempt supervision and checked backend lifecycle contracts. Privileged credentials, policy originals, ledgers, authoritative state, host repository and publication or completion interfaces stay outside candidate authority; candidate configuration cannot load another provider or expand capabilities.
+      - If model-service access is needed, a separately reviewed trusted broker enforces explicit operation, data, request and spend limits without exposing its credentials or general network authority to candidate tools. The existing local Bubblewrap backend's network denial is not silently relaxed.
+      - Enforce declared wall-clock, retry and concurrency budgets plus the integration's host resource and model-service limits. Establish CPU, memory and process containment through a reviewed disposable host or runtime resource controls rather than claiming existing timeout and tmpfs limits provide it.
+      - Retain trusted worker lifecycle and termination facts separately from candidate logs, status and artifacts, preserving content build identities for handoff. Failure, cancellation, unavailable infrastructure or exhausted resources cannot be salvaged into success from candidate output alone.
+      - Verify one local coordination deployment first; another physical backend or distributed ownership requires its own reviewed contract, fencing and real verification. A first workflow-only evidence pilot may use a deterministic reviewed command without claiming coding-agent support.
+    verification_method: Future concrete worker, broker-boundary, resource-budget and real-runtime integration tests.
+    observe:
+      tests:
+        cases: ["python/tests/test_worker_integration.py::*", "python/tests/test_worker_integration_runtime.py::*"]
+
+  - id: REQ-037
+    type: Requirement
+    name: Publish exact handoff commits remotely and associate approved CI
+    description: Bridge reviewed local Git output to a permitted remote destination and immutable producer selection.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-31"
+    statement: >-
+      Under separately authorized remote effects, publish the exact retained handoff commit to a pinned
+      remote repository and destination, then identify the approved producer run and attempt for that
+      resulting revision without treating publication or CI discovery as verification.
+    acceptance_criteria:
+      - Pin immutable remote repository identity, approved source and destination, exact local handoff provenance and commit, expected remote ref value and permitted effect. Base-object import and any PR creation or update also require explicit scoped authority and cannot select candidate-controlled remotes or credentials.
+      - Persist intent and stable operation identity before remote effects. Publish with the destination's checked expected-state semantics; ref drift, protected-branch rejection or another actor's change conflicts without force-overwriting it or broadening authority.
+      - After interrupted or ambiguous publication, discover the exact remote objects, ref and operation before retrying. Absence of a response or an empty discovery result is not permission to duplicate an uncertain effect; incompatible or unverifiable remote state remains unresolved.
+      - Any created or updated PR is associated with the exact approved source and base identities and retained remote operation. PR existence, merge or remote publication supplies no implicit merge, release, deployment, evidence or completion authority.
+      - Trigger or observe only an approved producer contract, with separately authorized reruns. Record the immutable repository, workflow, source revision, run and attempt, and wait for actual terminal status within bounded deadlines; a latest green run, unrelated PR check or merely matching display name is insufficient.
+      - Preserve current admission restrictions. A consumer must supply a producer event, branch and job contract that native admission supports; unsupported pull-request or matrix evidence cannot be accepted by changing identity labels or silently relaxing trust policy.
+      - Keep remote credentials and transport in the trusted adapter or an explicitly configured external service. Reuse existing handoff, GitHub evidence and admission validation rather than allowing candidate code to publish or vouch for its own results.
+    verification_method: Future remote-publication, ambiguous-effect, expected-ref, exact-CI-selection and live transport acceptance tests.
+    observe:
+      tests:
+        cases: ["python/tests/test_remote_publication.py::*", "python/tests/test_remote_publication_faults.py::*", "python/tests/test_remote_publication_live.py::*"]
+
+  - id: REQ-038
+    type: Requirement
+    name: Associate generated targets with fresh evidence and native completion
+    description: Carry exact output identity through explicit binding replacement, admission and completion.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-31"
+    statement: >-
+      Correlate the original verification objective with its exact generated implementation, explicitly
+      supersede the registered output binding when authorized, and complete only through the existing
+      fresh-admission and conditional state-publication contracts.
+    acceptance_criteria:
+      - Preserve the original goal, task, planning input, approved model and criteria separately from the resulting implementation revision and any local build identities. Retain the handoff and remote publication chain instead of relabeling earlier observations or trusting a candidate revision claim.
+      - Use existing execution registration and explicit supersession to associate the exact produced output target under current state and active-binding checks. Preserve pending identity, prior binding and consumed objective budgets; unavailable or ambiguous output provenance cannot authorize replacement.
+      - Select every declared required composition member and exact producer run and attempt under approved definition and policy identities. Reuse native composition, admission and readiness without discovering an arbitrary latest result or substituting retained partial successes for fresh checks.
+      - Keep producer namespaces, applicability scopes and evidence identities intact. If an aggregate needs a consumer observation or completion mapping, require an explicitly approved contract; raw composition or JUnit output cannot be imported as authenticated foreign state or used circularly to satisfy its own prerequisites.
+      - Invoke native completion only for the active registered goal and explicit resulting target, with fresh live admission and merged current-state assessment. Worker success, local handoff, remote publication, admitted failure or aggregate readiness alone does not remove pending work.
+      - Crash recovery correlates existing registration, admission and completion intents and receipts before further effects, preserving unrelated observations and work. Exact completed replay does not publish state twice, and stale criteria, conflicting state, failed, missing or wrong-revision evidence keeps the goal pending with an actionable reason.
+    verification_method: Future output association, binding-supersession, composition-to-goal and native completion integration tests.
+    observe:
+      tests:
+        cases: ["python/tests/test_unattended_output_association.py::*", "python/tests/test_unattended_completion.py::*"]
+
+  - id: REQ-039
+    type: Requirement
+    name: Demonstrate an unattended workflow with live producers and recovery
+    description: Establish the whole supported loop with real remote publication and CI rather than controlled source responses.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-31"
+    statement: >-
+      Demonstrate a narrowly scoped consumer verification objective progressing under independently
+      approved standing authority through real execution, remote publication, trusted CI, fresh admission
+      and durable completion without an operator issuing routine per-phase approvals during the run.
+    acceptance_criteria:
+      - Declare one consumer, canonical coordination host, protected verifier, eligible goal, permitted source paths and destinations, approved policies, bounded resources and retained acceptance evidence before the live run. A deterministic reviewed worker is sufficient for the first workflow pilot; a coding-agent claim requires its separately verified concrete integration.
+      - Exercise actual isolated execution, exact artifact-to-local-Git handoff, permitted remote publication and a real approved producer run, followed by exact output association, fresh native admission and conditional completion. Controlled GitHub responses, in-memory task adapters and an installed local smoke alone cannot satisfy this live contract.
+      - Retain the approved objective and policy identities, source and resulting revisions, native task, attempt, handoff and remote receipts, exact CI selections, admitted report identities and completion receipt so the full chain and its limitations are reviewable.
+      - Show that duplicate events and a controller restart at effect boundaries recover retained work without duplicate task creation, publication, execution or state completion. Ambiguous remote responses require discovery, and a divergent ref or state is preserved as a conflict.
+      - Exercise failed CI, unavailable producer, wrong revision or attempt, changed criteria or verifier, revoked or expired delegation and exhausted objective budgets. Each blocks completion or new authority as appropriate, preserves history and reports a bounded actionable escalation.
+      - If the declared pilot uses a required-member composition, run each required producer live and demonstrate a missing or failed member blocks the aggregate. A single-target pilot establishes no untested multi-target or cross-model completion contract.
+      - Publish a supported operational procedure covering protected storage, restart and recovery, bounded scheduling and service limits, monitoring, cancellation and escalation. Verification completion grants no automatic PR merge, release or deployment authority.
+    verification_method: Future opt-in controlled-consumer live end-to-end acceptance, interruption and negative-path evidence.
+    observe:
+      tests:
+        cases: ["python/tests/test_unattended_live_end_to_end.py::*", "python/tests/test_unattended_live_recovery.py::*"]
+
+  - id: APP-020
+    type: Application
+    name: Unattended verification controller
+    description: Planned whole-workflow coordinator reusing the existing effect and completion primitives.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-31"
+    responsibility: Select approved verification work, correlate durable phases and output evidence, recover before retrying and complete through native admission under bounded delegated authority.
+    interfaces: [Planned unattended verification controller, Planned exacly.automation_controller Python API]
+    implementation_ref: { locator: python/src/exacly/automation_controller.py, planned: true }
+
+  - id: APP-021
+    type: Application
+    name: Standing effect authorizer
+    description: Planned trusted evaluator of independently approved delegation and exact current effect proposals.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-31"
+    responsibility: Issue and retain exact one-shot decisions within protected scope and objective-wide budgets without granting authority to candidate templates or approving policy drift.
+    interfaces: [Planned trusted standing-authority integration, Planned exacly.automation_authorization Python API]
+    implementation_ref: { locator: python/src/exacly/automation_authorization.py, planned: true }
+
+  - id: APP-022
+    type: Application
+    name: Concrete worker integration
+    description: Planned reviewed command or coding-agent broker integration with the supported execution boundary.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-31"
+    responsibility: Prepare exact approved snapshots and delegate bounded work while the selected verified runtime enforces candidate isolation and privileged service credentials remain outside it.
+    interfaces: [Planned concrete worker adapter or broker, Planned exacly.worker_integration Python API]
+    implementation_ref: { locator: python/src/exacly/worker_integration.py, planned: true }
+
+  - id: APP-023
+    type: Application
+    name: Remote source publication and CI bridge
+    description: Planned trusted adapter connecting retained local handoff to permitted remote Git effects and producer identity.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-31"
+    responsibility: Publish exact approved commits under checked remote preconditions, reconcile ambiguous effects and retain exact approved workflow run selections without granting verification or merge authority.
+    interfaces: [Planned remote publication integration, Planned exacly.remote_publication Python API]
+    implementation_ref: { locator: python/src/exacly/remote_publication.py, planned: true }
+
+  - id: INFO-011
+    type: Information
+    name: Unattended workflow progress and effect correlations
+    description: Planned durable objective, phase and external-operation identity linking independently retained component history.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-31"
+    definition: Versioned workflow and phase intents, exact remote publication intents and receipts, native receipt references, current correlations, authoritative authorization-budget reservation references and escalation or recovery decisions; this progress does not replace authorizer accounting, component journals, authenticated evidence or model state.
+    identifiers: [objective ID, workflow ID, phase ID, effect ID, component receipt identity, repository and revision, run and attempt]
+    steward: exacly-maintainers
+
+  - id: INFO-012
+    type: Information
+    name: Standing delegation and exact authorization decisions
+    description: Planned protected approved delegation content, scope and budget history with its exact per-effect grants or denials.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-31"
+    definition: Independently approved versioned delegation, issuer and revocation facts, eligible objective and effect scope, finite budget reservations and consumption, and exact current proposal decisions with native one-shot authorization identities; hashes identify content and do not establish approval authority.
+    identifiers: [delegation ID and version, approval identity, objective ID, effect proposal digest, authorization digest, revocation identity]
+    steward: exacly-maintainers
+
+  - id: INF-008
+    type: Infrastructure
+    name: Protected automation coordination storage
+    description: Planned private operator storage for new workflow and delegation coordination records.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-10-31"
+    kind: Planned protected local control-plane journal storage
+    purpose: Retain initialized scoped workflow, remote-effect and authorization history in separately protected stores or namespaces while existing dispatch, executor, handoff, binding and completion journals retain their own formats and authority; no distributed guarantees or silent migrations follow from this proposal.
+    operational_ref: { locator: docs/unattended-automation.md, planned: true }
+
+relationships:
+  - { source: REQ-034, type: supports, target: PROC-004 }
+  - { source: REQ-035, type: supports, target: PROC-004 }
+  - { source: REQ-036, type: supports, target: PROC-004 }
+  - { source: REQ-037, type: supports, target: PROC-004 }
+  - { source: REQ-038, type: supports, target: PROC-004 }
+  - { source: REQ-039, type: supports, target: PROC-004 }
+  - { source: APP-020, type: implements, target: REQ-034 }
+  - { source: APP-020, type: implements, target: REQ-038 }
+  - { source: APP-020, type: implements, target: REQ-039 }
+  - { source: APP-021, type: implements, target: REQ-035 }
+  - { source: APP-022, type: implements, target: REQ-036 }
+  - { source: APP-023, type: implements, target: REQ-037 }
+  - { source: PROC-004, type: uses, target: APP-020, conditions: Proposed unattended path only after controller and live-pilot implementation and independent authority approval. }
+  - { source: APP-020, type: depends_on, target: APP-021, conditions: Noninteractive effects require independently approved standing delegation and exact current one-shot decisions. }
+  - { source: APP-020, type: depends_on, target: APP-022, conditions: When the selected workflow delegates candidate work to the concrete reviewed integration. }
+  - { source: APP-020, type: depends_on, target: APP-023, conditions: When the resulting implementation requires permitted remote publication and producer discovery. }
+  - { source: APP-020, type: depends_on, target: APP-007 }
+  - { source: APP-020, type: depends_on, target: APP-013, conditions: When new traceable work requires authorized dispatch rather than an existing registered task. }
+  - { source: APP-020, type: depends_on, target: APP-014, conditions: When an eligible task requires bounded candidate execution. }
+  - { source: APP-020, type: depends_on, target: APP-019, conditions: When candidate artifacts must become an exact Git implementation target. }
+  - { source: APP-020, type: depends_on, target: APP-010, conditions: Output association uses existing explicit registration and supersession. }
+  - { source: APP-020, type: depends_on, target: APP-018, conditions: When the approved goal requires multiple independent admission and readiness members. }
+  - { source: APP-020, type: depends_on, target: APP-008 }
+  - { source: APP-020, type: depends_on, target: APP-012, conditions: Only native completion may publish observation-confirmed completion of the selected registered goal. }
+  - { source: APP-020, type: depends_on, target: INF-008 }
+  - { source: APP-021, type: depends_on, target: INF-008 }
+  - { source: APP-022, type: depends_on, target: APP-014, conditions: The integration preserves the executor contract and delegates physical candidate enforcement to its reviewed runtime. }
+  - { source: APP-023, type: depends_on, target: APP-019 }
+  - { source: APP-023, type: depends_on, target: APP-008, conditions: Producer selection must remain compatible with independently approved native admission; discovery is not admission. }
+  - { source: APP-023, type: depends_on, target: INF-008 }
+  - { source: APP-020, type: reads, target: INFO-001 }
+  - { source: APP-020, type: reads, target: INFO-002 }
+  - { source: APP-020, type: reads, target: INFO-012 }
+  - { source: APP-020, type: writes, target: INFO-011 }
+  - { source: APP-021, type: reads, target: INFO-011 }
+  - { source: APP-021, type: reads, target: INFO-012 }
+  - { source: APP-021, type: writes, target: INFO-012 }
+  - { source: APP-023, type: reads, target: INFO-010 }
+  - { source: APP-023, type: writes, target: INFO-011 }
+  - { source: INF-008, type: stores, target: INFO-011, role: system_of_record, conditions: Proposed control-plane progress and remote intents only; component journals remain authoritative for their original effects. }
+  - { source: INF-008, type: stores, target: INFO-012, role: system_of_record, conditions: Independently approved delegation and its bounded exact-effect decisions remain outside candidate storage. }

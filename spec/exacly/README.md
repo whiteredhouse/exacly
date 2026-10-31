@@ -24,6 +24,8 @@ Exacly models itself, following the layout in section 13 of the specification. C
 - [`execution-maintenance.yaml`](execution-maintenance.yaml) covers bounded access, diagnosis, backup and copy-only ledger recovery and upgrade.
 - [`ledger-history.yaml`](ledger-history.yaml) covers separate audit-only conversion and operational indexed activation, including the proof-integrity, validation-profile and semantic-reuse contracts described in the [ledger-history scaling design](../../docs/ledger-history-scaling.md).
 - [`automation.yaml`](automation.yaml) covers verification completion, candidate isolation, dispatch and executor control.
+- [`unattended-automation.yaml`](unattended-automation.yaml) proposes the remaining bounded whole-workflow controller, standing authority, concrete worker, remote publication and live verification pilot.
+- [`delivery-automation.yaml`](delivery-automation.yaml) separately proposes implementation planning, PR merge, release publication and deployment after the first unattended verification scope.
 
 ## Automation roadmap
 
@@ -76,6 +78,31 @@ The [bounded local executor](../../python/README.md#run-a-bounded-local-executor
 REQ-031 covers the coordinator's explicit [backend contracts](../../docs/coordinator-interfaces.md) for attempt storage, invocation ownership and worker lifecycle. APP-014 consumes the composed protocols throughout execution, inspection and recovery; its local defaults retain the existing CLI, policy and history formats. Shared reference cases establish interface semantics, while the real local runtime and crash tests establish backend behavior. Distributed scope remains unsupported by protocol `0.1.0` and needs independently verified fencing and migration guarantees before another coordinator can be supported.
 
 REQ-033 and APP-019 cover [reviewed output handoff](../../docs/output-handoff.md): selected artifacts from a retained successful attempt become an exact source commit through separately authorized local Git publication. The handoff pins initialized private journal and repository identities, approved base and destination paths, retained artifact bytes and commit metadata; prepared object bytes and compare-and-swap ref publication support replay and model-independent recovery. INFO-010 describes its provenance and INF-007 its separate private journal and bare Git storage. Binding replacement, remote publication, evidence admission and completion keep their separate authorization. CAP-004 and PROC-004 remain proposed; a tested local handoff does not by itself establish the whole automation loop or a live remote producer.
+
+### Proposed first unattended verification milestone
+
+The remaining work is explicitly proposed in [unattended-automation.yaml](unattended-automation.yaml). These records describe future contracts; they do not add commands or authorize unattended operation today.
+
+| Requirement | Proposed contract | Planned implementer |
+| --- | --- | --- |
+| REQ-034 | Durable scheduling, phase correlation and recovery across the complete verification workflow | APP-020, unattended verification controller |
+| REQ-035 | Independently approved standing scope, exact one-shot grants, revocation and objective-wide budgets | APP-021, standing effect authorizer |
+| REQ-036 | One concrete reviewed worker or coding-agent integration with verified capability and resource boundaries | APP-022, concrete worker integration |
+| REQ-037 | Exact remote Git publication, ambiguous-effect recovery and approved CI run selection | APP-023, remote publication and CI bridge |
+| REQ-038 | Explicit output-binding supersession, fresh required evidence and native completion | APP-020, unattended verification controller |
+| REQ-039 | A real consumer pilot through remote publication, live CI, admission and completion, including interruption and negative paths | APP-020, with dedicated live acceptance coverage |
+
+APP-020 coordinates the existing planner, dispatch, executor, handoff, registration, composition, admission and completion applications; it does not replace their journals or authority. Its dependencies point from the proposed controller to those existing primitives. Worker execution, remote publication and composition are required only when selected by the approved workflow. INFO-011 and INFO-012 model proposed workflow progress and delegated-authority decisions in planned protected INF-008 storage, separate from existing authoritative component history.
+
+Deliver and independently review the remote bridge and one live consumer flow before relying on automatic coordination. Build bounded delegation and objective-wide budgets alongside the controller, then establish the complete unattended pilot under REQ-039. A deterministic reviewed worker can establish the first workflow-only pilot; a real coding-agent integration has its own REQ-036 acceptance. Fixed criteria, bindings and verifier code stay outside candidate authority. Neither retries, replanning, new revisions nor changing stores replenish the objective's consumed budget.
+
+CAP-004 and PROC-004 remain proposed until matching implementation and fresh observations establish the supported whole-loop contract. Existing component tests, local installed-package smoke and controlled evidence fixtures do not establish the live unattended milestone.
+
+### Separately proposed product planning and delivery
+
+[delivery-automation.yaml](delivery-automation.yaml) records later contracts under their own CAP-005/PROC-005 scope: REQ-040 for implementation planning and decomposition, REQ-041 for PR merge, REQ-042 for release publication and REQ-043 for deployment. They are not prerequisites for the first source-verification pilot and receive no authority from its standing delegation. The existing verification planner stays verification-only, and existing tag-triggered package publication does not establish a general unattended release or deployment contract.
+
+Every new roadmap record has lifecycle `proposed`, empty evidence and planned implementation or storage references where applicable. Its specific future test selectors describe intended acceptance coverage; the test modules are not implemented and no successful verification is claimed. The current active-requirement verification policy and observed state are unchanged. As a proposal is implemented, activate only its delivered contract and add it to the verification policy with real executed coverage.
 
 When implementing a proposal, update its lifecycle and planned references, review the acceptance tests and observation bindings, and update the [verification policy](../../ci/verification.yaml) in the same change. CI checks that this policy covers every active Requirement; successful verification still requires matching observations.
 
