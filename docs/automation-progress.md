@@ -16,12 +16,18 @@ approved delegation. Do not put mutable pilot fixture output beneath `ci/`: the 
 closure protects that directory. Protect the consumer model and criteria too, even if their files
 are stored beside fixture data. Candidate inputs cannot choose a different observer or policy.
 
-The current Exacly evidence workflow only runs on pushes to main. A fixture branch cannot supply
-approved producer evidence by relabeling it or changing the protected workflow. A dedicated
-nonproduction consumer with the fixed verifier and a supported push producer is still needed;
-its repository, durable coordination host, publisher identity, delegation and producer-policy
-approval have not yet been selected. The user's scope constraint is not evidence of approval for
-new policy identities or a producer event/branch change.
+The user selected consumer `whiteredhouse/exacly`, exact branch `pilot/req039-consumer`, and one
+dedicated GitHub-hosted `ubuntu-24.04` coordinator job. Demonstrate controller-process recovery with
+protected journals on that same runner. Runner-loss recovery and resuming the objective on another
+runner by recreating journals are explicitly excluded. This bounded local-machine scope does not
+require a persistent Linux host.
+
+The user authorized a separate push-only, single-job producer for that exact branch using the fixed
+verifier. Leave the existing main-only producer unchanged. Prepare concrete producer policy,
+delegation and publishing-identity requirements for independent approval, listing exact permissions,
+refs and credential configuration. The session's GitHub connector is not an Actions credential.
+Missing publishing credentials block the live run only; continue independent implementation.
+The user's consumer/host choice does not itself independently approve the final policy/delegation.
 
 ## Baseline and decisions
 
@@ -42,7 +48,7 @@ new policy identities or a producer event/branch change.
 | REQ-036 / APP-022 | [PR #89](https://github.com/whiteredhouse/exacly/pull/89) merged; 37 preparation tests and exact-head full CI passed; actual fixed recipe also passed the later supported-runtime integration | Deliver declared CPU/memory/process containment and complete worker lifecycle/resource acceptance on the approved host |
 | REQ-038 / APP-020 | [PR #90](https://github.com/whiteredhouse/exacly/pull/90) merged; 25 tests and exact-head full CI passed; independent review passed after directory durability correction | Integrate whole-workflow recovery and any required composition/output mapping; single-producer native completion now has controlled integration coverage |
 | REQ-034 | Not implemented | Integrate native phases, approved scope, accounting and recovery after the primitives above |
-| REQ-039 | Blocked pending implementation and approved pilot configuration | Select and independently approve the exact nonproduction consumer/runtime/policies before any live run |
+| REQ-039 | Consumer/ref and same-runner coordinator selected; implementation and independent policy/delegation approval remain outstanding | Deliver separate fixed-verifier producer and concrete approval packet; unavailable publishing credentials block live execution only |
 
 The focused code PR stack is [#88](https://github.com/whiteredhouse/exacly/pull/88)
 accounting (`03798bc85b11375367e9c35385eb0d9934868991`),
@@ -106,10 +112,12 @@ Shell `git fetch origin` fails because the session HTTP proxy cannot be reached.
 can read remote main, open PRs and repository rules, and is the available repository API transport.
 Use it for remote work while preserving exact SHA checks. Do not disable or bypass the proxy.
 
-No exact live consumer, canonical coordination host, independently approved delegation, producer
-policy or permitted remote destination has yet been declared. These are required before REQ-039.
-The existing Exacly producer accepts pushes to main and pins its observer closure; changing it or
-claiming branch/PR evidence is not a substitute for independent policy approval.
+The live consumer is `whiteredhouse/exacly` on `pilot/req039-consumer`; coordination is bounded to
+one dedicated `ubuntu-24.04` Actions runner. Exact initialized journals must remain on that runner
+through process recovery. Independently approved delegation/producer policy and a configured
+trusted publishing credential are still required before REQ-039. A new separate push-only,
+single-job branch producer is authorized; the existing main producer stays unchanged. Policy
+approval cannot be inferred from a copied template, filename, hash or this session's connector.
 
 The accounting foundation intentionally has no hot-journal recovery or migration API. Preserve
 database and sidecar after interruption and escalate; replacing either the store or trusted pin
@@ -130,7 +138,7 @@ also be checked from current PR metadata and checks. Never infer permission to b
 1. Read this checkpoint and inspect remote main and all open PRs again before resuming.
 2. Inspect `git status` in each worktree; preserve uncommitted work. The five implementation worktrees are clean at the exact remote heads listed above. `/workspace/work/exacly-integration` contains old untracked import copies; the committed test on main is authoritative. Do not overwrite current source from those copies or reset the original checkout.
 3. First verify current main's actual CI state publication, including state serial/config revision and the six proposed requirements' missing-coverage reasons. The repository checkpoint update is documentation, not observed state.
-4. Confirm the consumer, durable host and trusted publishing access with the user. Keep the approved verifier fixed and worker changes confined to exact fixture paths outside its closure. Do not change the producer event/branch or approve candidate policy merely to make the pilot run.
+4. Use the selected consumer/ref and dedicated same-runner coordinator; do not ask for a persistent host or repeat those decisions. Keep the approved verifier fixed and worker changes confined to exact fixture paths outside its closure. Prepare the separate branch producer and exact policy/delegation/credential packet for independent approval. Missing credentials block live execution, not implementation.
 5. Next engineering slice: trusted standing-scope evaluation, expiry/revocation and native exact grants around the existing objective-accounting store. Then implement the controller's durable phase correlation/recovery, concrete leased/correlated remote adapter and exact approved run selection, and resource envelope. Use the delivered controlled integration as the native API seam; it does not substitute for these contracts.
 6. Add the remaining fault and live acceptance coverage, independently approve the exact pilot configuration, and run the real nonproduction end-to-end and negative/recovery cases with retained evidence before activating complete contracts.
 7. For each next PR, update model/bindings accurately, validate/impact/test, obtain independent technical review, require exact-head CI and GitHub reviews, merge without bypass, then verify actual CI publication and update this checkpoint.
