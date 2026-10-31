@@ -6,7 +6,7 @@ records:
   - id: CAP-004
     type: Capability
     name: Reconcile approved verification work
-    description: Carry a reviewed verification goal through authorized work to observation-confirmed completion.
+    description: Carry a reviewed verification goal through authorized work to observation-confirmed completion, including the proposed bounded unattended path.
     owner: exacly-maintainers
     lifecycle: proposed
     evidence:
@@ -15,27 +15,29 @@ records:
         claim: Research recommends durable dispatch, observation-confirmed completion and bounded executor adapters.
         observed_at: "2026-10-28"
         applies_to: Proposed automation roadmap
-    last_reviewed_at: "2026-10-28"
-    scope: Explicitly authorized verification work, local completion, task dispatch and bounded candidate execution; release and deployment authorization remain separate.
+    last_reviewed_at: "2026-10-31"
+    scope: Explicitly authorized verification work, local completion, task dispatch, bounded candidate execution and source publication to approved verification destinations; unattended effects require independently approved standing delegation, while broader implementation planning, PR merge, release and deployment remain separately scoped proposals.
 
   - id: PROC-004
     type: Process
     name: Carry out approved verification work
-    description: The proposed operator-controlled loop from a reviewed plan to evidence for its resulting implementation.
+    description: The proposed authorized loop from a reviewed verification plan to evidence for its resulting implementation, attended or controlled by approved standing delegation.
     owner: exacly-maintainers
     lifecycle: proposed
     evidence: []
-    last_reviewed_at: "2026-10-28"
+    last_reviewed_at: "2026-10-31"
     perspective: business
-    actors: [Operator, Exacly, Task adapter, Isolated executor, Trusted evidence producer]
-    trigger: An operator authorizes a reviewed verification action under explicit execution or completion policy
+    actors: [Operator, Exacly, Standing authorizer, Workflow controller, Task adapter, Isolated executor, Trusted evidence producer]
+    trigger: An operator authorizes a reviewed verification action directly or approves a bounded delegation that can authorize its exact current effects
     steps:
       - Check the reviewed plan, policies, current state and selected action before committing any authorized effect
       - For existing work, select its active registered binding; for new work, persist dispatch intent and recover or create one traceable task
       - When candidate execution is authorized, run a bounded adapter within an enforced isolation boundary
+      - When output requires remote verification, hand approved artifacts to an exact source commit and separately authorize its permitted remote publication and producer selection
       - Identify the resulting implementation and admit fresh evidence against the unchanged approved model contract
       - Evaluate the selected goal against current state merged with admitted observations
       - Publish completion of the exact pending item through a recoverable intent and receipt protocol
+      - For a delegated unattended workflow, reobserve and resume eligible work within its original objective-wide budgets, retaining phase history and escalating effects outside its authority
     completion: The selected verification task has matching admitted evidence, published state and a durable completion receipt
     exceptions:
       - Changed criteria, bindings, policy, scope or active registration require explicit replanning or supersession
@@ -43,6 +45,7 @@ records:
       - Ambiguous external dispatch outcomes require discovery by stable identity before another create request
       - An interrupted publication requires recovery from its durable intent; divergent state requires explicit conflict resolution
       - Isolation setup failure or an exhausted execution budget stops candidate execution and records the reason
+      - Expired or revoked delegation stops new effects; uncertain in-flight operations preserve their history and separately approved recovery semantics
 
   - id: REQ-024
     type: Requirement
