@@ -81,7 +81,7 @@ REQ-033 and APP-019 cover [reviewed output handoff](../../docs/output-handoff.md
 
 ### Proposed first unattended verification milestone
 
-The remaining work is explicitly proposed in [unattended-automation.yaml](unattended-automation.yaml). These records describe future contracts; they do not add commands or authorize unattended operation today.
+The remaining work is explicitly proposed in [unattended-automation.yaml](unattended-automation.yaml). These records describe incomplete contracts; they do not authorize unattended operation today. The [foundation guide](../../docs/unattended-automation.md) describes delivered subsets and the [implementation checkpoint](../../docs/automation-progress.md) records progress and blockers.
 
 | Requirement | Proposed contract | Planned implementer |
 | --- | --- | --- |
@@ -102,7 +102,7 @@ CAP-004 and PROC-004 remain proposed until matching implementation and fresh obs
 
 [delivery-automation.yaml](delivery-automation.yaml) records later contracts under their own CAP-005/PROC-005 scope: REQ-040 for implementation planning and decomposition, REQ-041 for PR merge, REQ-042 for release publication and REQ-043 for deployment. They are not prerequisites for the first source-verification pilot and receive no authority from its standing delegation. The existing verification planner stays verification-only, and existing tag-triggered package publication does not establish a general unattended release or deployment contract.
 
-Every new roadmap record has lifecycle `proposed`, empty evidence and planned implementation or storage references where applicable. Its specific future test selectors describe intended acceptance coverage; the test modules are not implemented and no successful verification is claimed. The current active-requirement verification policy and observed state are unchanged. As a proposal is implemented, activate only its delivered contract and add it to the verification policy with real executed coverage.
+Incomplete roadmap records retain lifecycle `proposed` and empty authored evidence. Observation bindings include the complete intended acceptance coverage: foundation tests alone cannot establish the whole contract. REQ-035 also selects the future standing-scope acceptance module, so local accounting tests cannot produce a successful whole-requirement observation. The active-requirement verification policy is unchanged. As a proposal is completed, activate only its delivered contract and add it to the verification policy with real executed coverage.
 
 When implementing a proposal, update its lifecycle and planned references, review the acceptance tests and observation bindings, and update the [verification policy](../../ci/verification.yaml) in the same change. CI checks that this policy covers every active Requirement; successful verification still requires matching observations.
 
