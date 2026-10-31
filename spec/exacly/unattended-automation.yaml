@@ -75,7 +75,7 @@ records:
       - Enforce declared wall-clock, retry and concurrency budgets plus the integration's host resource and model-service limits. Establish CPU, memory and process containment through a reviewed disposable host or runtime resource controls rather than claiming existing timeout and tmpfs limits provide it.
       - Retain trusted worker lifecycle and termination facts separately from candidate logs, status and artifacts, preserving content build identities for handoff. Failure, cancellation, unavailable infrastructure or exhausted resources cannot be salvaged into success from candidate output alone.
       - Verify one local coordination deployment first; another physical backend or distributed ownership requires its own reviewed contract, fencing and real verification. A first workflow-only evidence pilot may use a deterministic reviewed command without claiming coding-agent support.
-    verification_method: Future concrete worker, broker-boundary, resource-budget and real-runtime integration tests.
+    verification_method: Immutable snapshot and fixed-recipe preparation tests cover the foundation; concrete runtime lifecycle, resource-budget and real-runtime integration acceptance remain future work.
     observe:
       tests:
         cases: ["python/tests/test_worker_integration.py::*", "python/tests/test_worker_integration_runtime.py::*"]
@@ -181,14 +181,14 @@ records:
   - id: APP-022
     type: Application
     name: Concrete worker integration
-    description: Planned reviewed command or coding-agent broker integration with the supported execution boundary.
+    description: Immutable source-snapshot and deterministic inventory-recipe foundation for a planned reviewed integration with the supported execution boundary.
     owner: exacly-maintainers
     lifecycle: proposed
     evidence: []
     last_reviewed_at: "2026-10-31"
     responsibility: Prepare exact approved snapshots and delegate bounded work while the selected verified runtime enforces candidate isolation and privileged service credentials remain outside it.
-    interfaces: [Planned concrete worker adapter or broker, Planned exacly.worker_integration Python API]
-    implementation_ref: { locator: python/src/exacly/worker_integration.py, planned: true }
+    interfaces: [exacly.worker_integration snapshot preparation API, Planned concrete worker lifecycle and resource integration]
+    implementation_ref: { locator: python/src/exacly/worker_integration.py }
 
   - id: APP-023
     type: Application
