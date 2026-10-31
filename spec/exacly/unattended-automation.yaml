@@ -124,7 +124,7 @@ records:
       - Keep producer namespaces, applicability scopes and evidence identities intact. If an aggregate needs a consumer observation or completion mapping, require an explicitly approved contract; raw composition or JUnit output cannot be imported as authenticated foreign state or used circularly to satisfy its own prerequisites.
       - Invoke native completion only for the active registered goal and explicit resulting target, with fresh live admission and merged current-state assessment. Worker success, local handoff, remote publication, admitted failure or aggregate readiness alone does not remove pending work.
       - Crash recovery correlates existing registration, admission and completion intents and receipts before further effects, preserving unrelated observations and work. Exact completed replay does not publish state twice, and stale criteria, conflicting state, failed, missing or wrong-revision evidence keeps the goal pending with an actionable reason.
-    verification_method: Future output association, binding-supersession, composition-to-goal and native completion integration tests.
+    verification_method: Controlled output-association and binding-supersession tests cover the foundation; composition-to-goal and fresh native completion integration acceptance remain future work.
     observe:
       tests:
         cases: ["python/tests/test_unattended_output_association.py::*", "python/tests/test_unattended_completion.py::*"]
@@ -157,13 +157,13 @@ records:
   - id: APP-020
     type: Application
     name: Unattended verification controller
-    description: Planned whole-workflow coordinator reusing the existing effect and completion primitives.
+    description: Planned whole-workflow coordinator reusing existing primitives, with an implemented explicit current-state output-association foundation.
     owner: exacly-maintainers
     lifecycle: proposed
     evidence: []
     last_reviewed_at: "2026-10-31"
     responsibility: Select approved verification work, correlate durable phases and output evidence, recover before retrying and complete through native admission under bounded delegated authority.
-    interfaces: [Planned unattended verification controller, Planned exacly.automation_controller Python API]
+    interfaces: [exacly.output_association explicit association API, Planned unattended verification controller, Planned exacly.automation_controller Python API]
     implementation_ref: { locator: python/src/exacly/automation_controller.py, planned: true }
 
   - id: APP-021
