@@ -24,6 +24,21 @@ It does not authorize or implement REQ-040–043. Incomplete contracts remain pr
 | REQ-034 | Not implemented | Integrate native phases, approved scope, accounting and recovery after the primitives above |
 | REQ-039 | Blocked pending implementation and approved pilot configuration | Select and independently approve the exact nonproduction consumer/runtime/policies before any live run |
 
+The focused code PR stack is [#88](https://github.com/whiteredhouse/exacly/pull/88)
+accounting (`03798bc85b11375367e9c35385eb0d9934868991`),
+[#89](https://github.com/whiteredhouse/exacly/pull/89) snapshots
+(`7720508cd7af038b7700e2c81428aa5db53ec589`),
+[#90](https://github.com/whiteredhouse/exacly/pull/90) association
+(`4d1d00fe4bfddb2b96664c65e836e14a80bf506a`) and
+[#91](https://github.com/whiteredhouse/exacly/pull/91) remote protocol
+(`c4d8e1b4eb7b88fbce8b9072dc8fadb7f33aee78`). Full final-head CI is running.
+Merge in dependency order only after each head passes; retarget the next PR to main.
+
+A controlled integration test is prepared on `codex/unattended-foundations`, connecting the actual
+fixed worker recipe and native executor/handoff/association/completion to controlled remote and
+producer responses. Collection, fixture setup, lint and type checks pass locally. Actual sandbox
+execution is still unchecked until supported-runtime CI passes. This is not REQ-039 live evidence.
+
 ## Validation and external blockers
 
 The cloud host cannot enforce the required local isolation boundary. The actual preflight
