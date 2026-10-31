@@ -60,3 +60,20 @@ real local Git objects and immutable preparation; they do not run the recipe thr
 physical runtime. No CPU, memory or process envelope is provided here, and a model digest is an
 identity rather than independent approval. REQ-036 remains proposed until the actual integration,
 resource envelope and supported-runtime lifecycle acceptance are delivered.
+
+## Exact output association
+
+`exacly.output_association` provides a separately initialized journal and explicit `apply`/`recover`
+invocations for associating one native published handoff with its original registered goal. Trusted
+configuration pins the journal identities, original binding, state, model, plan and policies.
+It checks retained handoff provenance, rereads current state and the active native binding under
+ordered locks, and retains the exact native replacement registration before publishing it.
+
+The replacement preserves the original pending goal and planning input while assigning the exact
+handoff output revision. It does not write observed state, admit evidence or complete work. Recovery
+reconciles the exact retained native record; drift conflicts instead of rebuilding a different
+registration. Intent, receipt and successful replay synchronize the pinned journal directory.
+
+The 25 controlled integration/fault cases include duplicate processes, exits on both sides of the
+native binding write, divergent state and failed directory synchronization. They establish this
+association primitive, not the complete REQ-038 fresh-evidence and native-completion workflow.
