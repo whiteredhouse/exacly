@@ -18,7 +18,7 @@ It does not authorize or implement REQ-040–043. Incomplete contracts remain pr
 | Scope | Status | Next action |
 | --- | --- | --- |
 | REQ-035 / APP-021 / INFO-012 / INF-008 | [PR #88](https://github.com/whiteredhouse/exacly/pull/88), final head `03798bc85b11375367e9c35385eb0d9934868991`; 53 focused tests, repository Ruff/format and strict mypy pass; independent technical review found no blockers | Full CI in progress; merge only after final-head checks/reviews pass, then verify observed-state publication. Scope evaluator, revocation and native grants still outstanding |
-| REQ-037 / APP-023 / INFO-011 | Exact remote CAS publication foundation in progress on `codex/unattended-remote` | Review retained native handoff provenance and ambiguous outcome recovery |
+| REQ-037 / APP-023 / INFO-011 | Exact remote CAS protocol foundation implemented on `codex/unattended-remote`; 39 tests, Ruff and strict mypy pass; independent review passed after directory durability correction | Publish focused PR and verify final-head CI. Concrete CAS transport with independently established operation proof, approved CI selection and live acceptance remain outstanding |
 | REQ-036 / APP-022 | Immutable snapshot and deterministic recipe foundation implemented on `codex/unattended-worker`; 37 tests, Ruff and strict mypy pass; independent technical review found no blockers | Publish and verify focused PR; resource envelope and supported-runtime lifecycle acceptance remain outstanding |
 | REQ-038 / APP-020 | Current-state output association foundation implemented on `codex/unattended-association`; 25 tests, Ruff and strict mypy pass; independent review passed after directory durability correction | Publish focused PR and verify final-head CI; composition/output mapping and fresh native workflow completion remain outstanding |
 | REQ-034 | Not implemented | Integrate native phases, approved scope, accounting and recovery after the primitives above |
@@ -45,6 +45,12 @@ claiming branch/PR evidence is not a substitute for independent policy approval.
 The accounting foundation intentionally has no hot-journal recovery or migration API. Preserve
 database and sidecar after interruption and escalate; replacing either the store or trusted pin
 cannot be used to reset objective capacity.
+
+The remote protocol deliberately requires an independently established operation identity. Ordinary
+GitHub REST ref updates lack atomic expected-old CAS, and plain refs do not prove operation correlation.
+A concrete transport must solve both without merely echoing its inputs. Atomic leased Git publication
+with a separately approved operation-marker ref is a possible next design; the current grant does not
+authorize the extra ref. No remote source-publication implementation or live success is claimed yet.
 
 Repository ruleset `26028163` enforces deletion and non-fast-forward protection with no bypass actors.
 The classic branch-protection endpoint returns HTTP 403 for this integration; merge readiness must
