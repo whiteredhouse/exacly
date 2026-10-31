@@ -40,3 +40,23 @@ There is no supported SQLite hot-journal recovery or store migration API in this
 If an interrupted transaction leaves a sidecar, preserve the database and sidecar together and
 escalate. Normal APIs refuse them before SQLite can recover implicitly. Never delete the sidecar
 or initialize a replacement store to resume with fresh capacity.
+
+## Immutable worker inputs
+
+`exacly.worker_integration.prepare` reads explicit regular source blobs from an initialized sealed
+bare Git repository at a full approved commit. The trusted caller supplies its repository UUID,
+literal allowed files, consumer-specific protected paths and separate approved model digest.
+Built-in model, verifier, policy and reserved worker paths remain excluded. Preparation does not
+check out source or run hooks, filters or candidate code.
+
+The immutable result supplies `inputs`, `identity`, fixed `argv` and `expected_outputs` for a
+separately authorized native executor request. Recipe `snapshot-inventory-v1` runs
+`/usr/bin/python3 -I -S /inputs/.exacly-worker.py` and inventories source-byte digests into
+`/outputs/source-digests.json`. It does not execute or verify those source files. Its retained
+identity includes the exact commit, tree, blobs, snapshot, recipe and input bytes.
+
+This API supplies preparation and a deterministic recipe only. The 37 focused tests exercise
+real local Git objects and immutable preparation; they do not run the recipe through the supported
+physical runtime. No CPU, memory or process envelope is provided here, and a model digest is an
+identity rather than independent approval. REQ-036 remains proposed until the actual integration,
+resource envelope and supported-runtime lifecycle acceptance are delivered.

@@ -17,9 +17,9 @@ It does not authorize or implement REQ-040–043. Incomplete contracts remain pr
 
 | Scope | Status | Next action |
 | --- | --- | --- |
-| REQ-035 / APP-021 / INFO-012 / INF-008 | Objective accounting foundation implemented on `codex/unattended-authority`; 53 focused tests, Ruff and strict mypy pass; independent technical review found no blockers | Publish focused PR, check final-head CI and reviews, merge, and verify observed-state publication. Scope evaluator, revocation and native grants still outstanding |
+| REQ-035 / APP-021 / INFO-012 / INF-008 | [PR #88](https://github.com/whiteredhouse/exacly/pull/88), final head `03798bc85b11375367e9c35385eb0d9934868991`; 53 focused tests, repository Ruff/format and strict mypy pass; independent technical review found no blockers | Full CI in progress; merge only after final-head checks/reviews pass, then verify observed-state publication. Scope evaluator, revocation and native grants still outstanding |
 | REQ-037 / APP-023 / INFO-011 | Exact remote CAS publication foundation in progress on `codex/unattended-remote` | Review retained native handoff provenance and ambiguous outcome recovery |
-| REQ-036 / APP-022 | Immutable snapshot and deterministic recipe foundation in progress on `codex/unattended-worker` | Review safe Git object reads and protected paths; retain runtime/resource limitations |
+| REQ-036 / APP-022 | Immutable snapshot and deterministic recipe foundation implemented on `codex/unattended-worker`; 37 tests, Ruff and strict mypy pass; independent technical review found no blockers | Publish and verify focused PR; resource envelope and supported-runtime lifecycle acceptance remain outstanding |
 | REQ-038 / APP-020 | Current-state output association foundation in progress on `codex/unattended-association` | Review ordered native locks, persisted registration intent and exact recovery |
 | REQ-034 | Not implemented | Integrate native phases, approved scope, accounting and recovery after the primitives above |
 | REQ-039 | Blocked pending implementation and approved pilot configuration | Select and independently approve the exact nonproduction consumer/runtime/policies before any live run |
