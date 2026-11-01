@@ -84,7 +84,7 @@ records:
   - id: APP-002
     type: Application
     name: Fixed fixture observer
-    description: Independently approved source, separate from mutable fixture results.
+    description: Protected fixed source for independent approval, separate from mutable fixture results.
     owner: exacly-maintainers
     lifecycle: active
     evidence: []

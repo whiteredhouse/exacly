@@ -1,5 +1,129 @@
 # Unattended verification implementation checkpoint
 
+Current recovery point: 2026-11-01. The unattended target is **incomplete**.
+The latest status below supersedes historical checkpoint sections. Never infer
+live acceptance or fresh main observations from merged code or controlled tests.
+
+## Current PR sequence and decisions
+
+| Slice | PR | Exact head / merged revision | Current status |
+| --- | --- | --- | --- |
+| Objective accounting | [#88](https://github.com/whiteredhouse/exacly/pull/88) | merge [e9d03a721b497907aedc29cb1566d87921cec456](https://github.com/whiteredhouse/exacly/commit/e9d03a721b497907aedc29cb1566d87921cec456) | Merged, exact-head CI passed |
+| Immutable worker inputs | [#89](https://github.com/whiteredhouse/exacly/pull/89) | merge [4fa40c95ec8567ed592a8c084036b002d368c40d](https://github.com/whiteredhouse/exacly/commit/4fa40c95ec8567ed592a8c084036b002d368c40d) | Merged, exact-head CI passed |
+| Output association | [#90](https://github.com/whiteredhouse/exacly/pull/90) | merge [748487f5d9c1d4078091cfa6384763acf2df742a](https://github.com/whiteredhouse/exacly/commit/748487f5d9c1d4078091cfa6384763acf2df742a) | Merged, exact-head CI passed |
+| Remote protocol | [#91](https://github.com/whiteredhouse/exacly/pull/91) | merge [54536a90408ca2d1fa78b5cd3e9291bfb7012d8f](https://github.com/whiteredhouse/exacly/commit/54536a90408ca2d1fa78b5cd3e9291bfb7012d8f) | Merged, exact-head CI passed |
+| Controlled native integration | [#92](https://github.com/whiteredhouse/exacly/pull/92) | merge [ac76acfdbfe78e4dfed587b74a314b1da9f20fab](https://github.com/whiteredhouse/exacly/commit/ac76acfdbfe78e4dfed587b74a314b1da9f20fab) | Merged; real isolation, controlled remote/CI |
+| Host/consumer checkpoint | [#93](https://github.com/whiteredhouse/exacly/pull/93) | merge [361fd1ac910f13efe48422182233720676a5d80c](https://github.com/whiteredhouse/exacly/commit/361fd1ac910f13efe48422182233720676a5d80c) | Merged, no behavior change |
+| Kernel resource integration | [#94](https://github.com/whiteredhouse/exacly/pull/94) | merge [b2e429c195d4e73ef8f30e79e72f373b03919d54](https://github.com/whiteredhouse/exacly/commit/b2e429c195d4e73ef8f30e79e72f373b03919d54) | Merged; final CI 3,585 tests pass |
+| Standing scope | [#95](https://github.com/whiteredhouse/exacly/pull/95) | [3440d6854a997bd119fde581e2fae1cd5c7fd08f](https://github.com/whiteredhouse/exacly/commit/3440d6854a997bd119fde581e2fae1cd5c7fd08f) | Independent review clear; full CI running |
+| Concrete Git transport | [#96](https://github.com/whiteredhouse/exacly/pull/96) | [61f4ef3aac2266a32a43bd2103dc38821624d5ed](https://github.com/whiteredhouse/exacly/commit/61f4ef3aac2266a32a43bd2103dc38821624d5ed) | Independent review clear; full CI running |
+| Fixed fixture producer | [#97](https://github.com/whiteredhouse/exacly/pull/97) | [7a7429f08762e498ada1f2354e23eba91c099e3a](https://github.com/whiteredhouse/exacly/commit/7a7429f08762e498ada1f2354e23eba91c099e3a) | Independent review clear; full CI running |
+| Native workflow controller | [#98](https://github.com/whiteredhouse/exacly/pull/98) | [e40f534bb73fb86f799e31ead3b810858a5c6ba3](https://github.com/whiteredhouse/exacly/commit/e40f534bb73fb86f799e31ead3b810858a5c6ba3) | Final 276-test independent review clear; full CI running |
+
+PRs #96–98 are stacked on their predecessor branch. Merge in order; retarget
+the next PR to main after its prerequisite merges. Inspect the final exact head,
+required checks, GitHub reviews and unresolved threads again before each merge.
+Required GitHub approval cannot be substituted by agent technical review.
+
+Runtime setup PR [#99](https://github.com/whiteredhouse/exacly/pull/99) merged as
+0f7bf455c710797ea900f9a2daa72dd941d41bb4 after exact head6133536e passed
+3,593 supported-runtime tests and all checks. Main advanced to that merge; its
+own new CI and state publication still require observation. Older state jobs
+remain blocked behind the association state run41253365811, job124693321007
+(runtime installation since00:20UTC). The actual
+committed state remains serial 66, config 5ba9e66a713a526e913cad84ab9ef2d45d201856,
+so fresh publication is **not established**. Do not edit it. The refreshed #95–98 heads now inherit the bounded noninteractive installer
+through ordinary merge commits, without force or reviewed implementation changes.
+Fresh exact-head full CI remains required; the older stalled check heads are obsolete.
+
+The user selected repository whiteredhouse/exacly (ID 1411700094), exact consumer
+branch pilot/req039-consumer, and one dedicated GitHub-hosted ubuntu-24.04
+coordinator job. The fixed verifier stays outside worker authority; only exact
+fixture paths may change. Existing main-only verification-evidence.yml remains
+unchanged. A separate push-only single-job branch producer is in #97.
+Only this dedicated pilot policy proposes branch_protection: not_required;
+all other admission checks and defaults remain unchanged. Receipts report
+protection as unverified. Independent approval of the finalized actual
+policy/delegation/configuration remains mandatory before live effects.
+
+The unit supports controller-process recovery with existing private journals
+on that same runner. Runner loss ends the supported domain; never recreate
+journals or original-goal budgets on another runner. A persistent Linux host
+is not required for this bounded acceptance. Native Ubuntu resource tests
+enforce CPU/memory/process caps. This cloud host cannot enforce the full
+Bubblewrap/cgroup boundary, and no fallback or relaxed isolation is allowed.
+
+## Remaining implementation and live gate
+
+The pilot coordinator and authenticated live-proof checker have final independent
+source review clearance. The full controlled positive uses actual production
+bootstrap, fixed worker, NativeWorkflow and real Authorizer, including all 12
+declared case proofs; validation succeeds after private stores/keys are hidden.
+It is controlled integration, not actual live acceptance. They prepare exact per-run stores/policy/delegation,
+require an original unedited independent human approval, and verify an immutable
+Actions artifact fence before authority. Post-approval checks and probes consume
+the same original goal's authoritative reservations. Original journals, uncertain
+reservations and actual paid producer-call limits survive process restart.
+No actor creates the human approval on the user's behalf.
+
+A separately configured non-GitHub-Actions App installation token is required
+inside Actions; this session's connection does not supply it. Required scope is
+repository_ids:[1411700094], contents:write/actions:read/issues:write, with
+externally approved App/installation/expiry mint metadata. It must remain
+Actions-read-only for immutable fence retention assumptions. See
+docs/unattended-pilot-approval.md for exact secret/variable names, refs and
+independent permission confirmation. Missing access blocks live execution only.
+
+Actual live verification must retain isolated execution, exact native handoff,
+publication/tag proof, fresh approved CI/admission/completion, restart/duplicate
+proof and every declared negative case. Controlled tests and skipped live cases
+cannot establish it. REQ-037–039 remain proposed. #98 activates only delivered
+REQ-034/035 and its native single-producer local profile; full exact-head CI
+gates their observations. REQ-040–043 remain unchanged and proposed.
+
+## Workspace recovery
+
+The original /workspace/exacly checkout remains clean on branch work at 461b32f.
+Use isolated worktrees; do not reset it or overwrite user work. Read current
+remote main and PRs before resuming. The initial automatic merge review rejection
+for #99 was resolved by checking effective main rules (only deletion/non-fast-forward,
+no required GitHub review rule) and retrying the same exact-head merge with that
+evidence; no rules/reviews were bypassed or changed. Native read-only git fetch now works through
+the configured proxy; the GitHub connector remains available for authenticated
+repository operations. The earlier proxy outage below is historical.
+
+Current source ownership:
+
+- /workspace/work/exacly-standing: original authorizer scope4270a0d4 is in #95; the separately reviewed retained-parser delta48c6b446 and39 tests belong to the coordinator slice.
+- /workspace/work/exacly-git-transport: frozen eight-file transport source; #96 is authoritative.
+- /workspace/work/exacly-controller: frozen a880e116 controller, 67931856 runtime, 72cf9a3d store; #98 has these plus b1550644 authorizer reader additions.
+- /workspace/work/exacly-pilot-runner: owned ci/req039_pilot.py, ci/req039_bootstrap.py, ci/req039_history.py and tests/test_req039_pilot_runner.py; copied dependencies are not authoritative.
+- /workspace/work/exacly-live-verifier: owned live_pilot_evidence.py, live acceptance tests and the new read-only remote precondition API delta; copied dependencies are not authoritative.
+- /workspace/work/exacly-pilot: root-owned coordinator YAML and final independently reviewed workflow regression test.
+- /workspace/work/exacly-pilot-pr: integration staging from #98, root model/CI/docs changes; import only each owner's final reviewed files.
+
+A broad integrated development run passed 3,642 tests with 15 explicit opt-in live skips
+(the configured live contract remains inconclusive without real evidence). Ruff, formatting
+and strict mypy passed. Final retained-parser/namespace/worker/resource/grant joins passed targeted
+independent review:217 authority tests,56 runner cases,95 approval/history/workflow
+probes and73 verifier cases (14 actual live cases unconfigured). The final integrated
+retained/runner/workflow/evidence tests pass253 cases with14 live cases skipped. Runtime
+validate/Authorizer paths remain physical; separate pure retained parsers grant no authority.
+
+Publish the concrete coordinator and retained-proof slice, then run exact-head CI.
+Installer #99 is merged; finish merging refreshed #95–98 and the coordinator slice
+in order, then verify actual current
+main state publication, seed the authorized consumer branch without a generated
+result and finalize the actual approval packet. Independently approve the packet
+and configure the publisher before the supported live run. No routine per-phase
+approvals are required once that exact standing contract is approved.
+
+---
+
+The following sections retain earlier implementation history.
+
+# Unattended verification implementation checkpoint
+
 This checkpoint covers REQ-034–039 from roadmap PR [#87](https://github.com/whiteredhouse/exacly/pull/87).
 It does not authorize or implement REQ-040–043. Incomplete contracts remain proposed.
 
@@ -70,11 +194,11 @@ review and thread inspection. No blocking GitHub reviews or threads were present
 
 | PR | Merge commit | Exact-head full check |
 | --- | --- | --- |
-| #88 | [e9d03a7](https://github.com/whiteredhouse/exacly/commit/e9d03a721b497907aedc29cb1566d87921cec456) | [run 41252040463](https://github.com/whiteredhouse/exacly/actions/runs/41252040463), 3,429 tests |
-| #89 | [4fa40c9](https://github.com/whiteredhouse/exacly/commit/4fa40c95ec8567ed592a8c084036b002d368c40d) | [run 41252157970](https://github.com/whiteredhouse/exacly/actions/runs/41252157970) |
-| #90 | [748487f](https://github.com/whiteredhouse/exacly/commit/748487f5d9c1d4078091cfa6384763acf2df742a) | [run 41252320226](https://github.com/whiteredhouse/exacly/actions/runs/41252320226) |
-| #91 | [54536a9](https://github.com/whiteredhouse/exacly/commit/54536a90408ca2d1fa78b5cd3e9291bfb7012d8f) | [run 41252408011](https://github.com/whiteredhouse/exacly/actions/runs/41252408011) |
-| #92 | [ac76acf](https://github.com/whiteredhouse/exacly/commit/ac76acfdbfe78e4dfed587b74a314b1da9f20fab) | [run 41252506469](https://github.com/whiteredhouse/exacly/actions/runs/41252506469), 3,531 tests |
+| [#88](https://github.com/whiteredhouse/exacly/pull/88) | [e9d03a7](https://github.com/whiteredhouse/exacly/commit/[e9d03a721b497907aedc29cb1566d87921cec456](https://github.com/whiteredhouse/exacly/commit/e9d03a721b497907aedc29cb1566d87921cec456)) | [run 41252040463](https://github.com/whiteredhouse/exacly/actions/runs/41252040463), 3,429 tests |
+| [#89](https://github.com/whiteredhouse/exacly/pull/89) | [4fa40c9](https://github.com/whiteredhouse/exacly/commit/[4fa40c95ec8567ed592a8c084036b002d368c40d](https://github.com/whiteredhouse/exacly/commit/4fa40c95ec8567ed592a8c084036b002d368c40d)) | [run 41252157970](https://github.com/whiteredhouse/exacly/actions/runs/41252157970) |
+| [#90](https://github.com/whiteredhouse/exacly/pull/90) | [748487f](https://github.com/whiteredhouse/exacly/commit/[748487f5d9c1d4078091cfa6384763acf2df742a](https://github.com/whiteredhouse/exacly/commit/748487f5d9c1d4078091cfa6384763acf2df742a)) | [run 41252320226](https://github.com/whiteredhouse/exacly/actions/runs/41252320226) |
+| [#91](https://github.com/whiteredhouse/exacly/pull/91) | [54536a9](https://github.com/whiteredhouse/exacly/commit/[54536a90408ca2d1fa78b5cd3e9291bfb7012d8f](https://github.com/whiteredhouse/exacly/commit/54536a90408ca2d1fa78b5cd3e9291bfb7012d8f)) | [run 41252408011](https://github.com/whiteredhouse/exacly/actions/runs/41252408011) |
+| [#92](https://github.com/whiteredhouse/exacly/pull/92) | [ac76acf](https://github.com/whiteredhouse/exacly/commit/[ac76acfdbfe78e4dfed587b74a314b1da9f20fab](https://github.com/whiteredhouse/exacly/commit/ac76acfdbfe78e4dfed587b74a314b1da9f20fab)) | [run 41252506469](https://github.com/whiteredhouse/exacly/actions/runs/41252506469), 3,531 tests |
 
 The merged controlled integration connects the actual fixed worker recipe and native
 executor/handoff/association/completion to controlled remote and producer responses. It passed in
@@ -148,37 +272,13 @@ also be checked from current PR metadata and checks. Never infer permission to b
 6. Add the remaining fault and live acceptance coverage, independently approve the exact pilot configuration, and run the real nonproduction end-to-end and negative/recovery cases with retained evidence before activating complete contracts.
 7. For each next PR, update model/bindings accurately, validate/impact/test, obtain independent technical review, require exact-head CI and GitHub reviews, merge without bypass, then verify actual CI publication and update this checkpoint.
 
-The unattended verification target is incomplete. REQ-036 is delivered and active; REQ-034–035 and REQ-037–039 remain proposed until their complete coverage is delivered. No live acceptance, release or deployment is claimed.
+The unattended verification target is incomplete. REQ-036 has delivered acceptance coverage and is active; REQ-034–035 and REQ-037–039 remain proposed. No live acceptance, unattended live completion, release or deployment is claimed.
 
 Resource PR #94 first full CI head `b25941c0a9ec545868c899117b83f559868eaee3` executed all five real
 resource/lifecycle cases successfully; total 3,584 tests passed and one development-subset contract
 test failed because its explicit backend-module list had not added the two new mandatory runtime
 modules. The expected list is corrected without excluding anything from full verification. Fresh
 exact-head CI is required before merging; the failed run is not a successful model publication.
-
-
-## Bounded installer recovery checkpoint (2026-11-01)
-
-Open implementation PRs #95–98 have cleared independent source review but their
-full checks are stalled in the existing isolation-runtime installation step.
-The older main Spec run 41253365811 (association merge 748487f5d9c1d4078091cfa6384763acf2df742a)
-has state job124693321007 stuck in that same step since00:20UTC. Later main
-state jobs remain queued; committed state is still serial66/config5ba9e66.
-No current publication or successful open-PR full check is claimed.
-
-The installer now uses noninteractive sudo, explicit GNU timeout TERM/KILL bounds,
-finite mirror retries/HTTP timeouts and bounded package-lock waits. Exact packages,
-vendor-profile refusal, scoped AppArmor policy load and before/after enforcement
-checks remain mandatory. Timeout or package/profile failure fails setup and the job;
-a partly installed disposable host is not salvaged as a supported runtime.
-The existing main-only verification-evidence.yml bytes are unchanged.
-
-After exact-head CI passes and this focused fix merges, refresh #95–98 onto it
-without changing their independently reviewed implementation bytes, require fresh
-exact-head CI/reviews, and merge prerequisites in order. The bounded coordinator
-and retained-proof checker are staged separately and still need final integrated
-review/CI. Actual live execution additionally requires the independently approved
-run-specific packet and a real scoped App publishing credential.
 
 
 ## Standing scope implementation checkpoint (2026-11-01)
@@ -215,13 +315,10 @@ run-specific approval packet and verify the declared live recovery/negative case
 Preserve every existing private journal; never recreate the original approved goal on another runner.
 
 
-Runtime setup PR #99 merged as 0f7bf455c710797ea900f9a2daa72dd941d41bb4 after exact-head supported CI passed 3,593 tests and all other checks. This standing-scope head inherits that fix through an ordinary merge; reviewed implementation bytes are unchanged. Fresh exact-head CI remains required. Main state publication is still behind the older queued jobs; no fresh publication is claimed.
-
-
 ## Concrete remote bridge checkpoint (2026-11-01)
 
 Standing-scope PR [#95](https://github.com/whiteredhouse/exacly/pull/95), head
-`3440d6854a997bd119fde581e2fae1cd5c7fd08f`, is independently reviewed and
+`8cb20c3b0bce27b7861f449d188561e9b43f3ddf`, is independently reviewed and
 awaiting exact-head full CI/merge at this checkpoint.
 
 The concrete remote bridge now uses explicit atomic Git receive-pack old/new commands,
@@ -244,8 +341,6 @@ Next: install the separate fixed fixture producer and finish controller/coordina
 then approve actual run-specific policy/delegation and credentials before live execution.
 The selected bounded same-runner scope and dedicated-policy protection opt-out are unchanged.
 
-This bridge head inherits merged bounded installer #99 through the refreshed #95 branch. Reviewed transport bytes are unchanged; fresh exact-head CI remains required.
-
 
 ## Fixed consumer and producer checkpoint (2026-11-01)
 
@@ -266,8 +361,6 @@ handshake. It is not an approval or live receipt. Actual per-run journal identit
 policy/verifier/source pins, credential mint facts and delegation must be finalized
 in the coordinator packet and independently approved before authority.
 REQ-039 and APP-026 remain proposed. Missing credentials affect live execution only.
-
-This fixed-producer head inherits bounded runtime setup #99 through the refreshed prerequisite stack. Producer and verifier implementation bytes are unchanged; fresh exact-head CI remains required.
 
 
 ## Native controller checkpoint (2026-11-01)
@@ -298,9 +391,10 @@ planner-directed investigation/evidence/configuration escalation and already-sat
 have native acceptance coverage. REQ-038 still requires
 its whole declared contract, and REQ-039 requires actual approved live acceptance.
 
-Current staged PR stack: #95 standing scope (3440d68), #96 concrete Git bridge
-(61f4ef3), #97 fixed fixture producer (7a7429f). Merge prerequisites in order,
+Current staged PR stack: #95 standing scope (8cb20c3), #96 concrete Git bridge
+(1483a8b), #97 fixed fixture producer (9db3901). Merge prerequisites in order,
 retarget each next PR to main, inspect exact-head required checks/reviews and unresolved
 threads afresh, and verify CI state publication. No automatic merge bypass is authorized.
 
-This native-controller head incorporates bounded runtime setup #99 through the refreshed prerequisite stack. All reviewed controller/runtime/store and b155 authorizer implementation bytes are unchanged; fresh exact-head CI remains mandatory.
+
+The bounded installer #99 follow-up is merged at0f7bf455; its standalone source head6133536e passed3,593 tests. Final coordinator source and retained proof are independently reviewed and staged for the next focused PR. No actual live approval/effects or new main state publication is claimed.

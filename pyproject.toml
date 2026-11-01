@@ -87,5 +87,7 @@ module = ["jsonpatch"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
+# Exercise repository-owned CI adapters through the same imports as their runtime CLI.
+pythonpath = ["."]
 # xunit1 keeps each test's file in the JUnit report, which exacly refresh reads.
 junit_family = "xunit1"

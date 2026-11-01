@@ -1,0 +1,128 @@
+name: REQ-039 bounded coordinator
+
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: Exact existing pilot/req039-consumer commit (full SHA)
+        required: true
+        type: string
+      baseline_run:
+        description: Optional exact initial failed fixture producer run ID
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: exacly-req039-original-goal
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  coordinate:
+    name: coordinate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PILOT_ROOT: ${{ runner.temp }}/exacly-req039
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install the Linux isolation test runtime
+        run: sh ci/setup_isolation_runtime.sh
+      - name: Check the Linux isolation test runtime
+        run: /usr/bin/python3 ci/check_isolation_runtime.py
+      - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
+      - name: Install locked dependencies
+        run: uv sync --locked
+      - name: Start bounded same-runner coordinator
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          EXACLY_REQ039_PUBLISH_TOKEN: ${{ secrets.EXACLY_REQ039_PUBLISH_TOKEN }}
+          EXACLY_REQ039_PUBLISH_APP_ID: ${{ vars.EXACLY_REQ039_PUBLISH_APP_ID }}
+          EXACLY_REQ039_PUBLISH_INSTALLATION_ID: ${{ vars.EXACLY_REQ039_PUBLISH_INSTALLATION_ID }}
+          EXACLY_REQ039_PUBLISH_EXPIRES_AT: ${{ vars.EXACLY_REQ039_PUBLISH_EXPIRES_AT }}
+          PILOT_BASE: ${{ inputs.base }}
+          PILOT_BASELINE_RUN: ${{ inputs.baseline_run }}
+        run: |
+          set -euo pipefail
+          args=(launch --root "$PILOT_ROOT" --checkout "$GITHUB_WORKSPACE" --base "$PILOT_BASE")
+          if [ -n "$PILOT_BASELINE_RUN" ]; then
+            args+=(--baseline-run "$PILOT_BASELINE_RUN")
+          fi
+          uv run --locked python -m ci.req039_pilot "${args[@]}"
+      - name: Retain concrete review packet
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: exacly-req039-review-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.PILOT_ROOT }}/public/packet.json
+            ${{ env.PILOT_ROOT }}/public/approval-comment.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 90
+          include-hidden-files: false
+      - name: Await independent approval
+        run: uv run --locked python -m ci.req039_pilot wait-approval --root "$PILOT_ROOT"
+      - name: Retain immutable approved-goal fence
+        id: goal_fence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: exacly-req039-approval-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.PILOT_ROOT }}/public/approval-receipt.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 90
+          include-hidden-files: false
+      - name: Reference independently checked approval fence
+        env:
+          PILOT_FENCE_ID: ${{ steps.goal_fence.outputs.artifact-id }}
+          PILOT_FENCE_DIGEST: ${{ steps.goal_fence.outputs.artifact-digest }}
+        run: |
+          set -euo pipefail
+          uv run --locked python -m ci.req039_pilot advance --root "$PILOT_ROOT" \
+            --artifact-id "$PILOT_FENCE_ID" --artifact-digest "$PILOT_FENCE_DIGEST"
+      - name: Await native completion
+        run: uv run --locked python -m ci.req039_pilot wait --root "$PILOT_ROOT"
+      - name: Stop bounded same-runner coordinator
+        id: cleanup
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -f "$PILOT_ROOT/public/acceptance-evidence.json" ]; then
+            echo 'evidence=true' >> "$GITHUB_OUTPUT"
+          fi
+          if [ -f "$PILOT_ROOT/launch.json" ]; then
+            uv run --locked python -m ci.req039_pilot stop --root "$PILOT_ROOT"
+          fi
+          if [ -f "$PILOT_ROOT/public/terminal-noauthority.json" ]; then
+            echo 'noauthority=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Retain terminal no-authority receipt
+        if: always() && steps.cleanup.outputs.noauthority == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: exacly-req039-noauthority-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.PILOT_ROOT }}/public/terminal-noauthority.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 90
+          include-hidden-files: false
+      - name: Retain live acceptance evidence
+        if: always() && steps.cleanup.outputs.evidence == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: exacly-req039-acceptance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.PILOT_ROOT }}/public/acceptance-evidence.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 90
+          include-hidden-files: false

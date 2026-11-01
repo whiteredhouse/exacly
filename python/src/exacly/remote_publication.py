@@ -672,6 +672,48 @@ def show(journal: Path, journal_id: str, identity: str, *, lock_timeout: float =
     return retained
 
 
+def inspect_precondition(
+    request: Request,
+    *,
+    authorization: Any,
+    transport: RemoteTransport,
+    timeout: float = 30,
+    lock_timeout: float = store.DEFAULT_LOCK_TIMEOUT,
+) -> Doc:
+    """Read the actual ref against an exact unreleased operation without persisting or sending.
+
+    This establishes only the selected ref precondition. A matching ref is not an authorization,
+    marker-absence assertion, publication result or completion decision.
+    """
+    document = _request(request)
+    limit = _timeout(timeout)
+    wait = store.Deadline(lock_timeout)
+    deadline = store.Deadline(limit)
+    store.require(transport.adapter == request.adapter, "trusted remote adapter identity changed")
+    receipt = _source(document, min(wait.remaining(), deadline.remaining()))
+    expected = _authorization(document, receipt, lock_timeout=min(wait.remaining(), deadline.remaining()))
+    store.require(authorization == expected, "read-only remote proposal differs from the exact native handoff")
+    with _opened(request.journal, request.journal_id, write=False, deadline=wait) as connection:
+        store.require(
+            _load(connection, expected["operation_id"], deadline=wait) is None,
+            "precondition probe must select a distinct unreleased operation",
+        )
+    intent = {"id": expected["operation_id"], "request": document, "handoff": receipt, "authorization": expected}
+    deadline.check()
+    observed = _observation(transport.inspect(copy.deepcopy(intent), timeout=deadline.remaining()), intent)
+    deadline.check()
+    report = {
+        "schema_version": VERSION,
+        "operation_id": expected["operation_id"],
+        "intent": intent,
+        "status": "ref_matches" if observed["revision"] == request.expected_revision else "conflict",
+        "observation": observed,
+        "claims": {**CLAIMS, "remote_published": False, "effect_authorized": False, "marker_absence_verified": False},
+    }
+    report["digest"] = planning.digest(report)
+    return report
+
+
 def recover(
     journal: Path,
     journal_id: str,
