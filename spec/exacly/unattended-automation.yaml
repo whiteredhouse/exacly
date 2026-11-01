@@ -8,9 +8,9 @@ records:
     name: Resume approved verification workflows without an attending operator
     description: Coordinate existing verification primitives through a durable, bounded whole-workflow controller.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-31"
+    last_reviewed_at: "2026-11-01"
     statement: >-
       Given an explicitly selected verification objective, approved model and policies, and independently
       delegated authority, coordinate eligible work from planning through observation-confirmed completion,
@@ -24,17 +24,17 @@ records:
       - Waiting, polling and retries use bounded deadlines and backoff. Consume and reconcile the standing authorizer's authoritative objective-wide attempt, time and model-service reservations alongside native component limits; replans, new action IDs, successive revisions, binding supersession or another journal or policy version cannot replenish consumed or reserved capacity.
       - Expose durable status, pause, cancellation, recovery and actionable escalation for unavailable infrastructure, failed CI, exhausted budgets and stale contracts. Cancellation and revocation stop new effects while preserving uncertain in-flight effects and their separately approved recovery semantics.
       - Reobserve after completion before selecting more work. Only native admitted evidence and completion may establish satisfied work; a controller phase, worker exit, published commit, merged PR or passing report alone cannot remove pending work.
-    verification_method: Future whole-workflow, event deduplication, restart, budget and concurrency acceptance tests.
+    verification_method: Durable scheduling, native single-producer integration, real controller-process supervision/recovery and fault tests cover the bounded local controller; live acceptance remains separate.
     observe:
       tests:
-        cases: ["python/tests/test_unattended_controller.py::*", "python/tests/test_unattended_controller_faults.py::*"]
+        cases: ["python/tests/test_unattended_controller.py::*", "python/tests/test_unattended_controller_faults.py::*", "python/tests/test_unattended_completion.py::*"]
 
   - id: REQ-035
     type: Requirement
     name: Delegate exact effects under bounded standing authorization
     description: Permit routine unattended effects through independently approved policy without weakening one-shot authorization.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
     last_reviewed_at: "2026-11-01"
     statement: >-
@@ -50,7 +50,7 @@ records:
       - Recheck expiry and revocation before new effects or retries. Revocation prevents new grants and requests cancellation where supported; it does not claim to recall an already sent remote request, erase history or invent permission for a new effect under the name of recovery.
       - Changes to acceptance criteria, observation bindings, trusted verifier or observer code, producer policy or the delegation itself require independent review and a new approved contract. A permitted product-source path does not authorize weakening the checks deciding success, including Exacly's own pinned observer source.
       - Merge, release, deployment, destruction and unsupported runtime capabilities require separate explicit contracts; the first verification delegation does not inherit them. Unknown decisions and unavailable authorizer or budget storage stop new effects with an inspectable escalation.
-    verification_method: Objective accounting, delegation scope, revocation, native grant identity, metered reads and cross-policy exclusion have acceptance coverage; complete native controller wiring remains required.
+    verification_method: Objective accounting, protected delegation scope, revocation, native grant identity, metered reads, cross-policy exclusion and native whole-workflow wiring have acceptance coverage; live deployment evidence is separate.
     observe:
       tests:
         cases: ["python/tests/test_standing_authorization.py::*", "python/tests/test_standing_authorization_faults.py::*", "python/tests/test_standing_authorization_scope.py::*", "python/tests/test_standing_authorization_scope_faults.py::*", "python/tests/test_unattended_completion.py::*"]
@@ -157,21 +157,21 @@ records:
   - id: APP-020
     type: Application
     name: Unattended verification controller
-    description: Planned whole-workflow coordinator reusing existing primitives, with an implemented explicit current-state output-association foundation.
+    description: Durable whole-workflow controller with exact native adapters, protected store anchors and independently supervised bounded calls; first profile is a single producer on one local coordination host.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-31"
+    last_reviewed_at: "2026-11-01"
     responsibility: Select approved verification work, correlate durable phases and output evidence, recover before retrying and complete through native admission under bounded delegated authority.
-    interfaces: [exacly.output_association explicit association API, Planned unattended verification controller, Planned exacly.automation_controller Python API]
-    implementation_ref: { locator: python/src/exacly/automation_controller.py, planned: true }
+    interfaces: [exacly.automation_controller native workflow and scheduler API, exacly.controller_store protected journal and ledger anchor API, exacly.controller_runtime gated supervision API, exacly.output_association explicit association API]
+    implementation_ref: { locator: python/src/exacly/automation_controller.py }
 
   - id: APP-021
     type: Application
     name: Standing effect authorizer
     description: Protected independently selected delegation evaluator with exact native grants, objective-wide accounting, metered reads and cross-policy write exclusion; complete workflow integration remains proposed.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
     last_reviewed_at: "2026-11-01"
     responsibility: Issue and retain exact one-shot decisions within protected scope and objective-wide budgets without granting authority to candidate templates or approving policy drift.
@@ -217,11 +217,11 @@ records:
   - id: INFO-011
     type: Information
     name: Unattended workflow progress and effect correlations
-    description: Planned durable objective, phase and external-operation identity linking independently retained component history.
+    description: Durable objective, phase, supervisor and external-operation correlations linking independently retained component history; component journals and accounting remain authoritative.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-31"
+    last_reviewed_at: "2026-11-01"
     definition: Versioned workflow and phase intents, exact remote publication intents and receipts, native receipt references, current correlations, authoritative authorization-budget reservation references and escalation or recovery decisions; this progress does not replace authorizer accounting, component journals, authenticated evidence or model state.
     identifiers: [objective ID, workflow ID, phase ID, effect ID, component receipt identity, repository and revision, run and attempt]
     steward: exacly-maintainers
@@ -231,7 +231,7 @@ records:
     name: Standing delegation and exact authorization decisions
     description: Protected objective accounting and retained independently selected scope decisions, exact native grants, metered reads and revocation facts.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
     last_reviewed_at: "2026-11-01"
     definition: Independently approved versioned delegation, issuer and revocation facts, eligible objective and effect scope, finite budget reservations and consumption, and exact current proposal decisions with native one-shot authorization identities; hashes identify content and do not establish approval authority.
@@ -241,12 +241,12 @@ records:
   - id: INF-008
     type: Infrastructure
     name: Protected automation coordination storage
-    description: Private operator storage for the local objective-accounting foundation; workflow and standing-policy coordination remain planned.
+    description: Private local accounting, policy, workflow and native effect journals with exact store pins and a protected native-ledger inode anchor; no distributed migration is supported.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-31"
-    kind: Planned protected local control-plane journal storage
+    last_reviewed_at: "2026-11-01"
+    kind: Protected local control-plane journal storage
     purpose: Retain initialized scoped workflow, remote-effect and authorization history in separately protected stores or namespaces while existing dispatch, executor, handoff, binding and completion journals retain their own formats and authority; no distributed guarantees or silent migrations follow from this proposal.
     operational_ref: { locator: docs/unattended-automation.md }
 
