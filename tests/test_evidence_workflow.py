@@ -3,6 +3,7 @@
 import hashlib
 import json
 import re
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -128,11 +129,15 @@ def test_ci_namespace_permission_is_scoped_to_system_bubblewrap_and_preserves_gl
     setup = (ROOT / "ci/setup_isolation_runtime.sh").read_text()
     privileged = [line for line in setup.splitlines() if line.startswith("sudo ")]
     assert privileged == [
-        "sudo apt-get update",
-        "sudo apt-get install --yes apparmor bubblewrap libseccomp2",
-        'sudo install -m 0644 "$isolation_setup_dir/apparmor/exacly-bwrap" /etc/apparmor.d/exacly-bwrap',
-        "sudo apparmor_parser --replace /etc/apparmor.d/exacly-bwrap",
+        "sudo -n env DEBIAN_FRONTEND=noninteractive timeout --signal=TERM --kill-after=15s 300s \\",
+        "sudo -n env DEBIAN_FRONTEND=noninteractive timeout --signal=TERM --kill-after=15s 300s \\",
+        "sudo -n timeout --signal=TERM --kill-after=15s 60s install -m 0644 "
+        '"$isolation_setup_dir/apparmor/exacly-bwrap" /etc/apparmor.d/exacly-bwrap',
+        "sudo -n timeout --signal=TERM --kill-after=15s 60s apparmor_parser --replace /etc/apparmor.d/exacly-bwrap",
     ]
+    assert setup.count("Acquire::Retries=2") == setup.count("DPkg::Lock::Timeout=30") == 2
+    assert setup.count("Acquire::http::Timeout=30") == setup.count("Acquire::https::Timeout=30") == 2
+    assert "install --yes apparmor bubblewrap libseccomp2" in setup
     assert 'test "$isolation_restriction" = 1' in setup
     assert 'test "$isolation_enforcement" = Y' in setup
     assert 'test "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)" = "$isolation_restriction"' in setup
@@ -140,6 +145,50 @@ def test_ci_namespace_permission_is_scoped_to_system_bubblewrap_and_preserves_gl
     profile = (ROOT / "ci/apparmor/exacly-bwrap").read_text()
     assert re.search(r"profile exacly-bwrap /usr/bin/bwrap flags=\(unconfined\) \{\s*userns,\s*\}", profile)
     assert "capability" not in profile
+
+
+@pytest.mark.parametrize("failed_call", [1, 2])
+@pytest.mark.parametrize("status", [1, 100, 124, 137])
+def test_runtime_setup_propagates_admin_package_and_timeout_failures(
+    tmp_path: Path, failed_call: int, status: int
+) -> None:
+    commands = tmp_path / "commands"
+    commands.mkdir()
+    calls = tmp_path / "calls.json"
+    (commands / "cat").write_text(
+        '#!/bin/sh\ncase "$1" in\n'
+        "  /proc/sys/kernel/apparmor_restrict_unprivileged_userns) echo 1;;\n"
+        "  /sys/module/apparmor/parameters/enabled) echo Y;;\n"
+        "  *) exit 99;;\nesac\n"
+    )
+    (commands / "sudo").write_text(
+        "#!/usr/bin/python3\nimport json, os, pathlib, sys\n"
+        "p=pathlib.Path(os.environ['EXACLY_SETUP_TEST_CALLS'])\n"
+        "calls=json.loads(p.read_text()) if p.exists() else []\n"
+        "calls.append(sys.argv[1:]); p.write_text(json.dumps(calls))\n"
+        "sys.exit(int(os.environ['EXACLY_SETUP_TEST_STATUS']) "
+        "if len(calls)==int(os.environ['EXACLY_SETUP_TEST_FAILURE']) else 0)\n"
+    )
+    for path in commands.iterdir():
+        path.chmod(0o700)
+    result = subprocess.run(
+        ["/bin/sh", str(ROOT / "ci/setup_isolation_runtime.sh")],
+        env={
+            "PATH": f"{commands}:/usr/bin:/bin",
+            "EXACLY_SETUP_TEST_CALLS": str(calls),
+            "EXACLY_SETUP_TEST_STATUS": str(status),
+            "EXACLY_SETUP_TEST_FAILURE": str(failed_call),
+        },
+        capture_output=True,
+        timeout=5,
+        check=False,
+    )
+    assert result.returncode == status
+    invoked = json.loads(calls.read_bytes())
+    assert len(invoked) == failed_call
+    assert all(arguments[0] == "-n" for arguments in invoked)
+    assert "update" in invoked[0]
+    assert all("/etc/apparmor.d/exacly-bwrap" not in arguments for arguments in invoked)
 
 
 @pytest.mark.parametrize(
