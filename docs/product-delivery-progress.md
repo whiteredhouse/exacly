@@ -60,15 +60,18 @@ passed. The CI-owned state writer published serial 68 as
 all 149 REQ-040 cases passed. REQ-037/038/039 remained inconclusive because
 their live cases were skipped. The first target is not complete.
 
-After PR #114, main was reread at
+After PR #114, main's material source revision was
 `43bd44add2814032c3560cacd976c612481e2c36`.
 [Spec run 41309250343](https://github.com/whiteredhouse/exacly/actions/runs/41309250343)
 passed its check job with 4,496 tests, 16 explicit live skips and all 37 active
 gates, with no model findings. Its separate state writer and
 [verification-evidence run 41309250329](https://github.com/whiteredhouse/exacly/actions/runs/41309250329)
-were still running at this checkpoint. Do not claim their observation refresh
-until the actual CI-owned state is published and reread. No observed state has
-been hand-edited.
+also passed. The exact CI-owned file was reread at state commit
+`a8479dcc0ccea8ed40e8473dfeb9fa6a012fb596`: serial 69, config revision
+`43bd44add2814032c3560cacd976c612481e2c36`, written
+`2026-11-01T13:33:53Z`. REQ-034/035/036/040 passed; REQ-037–039 and
+REQ-041 remain inconclusive due to required unconfigured live cases. REQ-042/043
+were not checked at that earlier source revision. No state was hand-edited.
 
 The pilot ref `refs/heads/pilot/req039-consumer` still points to
 `7533c740df148caf4ed7b972e3b04f2e6f384260`. Its policies, markers,
@@ -112,9 +115,20 @@ The fresh wheel is
 and sdist
 `cc35c7a885facf1f1eaa7035e3ef05e369bb9f9706e9d76e92176bb48dc0fa75`.
 Global lint/format, strict typing (234 files), model validation and impact review
-passed; approved REQ-040–043 statements and criteria are unchanged. The required
-local full check is running. Fresh supported hosted CI remains mandatory before
-this draft can merge.
+passed; approved REQ-040–043 statements and criteria are unchanged. Runtime-role
+source is retained in commit `54918007994a26c798cd1ba3bbb5f117fa2f2c63`.
+
+The required local full attempt stopped after 1,059 passes and one live skip at
+an unchanged watchdog timing assertion while several checks ran concurrently.
+An unchanged focused rerun also missed its backend start marker within the short
+native window. Read-only journal evidence showed the original one-second bound,
+full reservation, successful cleanup and zero writes. After the other large runs
+finished, the original testcase passed in 3.56 seconds without code, cap or
+assertion changes. Separate phase instrumentation showed actual backend entry,
+cleanup at approximately 755 ms within the one-second bound, and slower outer
+validation/bookkeeping. The first failed fixture was pruned before phase analysis;
+its exact breakdown is not claimed. The full local attempt remains failed.
+Fresh supported hosted CI remains mandatory before this draft can merge.
 
 Earlier publication review corrected future signed timestamps and genuine
 other-intent receipt replay. Those regressions remain. The reference owns one
@@ -168,8 +182,8 @@ selected destinations, identities, artifact hashes, journal original scope,
 separate stage authorities, finite limits/expiry and recovery boundaries before
 requesting an additional grant. Do not fabricate approval from a template.
 
-Next: finish the required local check, update PR #115 with its reviewed runtime
-role correction and require a fresh full hosted pass. Adopt that
+Next: update PR #115 with its reviewed runtime-role correction and the truthful
+local-check results, then require a fresh full hosted pass. Adopt that
 dependency into deployment without losing work; finish its verification and PR.
 Verify each post-merge main observation refresh. Keep operational gaps explicit
 and preserve proposed lifecycle until authentic acceptance justifies activation.
