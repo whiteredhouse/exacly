@@ -1,0 +1,42 @@
+name: REQ-039 fixture evidence
+
+on:
+  push:
+    branches: [pilot/req039-consumer]
+
+permissions:
+  contents: read
+
+jobs:
+  observe:
+    name: Observe REQ-039 fixture
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
+      - name: Install locked dependencies
+        run: uv sync --locked
+      - name: Run fixed fixture verification
+        id: verification
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: uv run --locked pytest -c pyproject.toml verification/req039_inventory_test.py --junitxml=reports/req039-junit.xml
+      - name: Package verification evidence
+        id: evidence
+        if: always() && (steps.verification.outcome == 'success' || steps.verification.outcome == 'failure')
+        env:
+          EXACLY_TEST_OUTCOME: ${{ steps.verification.outcome }}
+        run: uv run --locked exacly evidence package --report reports/req039-junit.xml --out reports/req039-evidence
+      - name: Upload verification evidence
+        if: always() && steps.evidence.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: exacly-req039-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: reports/req039-evidence
+          if-no-files-found: error
+          retention-days: 30
+          include-hidden-files: false

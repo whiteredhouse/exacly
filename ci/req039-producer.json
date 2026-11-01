@@ -1,0 +1,14 @@
+{
+  "branch": "pilot/req039-consumer",
+  "workflow": {
+    "path": ".github/workflows/req039-evidence.yml",
+    "job_id": "observe",
+    "job_name": "Observe REQ-039 fixture",
+    "steps": {
+      "verification": "Run fixed fixture verification",
+      "package": "Package verification evidence",
+      "upload": "Upload verification evidence"
+    }
+  },
+  "artifact": {"name_prefix": "exacly-req039-evidence"}
+}

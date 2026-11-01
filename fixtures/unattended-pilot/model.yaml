@@ -1,0 +1,143 @@
+exacly: "0.2.0"
+model:
+  namespace: req039-consumer
+  product: Bounded unattended inventory pilot
+  owner: exacly-maintainers
+  scope:
+    covers: One fixed fixture inventory under explicitly approved nonproduction authority
+    excludes: [Product repair, Coding agents, Merge, Release, Deployment, Runner-loss recovery]
+  environment: req039-pilot
+  review_interval_days: 30
+records:
+  - id: MEAS-001
+    type: Measure
+    name: Inventory verification result
+    description: Observed verification of the single fixed consumer requirement.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-11-01"
+  - id: OUT-001
+    type: Outcome
+    name: Inventory fixture bytes accurately
+    description: A deliberately narrow consumer for the first unattended verification pilot.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-11-01"
+    beneficiary: Exacly maintainers
+    success_criterion: A fresh approved producer verifies the exact retained inventory output.
+    evaluation_period: One approved bounded pilot
+  - id: CAP-001
+    type: Capability
+    name: Verify fixture inventory
+    description: Check byte identities with a fixed independently reviewed verifier.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-11-01"
+    scope: Exact input and result files in the nonproduction fixture namespace.
+  - id: PROC-001
+    type: Process
+    name: Collect and verify one inventory
+    description: Keep generated data separate from the protected verification contract.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-11-01"
+    perspective: business
+    actors: [Approved nonproduction coordinator]
+    trigger: An explicitly approved inventory verification objective
+    steps: [Collect exact fixture bytes, Retain inventory output, Verify with the fixed producer]
+    completion: Native admission and completion for the exact result revision
+    exceptions: [Missing or incorrect output remains pending]
+  - id: REQ-001
+    type: Requirement
+    name: Retain an accurate inventory of the selected fixture
+    description: The fixed observer checks the result without trusting worker success claims.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-11-01"
+    statement: Produce one inventory identifying the exact selected source fixture bytes.
+    acceptance_criteria:
+      - The result selects only fixtures/unattended-pilot/inputs/source.txt and reports its exact byte length and SHA-256 digest.
+      - The closed result identifies snapshot-inventory-v1 and carries a content snapshot digest without claiming admitted evidence or established verification.
+      - Missing, malformed, aliased, extra-file or wrong-byte output fails the unchanged verifier.
+    verification_method: Fixed single-case fixture verifier in the independently approved push producer.
+    observe:
+      tests:
+        workflow: .github/workflows/req039-evidence.yml
+        job: observe
+        cases: ["verification/req039_inventory_test.py::test_pilot_inventory_matches_approved_fixture"]
+  - id: APP-001
+    type: Application
+    name: Fixed inventory recipe
+    description: Deterministic reviewed command; no coding-agent or general product modification support.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-11-01"
+    responsibility: Inventory selected immutable fixture bytes through the bounded native executor.
+    interfaces: [exacly.worker_integration]
+    implementation_ref: {locator: python/src/exacly/worker_integration.py}
+  - id: APP-002
+    type: Application
+    name: Fixed fixture observer
+    description: Independently approved source, separate from mutable fixture results.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-11-01"
+    responsibility: Compare actual fixture bytes with inventory data and emit an honest passing or failing check.
+    interfaces: [Single-case pytest producer]
+    implementation_ref: {locator: verification/req039_inventory_test.py}
+  - id: INFO-001
+    type: Information
+    name: Selected fixture bytes
+    description: The exact source data selected by the approved nonproduction task.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-11-01"
+    definition: Bounded regular-file bytes at fixtures/unattended-pilot/inputs/source.txt.
+    identifiers: [Git commit, Git blob identity, Source path]
+    steward: exacly-maintainers
+  - id: INFO-002
+    type: Information
+    name: Fixture inventory result
+    description: Generated data checked by the fixed observer, carrying no completion authority.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-11-01"
+    definition: Closed snapshot-inventory-v1 JSON selecting the source path, byte length, SHA-256 and snapshot content identity.
+    identifiers: [Source path, Source digest, Snapshot digest, Retained handoff commit]
+    steward: exacly-maintainers
+  - id: INF-001
+    type: Infrastructure
+    name: Nonproduction fixture Git storage
+    description: Source and result blobs within the exact approved consumer revision.
+    owner: exacly-maintainers
+    lifecycle: active
+    evidence: []
+    last_reviewed_at: "2026-11-01"
+    kind: Git source objects
+    purpose: Retain fixture data separately from the fixed observer, policy and model.
+    operational_ref: {locator: fixtures/unattended-pilot}
+relationships:
+  - {source: MEAS-001, type: evaluates, target: OUT-001}
+  - {source: CAP-001, type: contributes_to, target: OUT-001}
+  - {source: PROC-001, type: uses_capability, target: CAP-001}
+  - {source: PROC-001, type: uses, target: APP-001}
+  - {source: PROC-001, type: uses, target: APP-002}
+  - {source: REQ-001, type: supports, target: PROC-001}
+  - {source: APP-001, type: implements, target: REQ-001}
+  - {source: APP-001, type: reads, target: INFO-001}
+  - {source: APP-001, type: writes, target: INFO-002}
+  - {source: APP-002, type: reads, target: INFO-001}
+  - {source: APP-002, type: reads, target: INFO-002}
+  - {source: APP-001, type: depends_on, target: INF-001}
+  - {source: APP-002, type: depends_on, target: INF-001}
+  - {source: INF-001, type: stores, target: INFO-001, role: system_of_record}
+  - {source: INF-001, type: stores, target: INFO-002, role: system_of_record}
