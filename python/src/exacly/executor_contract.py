@@ -14,7 +14,7 @@ from typing import Any
 
 import jsonschema
 
-from exacly import execution_store, isolation, planning
+from exacly import execution_store, isolation, planning, resource_guard
 from exacly.applicability import Target
 from exacly.executor_interfaces import LOCAL_ADAPTER, IdentityValidator
 
@@ -42,7 +42,9 @@ POLICY_SCHEMA = planning.fields(
         "max_attempts": {"type": "integer", "minimum": 1, "maximum": 10},
         "timeout_seconds": {"type": "number", "exclusiveMinimum": 0, "maximum": 3600},
         "permitted_repository_effects": {"const": []},
-    }
+        "resource_guard": {"type": "object"},
+    },
+    optional=("resource_guard",),
 )
 CLAIMS = {
     "outputs_trusted": False,
@@ -107,6 +109,8 @@ def validate_policy(value: Any, *, check_storage: bool = True) -> Doc:
     except (jsonschema.ValidationError, RecursionError, TypeError) as error:
         raise ValueError(f"invalid executor policy: {error}") from error
     isolation.parse_policy(chosen["runtime"])
+    if "resource_guard" in chosen:
+        resource_guard.from_descriptor(chosen["resource_guard"])
     require(type(chosen["max_attempts"]) is int, "executor attempt limit must be an integer")
     require(
         type(chosen["timeout_seconds"]) in (int, float) and math.isfinite(chosen["timeout_seconds"]),

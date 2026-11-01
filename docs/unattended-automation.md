@@ -1,9 +1,10 @@
 # Unattended verification foundations
 
-The full unattended verification contracts, REQ-034–039, remain proposed in
+The remaining unattended verification contracts, REQ-034–035 and REQ-037–039, are proposed in
 [`spec/exacly/unattended-automation.yaml`](../spec/exacly/unattended-automation.yaml).
 The implementation checkpoint is [`automation-progress.md`](automation-progress.md).
-These foundations do not enable an unattended workflow by themselves.
+REQ-036 describes the implemented fixed inventory worker and resource integration. These components
+do not enable a complete unattended workflow by themselves.
 
 ## Objective accounting
 
@@ -55,11 +56,32 @@ separately authorized native executor request. Recipe `snapshot-inventory-v1` ru
 `/outputs/source-digests.json`. It does not execute or verify those source files. Its retained
 identity includes the exact commit, tree, blobs, snapshot, recipe and input bytes.
 
-This API supplies preparation and a deterministic recipe only. The 37 focused tests exercise
-real local Git objects and immutable preparation; they do not run the recipe through the supported
-physical runtime. No CPU, memory or process envelope is provided here, and a model digest is an
-identity rather than independent approval. REQ-036 remains proposed until the actual integration,
-resource envelope and supported-runtime lifecycle acceptance are delivered.
+The concrete integration also supplies `bind`, `preview`, `apply` and `guarded_backends` for this
+fixed recipe. A trusted operator provisions a transient systemd service with CPU quota 100000/100000,
+1 GiB memory, no swap and at most 128 processes. `resource_guard.capture` checks actual cgroup v2
+membership, kernel limits, boot and cgroup identities. The reviewed lifecycle checks those facts
+again before worker and namespace release. This does not provide coding-agent or model-service access.
+
+The approved native executor policy must contain the exact `guard.descriptor` in `resource_guard`.
+That closed optional descriptor participates in the native policy, contract and authorization digest
+and is retained in native history. Direct native apply enforces the declared guard; changing to a
+broader resource envelope cannot reuse an earlier grant. Historical replay preserves its original
+resource evidence. Existing policies without the field keep their contract and make no CPU/memory/
+process-containment claim.
+
+`resource_guard.run_unit` provisions the reviewed bounded service as the current non-root user.
+It accepts only trusted argv and explicit environment variable names; forwarded values stay out of
+argv and logs. The whole unit is stopped on timeout/output overflow. Secrets and canonical journals
+stay outside candidate mounts. The same unit can retain journals while a controller child restarts;
+another runner, boot, cgroup or replacement journal cannot resume that contract.
+
+Mandatory `test_worker_integration_runtime.py` cases self-provision actual transient services on
+supported Ubuntu. They verify fixed-recipe execution/replay, unavailable setup, cancellation,
+controller-process recovery in the same unit, and actual CPU throttling, process denial and memory
+OOM behavior. Missing systemd, sudo, cgroup enforcement or Bubblewrap fails full checks; the optional
+development subset excludes the real runtime modules and establishes no runtime verification.
+Lifecycle activation records this implemented fixed-command contract. Fresh supported-runtime CI
+observations establish verification; controlled preparation tests alone cannot do so.
 
 ## Exact output association
 

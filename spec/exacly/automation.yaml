@@ -170,7 +170,7 @@ records:
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-30"
+    last_reviewed_at: "2026-10-31"
     statement: >-
       Run one explicitly approved executor adapter within the enforced isolation boundary and
       declared attempt, time and concurrency limits, retaining durable outcomes and produced
@@ -180,6 +180,7 @@ records:
       - Dry-run launches no worker or candidate and changes no state, binding, watermark, attempt or output. Apply requires separately reviewed authorization binding the initialized journal and canonical storage scope, selected contract, actual history head, next attempt ordinal, exact current state and output destination; stale preconditions block execution.
       - Recheck the approved plan, policies, target, actual state, exact pending verification task and active execution binding before reserving a new attempt; contract drift, completed work or a changed binding prevents new execution.
       - Explicit policy bounds attempts and the worker's wall-clock time through staging, isolated execution and collection. Explicit journal initialization fixes shared concurrency capacity. The first adapter permits no repository effects; retries, changed policies and failures cannot expand retained limits or infer new authorization.
+      - An optional closed resource_guard policy descriptor pins actual cgroup identity and finite CPU, memory, swap and process bounds in the exact native contract and grant. When declared, native launch and release gates check the actual kernel envelope and process membership; a different or broader guard cannot reuse the grant, and historical replay preserves the original descriptor. Policies without this descriptor retain their existing contract and make no resource-containment claim.
       - Before starting the adapter, commit durable work and attempt identities, reviewed limits, status and the shared concurrency reservation in an explicitly initialized private companion journal. Existing version-2 and version-4 binding/completion ledgers retain their formats and ordinary operations never silently initialize, migrate or recover storage.
       - Supervision, inspection, cancellation and recovery consume explicitly selected attempt-storage, invocation-ownership and worker-lifecycle protocols; the default local adapters preserve the existing policy, authorization, journal and result contracts, and candidate-controlled inputs cannot select another provider.
       - Candidate code runs only through the verified local Bubblewrap launcher satisfying REQ-025, with no host-execution fallback, network or writable host repository mount. The full worker budget and process cleanup remain under the trusted supervisor.
@@ -197,6 +198,8 @@ records:
           - "python/tests/test_executor_faults.py::*"
           - "python/tests/test_executor_store.py::*"
           - "python/tests/test_executor_runtime.py::*"
+          - "python/tests/test_resource_guard.py::*"
+          - "python/tests/test_worker_integration_runtime.py::*"
 
   - id: REQ-031
     type: Requirement
@@ -369,8 +372,8 @@ records:
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-30"
-    definition: Versioned execution and attempt identities, pinned journal and ledger scope, exact reviewed authorization and task contract, fixed attempt and shared concurrency limits, retained launch and terminal outcomes, collected output references, host-derived content build identities and model-independent recovery history in an explicitly initialized companion journal; candidate results carry no verification or completion authority.
+    last_reviewed_at: "2026-10-31"
+    definition: Versioned execution and attempt identities, pinned journal and ledger scope, exact reviewed authorization and task contract, optional exact kernel resource descriptor, fixed attempt and shared concurrency limits, retained launch and terminal outcomes, collected output references, host-derived content build identities and model-independent recovery history in an explicitly initialized companion journal; candidate results carry no verification or completion authority.
     identifiers: [execution ID, execution attempt ID, attempt ordinal, journal initialization ID, task and binding identity, adapter, authorization digest, output build identity]
     steward: exacly-maintainers
 

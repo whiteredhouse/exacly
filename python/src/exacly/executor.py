@@ -26,6 +26,7 @@ from exacly import (
     planning,
     policy,
     reconciliation,
+    resource_guard,
     state_writer,
 )
 from exacly.core import is_state
@@ -70,6 +71,14 @@ __all__ = [
 ]
 
 Doc = dict[str, Any]
+
+
+def _approved_resources(chosen: Doc) -> resource_guard.Guard | None:
+    if "resource_guard" not in chosen:
+        return None
+    guard = resource_guard.from_descriptor(chosen["resource_guard"])
+    guard.check()
+    return guard
 
 
 def _backends(backends: CoordinatorBackends | None, coordination_scope: str) -> CoordinatorBackends:
@@ -305,6 +314,8 @@ def _view(operation: str, work: Doc, *, backends: CoordinatorBackends, dry_run: 
     )
     report = _report(operation, work["intent"]["id"], dry_run=dry_run)
     report["history"] = copy.deepcopy(work)
+    if "resource_guard" in work["intent"]["contract"]["policy"]:
+        report["resource_guard"] = copy.deepcopy(work["intent"]["contract"]["policy"]["resource_guard"])
     attempts = work["attempts"]
     if not attempts:
         return _finish(report, "prepared", "The work contract is retained; no candidate has started.")
@@ -331,6 +342,7 @@ def preview(
     """Read the exact next attempt and authorization without launching or writing anything."""
     backends = _backends(backends, coordination_scope)
     chosen = validate_policy(request.executor_policy)
+    _approved_resources(chosen)
     storage = chosen["storage"]
     require(str(canonical_path(str(state_path))) == storage["state"], "state path differs from reviewed policy")
     deadline = execution_store.Deadline(lock_timeout)
@@ -351,6 +363,8 @@ def preview(
                     "The approved attempt budget is exhausted; no further launch is permitted.",
                 )
         report = _report("preview", identity, dry_run=True)
+        if "resource_guard" in chosen:
+            report["resource_guard"] = copy.deepcopy(chosen["resource_guard"])
         report.update(
             authorization_template=authorization,
             attempt=authorization["attempt"],
@@ -666,10 +680,18 @@ def _apply(
         )
         prior = _checked_get(journal, authorization.get("execution_id", ""), backends)
         if prior is not None:
+            requested_resources = (
+                request.executor_policy.get("resource_guard") if isinstance(request.executor_policy, Mapping) else None
+            )
+            require(
+                prior["intent"]["contract"]["policy"].get("resource_guard") == requested_resources,
+                "resource envelope differs from the retained exact executor contract",
+            )
             replay = _retained(prior, authorization, backends)
             if replay is not None:
                 return replay
     chosen = validate_policy(request.executor_policy)
+    approved_resources = _approved_resources(chosen)
     storage = chosen["storage"]
     require(
         str(journal_path.resolve()) == storage["journal"]
@@ -717,13 +739,19 @@ def _apply(
 
     def on_worker(process: Doc) -> None:
         lease.assert_current()
+        if approved_resources is not None:
+            approved_resources.check_process(process["pid"])
         with backends.storage.open(Scope(journal_path), write=True, lock_timeout=lock_timeout) as target:
             selected = _checked_get(target, identity, backends)
             assert selected is not None
             _append_event(target, selected, number, "running", {"kind": "worker", "identity": process}, backends, lease)
+        if approved_resources is not None:
+            approved_resources.check_process(process["pid"])
 
     def on_boundary(process: Doc) -> None:
         lease.assert_current()
+        if approved_resources is not None:
+            approved_resources.check_process(process["pid"])
         budget = execution_store.Deadline(lock_timeout)
         with backends.storage.open(scope, write=True, lock_timeout=budget.remaining(), coordinated=True) as target:
             selected = _checked_get(target, identity, backends)
@@ -740,6 +768,8 @@ def _apply(
             )
             _current(documents, current, request, ledger, budget)
             lease.assert_current()
+            if approved_resources is not None:
+                approved_resources.check_process(process["pid"])
 
     try:
         lease.assert_current()
