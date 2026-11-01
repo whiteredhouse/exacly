@@ -194,3 +194,11 @@ owner. Its private immutable registry, original-goal journal, authenticated
 receipt and actual-byte discovery implement a bounded reference workflow without
 changing the existing tag-triggered package release. Selected operational
 acceptance and deployment remain separate.
+
+The [static deployment reference](product-delivery-deployment.md) consumes exact
+authenticated published bytes under its own application/environment grant. A
+distinct operational observer measures the actual HTTP result and preserves
+current freshness separately from the retained applied effect. Rollback has its
+own exact prior artifact, fresh-failure conditions and original-goal budget.
+These are bounded local profiles, with selected operational acceptance still
+pending; neither they nor the native gate establish general application health.
