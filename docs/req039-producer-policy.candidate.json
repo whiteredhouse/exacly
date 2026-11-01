@@ -1,0 +1,48 @@
+{
+  "artifact": {
+    "name_prefix": "exacly-req039-evidence"
+  },
+  "branch": "pilot/req039-consumer",
+  "branch_protection": "not_required",
+  "model": {
+    "digest": "sha256:280ffeb05ca09775b558a493e3dd627636f7c5ab875fadf0e7f7c43af6ec23f5",
+    "files": [
+      "fixtures/unattended-pilot/model.yaml"
+    ],
+    "revision": "7533c740df148caf4ed7b972e3b04f2e6f384260"
+  },
+  "name": "req039-fixed-push-producer",
+  "observer": {
+    "digest": "sha256:2013ef17a6bd710b334da85d02ef8782fd60ed945e2014e2f1476b51b0f4bd2b",
+    "paths": [
+      ".github",
+      "ci",
+      "conftest.py",
+      "fixtures/unattended-pilot/model.yaml",
+      "mise.toml",
+      "pyproject.toml",
+      "python",
+      "skills",
+      "spec",
+      "tests",
+      "uv.lock",
+      "verification"
+    ]
+  },
+  "repository": {
+    "full_name": "whiteredhouse/exacly",
+    "id": 1411700094
+  },
+  "version": "1",
+  "workflow": {
+    "digest": "sha256:4725b3ac34180542f84022ec19b54d89b87264c2d45899f25ef2438b4434e82d",
+    "job_id": "observe",
+    "job_name": "Observe REQ-039 fixture",
+    "path": ".github/workflows/req039-evidence.yml",
+    "steps": {
+      "package": "Package verification evidence",
+      "upload": "Upload verification evidence",
+      "verification": "Run fixed fixture verification"
+    }
+  }
+}

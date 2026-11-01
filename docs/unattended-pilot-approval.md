@@ -24,6 +24,14 @@ Exacly evidence packaging and uploads
 `exacly-req039-evidence-<run_id>-<run_attempt>`. The existing main-only
 `.github/workflows/verification-evidence.yml` is unchanged.
 
+The concrete immutable-base policy proposal is
+[`req039-producer-policy.candidate.json`](req039-producer-policy.candidate.json).
+It grants no trust. Use the current base and failed-producer identities in
+[`automation-progress.md`](automation-progress.md), then compare the coordinator's
+actual generated policy and delegation before independently approving its packet.
+Per-run host, journal, resource and credential identities are finalized by that
+protected setup; a copied policy or this document cannot approve them.
+
 The exact producer definition is in `ci/req039-producer.json`. The approval packet
 pins its workflow ID and bytes, model/criteria/bindings, observer closure, source
 base, installed native components and every initialized store identity. The
@@ -50,8 +58,13 @@ Mint with `repository_ids: [1411700094]` and these permissions:
 - `actions: read` for authentic producer, attempt, job and artifact discovery.
 - `issues: write` for native dispatch task creation and reconciliation.
 
-No workflows-write, actions-write, administration, secrets, deployments, releases
-or pull-request merge permission is required. Do not grant them for this pilot. The external mint request is:
+Mint only these repository permissions. GitHub's `contents: write` access is
+repository-wide and also authorizes merge and release APIs; the mint request
+cannot restrict it to pilot refs. Exacly's independently approved native grants
+permit only the exact pilot branch and allocated operation marker, with no main
+update, arbitrary ref, merge, release or deployment authority. Workers receive no
+publishing credential. No additional workflows, actions-write, administration,
+secrets or deployment permissions are needed. The external mint request is:
 
 ```json
 {"repository_ids":[1411700094],"permissions":{"contents":"write","actions":"read","issues":"write"}}
