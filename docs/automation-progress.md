@@ -398,3 +398,43 @@ threads afresh, and verify CI state publication. No automatic merge bypass is au
 
 
 The bounded installer #99 follow-up is merged at0f7bf455; its standalone source head6133536e passed3,593 tests. Final coordinator source and retained proof are independently reviewed and staged for the next focused PR. No actual live approval/effects or new main state publication is claimed.
+
+
+## Final single-producer acceptance mapping (2026-11-01)
+
+Independent review mapped all six REQ-038 criteria to the implemented declared
+single-consumer/single-producer profile. README makes composition conditional on
+the approved workflow; unsupported members, targets, foreign namespaces and
+aggregate mappings are rejected before effects. There is no unconditional
+composition implementation gap in this profile. All acceptance criteria remain
+unchanged, and no aggregate/multi-target support is claimed.
+
+REQ-038 remains proposed pending actual live acceptance shared with REQ-039. Its
+observation now additionally selects the authenticated read-only live E2E case,
+so controlled association/completion tests alone cannot establish its full
+observation. This binding and its requirement semantic fingerprint are finalized
+before any actual pilot. Successful retained live acceptance can justify
+activating REQ-037/038/039 within this profile. No live success is claimed now.
+
+Prerequisites #95, #96 and #97 merged as f085c11533ac1adcae8c1f36878bf49b867996af,
+689a3774424a17043274c4b2b48ad300473b64ec and578bc0398e5a47f195824579250143fb443e1706.
+Native controller #98 merged as8ec168e5b062a4b3bcd3c21d766f566c09716611 after
+3,915 tests passed (one separate opt-in live case unconfigured) and all other
+checks passed. Coordinator #100 exacthead320bfaf68c1e5f915f7304e8254f664609c30045
+has independent source review clearance and awaits final supported full CI/merge.
+All merges used clean GitHub metadata, satisfied current required checks/reviews
+and respected effective rules; there is no required GitHub review rule.
+
+Main observations remain serial66/config5ba9e66 until current-main CI publishes.
+Older state run41253365811 job124693321007 remains stalled in pre-fix runtime
+installation; obsolete pending runs41253411322,41254079984,41257610832 hold
+older revisions. Current tools can rerun jobs but do not provide run cancellation
+or workflow dispatch. Do not bypass the canonical state publication queue or
+hand-edit observed state. Exact obsolete-run cancellation by an authorized
+operator may be needed before current-main publication; inspect current runs first.
+
+The approved consumer branch has not yet been seeded; do so only from finalized
+merged code, preserve the fixed verifier and leave the result absent for the
+authentic failed baseline. A real scoped publisher credential/mint metadata and
+independent actual packet approval remain live prerequisites. Missing access
+blocks live only; all source implementation and independent review are complete.

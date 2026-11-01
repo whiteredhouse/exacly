@@ -112,7 +112,7 @@ records:
     owner: exacly-maintainers
     lifecycle: proposed
     evidence: []
-    last_reviewed_at: "2026-10-31"
+    last_reviewed_at: "2026-11-01"
     statement: >-
       Correlate the original verification objective with its exact generated implementation, explicitly
       supersede the registered output binding when authorized, and complete only through the existing
@@ -124,10 +124,10 @@ records:
       - Keep producer namespaces, applicability scopes and evidence identities intact. If an aggregate needs a consumer observation or completion mapping, require an explicitly approved contract; raw composition or JUnit output cannot be imported as authenticated foreign state or used circularly to satisfy its own prerequisites.
       - Invoke native completion only for the active registered goal and explicit resulting target, with fresh live admission and merged current-state assessment. Worker success, local handoff, remote publication, admitted failure or aggregate readiness alone does not remove pending work.
       - Crash recovery correlates existing registration, admission and completion intents and receipts before further effects, preserving unrelated observations and work. Exact completed replay does not publish state twice, and stale criteria, conflicting state, failed, missing or wrong-revision evidence keeps the goal pending with an actionable reason.
-    verification_method: Controlled output-association and foundation integration tests cover native binding supersession and single-producer completion; whole-workflow and composition-to-goal completion acceptance remain future work.
+    verification_method: Native association, single-producer controller, fresh admission/completion and recovery have acceptance coverage; the supported profile additionally requires the authenticated read-only live chain. Composition and mappings require an explicitly selected approved contract.
     observe:
       tests:
-        cases: ["python/tests/test_unattended_output_association.py::*", "python/tests/test_unattended_completion.py::*", "python/tests/test_unattended_foundations_integration.py::*"]
+        cases: ["python/tests/test_unattended_output_association.py::*", "python/tests/test_unattended_completion.py::*", "python/tests/test_unattended_foundations_integration.py::*", "python/tests/test_unattended_live_end_to_end.py::test_live_isolated_output_reaches_fresh_native_completion"]
 
   - id: REQ-039
     type: Requirement
