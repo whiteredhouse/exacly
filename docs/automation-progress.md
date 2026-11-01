@@ -216,3 +216,32 @@ Preserve every existing private journal; never recreate the original approved go
 
 
 Runtime setup PR #99 merged as 0f7bf455c710797ea900f9a2daa72dd941d41bb4 after exact-head supported CI passed 3,593 tests and all other checks. This standing-scope head inherits that fix through an ordinary merge; reviewed implementation bytes are unchanged. Fresh exact-head CI remains required. Main state publication is still behind the older queued jobs; no fresh publication is claimed.
+
+
+## Concrete remote bridge checkpoint (2026-11-01)
+
+Standing-scope PR [#95](https://github.com/whiteredhouse/exacly/pull/95), head
+`3440d6854a997bd119fde581e2fae1cd5c7fd08f`, is independently reviewed and
+awaiting exact-head full CI/merge at this checkpoint.
+
+The concrete remote bridge now uses explicit atomic Git receive-pack old/new commands,
+not porcelain push's up-to-date shortcut. Real local receive-pack tests demonstrate
+expected-old enforcement even when another actor already moved the branch to the desired
+commit. Publication atomically creates a separately approved HMAC-signed annotated operation
+marker; ambiguous response recovery independently reads and verifies it without resending.
+An authenticated all-ref rejection remains terminal conflict. The same captured App token's
+installation-repositories response must contain exactly immutable repository ID 1411700094.
+Only the bounded literal GitHub transport is supported; candidate code cannot select it.
+
+Producer selection pins actual workflow bytes and ID, exact branch/push/source revision,
+run/attempt and single-job closure on each bounded poll. There is no latest-green or rerun
+substitution. Publication journal lookup validates the actual pinned store before treating
+a missing operation as absent. Protected HMAC key bytes never enter journals or exports.
+The reviewed adapter has 129 passing controlled/unit cases and one opt-in live case skipped;
+the latter is inconclusive, not live verification. REQ-037/APP-023 remain proposed.
+
+Next: install the separate fixed fixture producer and finish controller/coordinator review,
+then approve actual run-specific policy/delegation and credentials before live execution.
+The selected bounded same-runner scope and dedicated-policy protection opt-out are unchanged.
+
+This bridge head inherits merged bounded installer #99 through the refreshed #95 branch. Reviewed transport bytes are unchanged; fresh exact-head CI remains required.

@@ -87,7 +87,7 @@ records:
     owner: exacly-maintainers
     lifecycle: proposed
     evidence: []
-    last_reviewed_at: "2026-10-31"
+    last_reviewed_at: "2026-11-01"
     statement: >-
       Under separately authorized remote effects, publish the exact retained handoff commit to a pinned
       remote repository and destination, then identify the approved producer run and attempt for that
@@ -100,10 +100,10 @@ records:
       - Trigger or observe only an approved producer contract, with separately authorized reruns. Record the immutable repository, workflow, source revision, run and attempt, and wait for actual terminal status within bounded deadlines; a latest green run, unrelated PR check or merely matching display name is insufficient.
       - Preserve current admission restrictions. A consumer must supply a producer event, branch and job contract that native admission supports; unsupported pull-request or matrix evidence cannot be accepted by changing identity labels or silently relaxing trust policy.
       - Keep remote credentials and transport in the trusted adapter or an explicitly configured external service. Reuse existing handoff, GitHub evidence and admission validation rather than allowing candidate code to publish or vouch for its own results.
-    verification_method: Controlled remote-publication protocol, ambiguous-effect and expected-ref tests cover the foundation; concrete transport, exact-CI-selection and live transport acceptance remain future work.
+    verification_method: Native journal, real local receive-pack, exact producer selection and HMAC marker tests cover the concrete adapter; opt-in live transport acceptance remains required and skipped live tests are inconclusive.
     observe:
       tests:
-        cases: ["python/tests/test_remote_publication.py::*", "python/tests/test_remote_publication_faults.py::*", "python/tests/test_remote_publication_live.py::*"]
+        cases: ["python/tests/test_remote_publication.py::*", "python/tests/test_remote_publication_faults.py::*", "python/tests/test_git_remote_transport.py::*", "python/tests/test_producer_selection.py::*", "python/tests/test_publication_key.py::*", "python/tests/test_remote_publication_live.py::*"]
 
   - id: REQ-038
     type: Requirement
@@ -193,13 +193,13 @@ records:
   - id: APP-023
     type: Application
     name: Remote source publication and CI bridge
-    description: Durable exact-publication protocol foundation; concrete trusted transport and approved producer selection remain planned.
+    description: Durable exact-publication protocol, explicit atomic expected-old Git receive-pack transport, authenticated operation markers and exact approved producer selection; live acceptance remains required.
     owner: exacly-maintainers
     lifecycle: proposed
     evidence: []
-    last_reviewed_at: "2026-10-31"
+    last_reviewed_at: "2026-11-01"
     responsibility: Publish exact approved commits under checked remote preconditions, reconcile ambiguous effects and retain exact approved workflow run selections without granting verification or merge authority.
-    interfaces: [exacly.remote_publication protocol and journal API, Planned concrete remote transport and approved CI selection]
+    interfaces: [exacly.remote_publication journal API, exacly.git_remote_transport authenticated GitHub transport, exacly.publication_key protected marker key API, exacly.producer_selection exact producer API]
     implementation_ref: { locator: python/src/exacly/remote_publication.py }
 
   - id: INFO-011
