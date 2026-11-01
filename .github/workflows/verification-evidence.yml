@@ -20,7 +20,7 @@ jobs:
         run: sh ci/setup_isolation_runtime.sh
       - name: Check the Linux isolation test runtime
         run: /usr/bin/python3 ci/check_isolation_runtime.py
-      - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
+      - uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
       - name: Install locked dependencies
         run: uv sync --locked
       - name: Run verification
