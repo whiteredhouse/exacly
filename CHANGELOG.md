@@ -1,5 +1,10 @@
 # Package release notes
 
+## Unreleased
+
+- Add advisory implementation planning under separately approved product intent. `exacly implementation propose` generates criterion-level tasks and reviewed dependency graphs; missing verification alone never becomes a code gap. Exact model/criteria/binding/policy/target and observation fingerprints, an independently pinned genesis contract and explicit predecessor/supersession checks preserve proposal identity. New private immutable bundles retain input snapshots; `implementation check --bundle` checks retained and current content without effects. Generated contract changes remain unapproved proposals, and no execution or later delivery authority is granted.
+- Introduce closed product-delivery approval, intent and receipt contracts with separate stage identities and externally selected approval pins. The pure validators perform no provider invocation, journal initialization or budget reservation; concrete merge, publication and deployment adapters remain separately scoped work.
+
 ## 0.7.0rc1 — release candidate
 
 This candidate adds separately authorized task dispatch, isolated local execution

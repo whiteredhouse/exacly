@@ -1,4 +1,4 @@
-# Later proposed automation: implementation planning and separately authorized delivery effects.
+# Implementation planning and separately authorized delivery effects.
 # This is not a prerequisite for the first verification pilot and does not extend REQ-018.
 exacly: "0.2.0"
 
@@ -41,11 +41,11 @@ records:
   - id: REQ-040
     type: Requirement
     name: Propose implementation work from approved product intent
-    description: Later implementation planning and decomposition remain distinct from verification-gap planning and execution authority.
+    description: Advisory implementation planning and decomposition remain distinct from verification-gap planning and execution authority.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-31"
+    last_reviewed_at: "2026-11-01"
     statement: Given separately authorized product-planning scope and independently approved intent and criteria, propose traceable implementation work and dependencies without changing the approved contract or performing delivery effects.
     acceptance_criteria:
       - Missing, expired, skipped or inconclusive evidence remains an observation gap; implementation work requires an approved behavior gap or an investigated finding, rather than assuming missing evidence means missing code.
@@ -53,7 +53,7 @@ records:
       - Generated acceptance criteria, tests, observation bindings and policy changes are proposals requiring independent review; neither the planner nor its executor can approve a weaker contract for its own result.
       - Retain the proposal and dependency graph with stable identities and approved model, criteria, policy and target fingerprints; changed inputs require explicit revision or supersession before execution uses the proposal.
       - People or external agents perform implementation under separately bounded execution authority; approving a proposal grants no merge, release or deployment authority and establishes no verified implementation result.
-    verification_method: Future implementation-planning contract tests; these bindings do not select an implemented or currently passing planner.
+    verification_method: Implementation-planning generation, criterion and dependency tracing, input-currentness, explicit supersession and immutable proposal CLI acceptance tests; planning establishes no executed implementation or delivery effect.
     observe:
       tests:
         cases:
@@ -61,6 +61,9 @@ records:
           - "python/tests/test_implementation_planning.py::test_decomposition_preserves_approved_criteria_and_dependencies"
           - "python/tests/test_implementation_planning.py::test_changed_contract_requires_independent_review_and_supersession"
           - "python/tests/test_implementation_planning.py::test_proposal_grants_no_execution_or_delivery_authority"
+          - "python/tests/test_implementation_planning.py::*"
+          - "python/tests/test_implementation_planning_cli.py::*"
+          - "python/tests/test_delivery_contracts.py::*"
 
   - id: REQ-041
     type: Requirement
@@ -138,14 +141,14 @@ records:
   - id: APP-024
     type: Application
     name: Implementation planner
-    description: The later proposal and decomposition adapter for separately approved product-change intent.
+    description: The advisory proposal and decomposition adapter for separately approved product-change intent.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-31"
-    responsibility: Produce traceable implementation proposals through people or external agents, retaining independent review and immutable input lineage without extending the verification-only planner or performing delivery effects.
-    interfaces: [Planned implementation-planning interface, Planned proposal-review interface]
-    implementation_ref: { locator: python/src/exacly/implementation_planning.py, planned: true }
+    last_reviewed_at: "2026-11-01"
+    responsibility: Generate bounded criterion-level implementation proposals and reviewed dependency graphs, retaining independent review and immutable input lineage for separately authorized people or external agents without extending the verification-only planner or performing delivery effects.
+    interfaces: [exacly implementation propose command, exacly implementation check command, exacly.implementation_planning Python API]
+    implementation_ref: { locator: python/src/exacly/implementation_planning.py }
 
   - id: APP-025
     type: Application
@@ -162,11 +165,11 @@ records:
   - id: INFO-013
     type: Information
     name: Implementation proposals
-    description: Later reviewed product-change decompositions and their approved criteria and input lineage.
+    description: Advisory product-change decompositions and their approved criteria and input lineage, retained as immutable proposal revisions.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-31"
+    last_reviewed_at: "2026-11-01"
     definition: Versioned implementation proposals with requirement and criterion mappings, dependency graph, unresolved decisions, approved model and policy fingerprints, immutable source and target scope, independent review decisions and explicit revisions or supersession; a proposal grants no execution or delivery authority.
     identifiers: [proposal ID and revision, Requirement IDs, criterion fingerprints, dependency identities, model and policy digests, source and target identities, review decision identity]
     steward: exacly-maintainers

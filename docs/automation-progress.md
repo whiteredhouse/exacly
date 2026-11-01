@@ -3,14 +3,16 @@
 Recovery point: 2026-11-01, following roadmap [#87](https://github.com/whiteredhouse/exacly/pull/87).
 **The REQ-034–039 target is incomplete.** Source implementation and controlled
 acceptance have been delivered and merged; the independently approved live pilot
-and fresh main observations remain outstanding. This checkpoint replaces the
+remains outstanding. Current main observations have published successfully, as
+rechecked below. This checkpoint replaces the
 earlier historical snapshots. Merged code, failed baseline CI and skipped live cases are
 not successful live acceptance.
 
 ## Current revisions and requirement status
 
-Implementation main is
-[`25f075ad680116a0ad3cd4d084ab021014ff2be2`](https://github.com/whiteredhouse/exacly/commit/25f075ad680116a0ad3cd4d084ab021014ff2be2).
+The rechecked main baseline is
+[`3d8e608b3f2e7f6bd30c47699c7bbcbff1e1b992`](https://github.com/whiteredhouse/exacly/commit/3d8e608b3f2e7f6bd30c47699c7bbcbff1e1b992),
+the state refresh after #103 at `c27a098572629c9a741bf2f0bef5a8bc168dd68d`.
 Coordinator/retained-proof [#100](https://github.com/whiteredhouse/exacly/pull/100),
 semantic binding [#101](https://github.com/whiteredhouse/exacly/pull/101), and
 workflow/history correction [#102](https://github.com/whiteredhouse/exacly/pull/102)
@@ -19,19 +21,19 @@ are merged. #102 final head
 passed [CI 41265791427](https://github.com/whiteredhouse/exacly/actions/runs/41265791427):
 4,114 tests, 15 explicitly unconfigured live skips, 1,222.91 seconds;
 plan and validation also passed. Current reviews/threads were empty and merge
-state was clean. This final checkpoint changes documentation only; the protected
-code/model closure stays identical to the consumer seed below. Re-read current
+state was clean. Those historical checkpoint PRs changed documentation only;
+their protected code/model closure matched the consumer seed below. Re-read current
 main, its actual state job, the consumer ref and operator replies before resuming.
 
 | Requirement | Lifecycle / evidence boundary |
 | --- | --- |
-| REQ-034 | Active: durable native controller and same-domain process recovery delivered; supported-runtime CI passed. Current main observation publication still needs verification. |
-| REQ-035 | Active: independently selected standing scope, exact native grants and original-goal authoritative budgets delivered; CI passed. Current main observation publication still needs verification. |
+| REQ-034 | Active: durable native controller and same-domain process recovery delivered; supported-runtime CI and current-main observations passed. |
+| REQ-035 | Active: independently selected standing scope, exact native grants and original-goal authoritative budgets delivered; CI and current-main observations passed. |
 | REQ-036 | Active: fixed worker, immutable inputs, kernel resource envelope and real supported-runtime cases delivered; CI passed. No coding-agent support is claimed. |
 | REQ-037 | Proposed: concrete atomic Git publication and exact producer selection delivered; actual approved live publication evidence pending. |
 | REQ-038 | Proposed: supported single-consumer/single-producer association and native completion delivered; actual approved live acceptance pending. #101 added the authenticated live E2E observation before the pilot's semantic pin. |
 | REQ-039 | Proposed: coordinator and retained-evidence verifier delivered; actual approved live acceptance and all declared cases pending. |
-| REQ-040–043 | Proposed and unchanged; later product delivery is outside this target. |
+| REQ-040–043 | Separate product-delivery target; implementation and acceptance are tracked in [its own checkpoint](product-delivery-progress.md), under separate authority. |
 
 Independent review mapped all six unchanged REQ-038 criteria to the declared
 single-consumer/single-producer profile. Composition is conditional on the
@@ -201,33 +203,31 @@ the approved original objective on another runner. A persistent Linux host is no
 required for this explicitly bounded acceptance. The current cloud environment
 cannot enforce the full Bubblewrap/cgroup boundary; never relax it for a live run.
 
-## Main observed-state publication blocker
+## Current-main observed state
 
-The actual committed `spec/exacly/state/main.json` remains serial `66`, config
-revision `5ba9e66a713a526e913cad84ab9ef2d45d201856`, written
-`2026-10-31T19:00:24Z`. Fresh current-main observations are **not established**.
-The canonical state queue is blocked by old [run 41253365811](https://github.com/whiteredhouse/exacly/actions/runs/41253365811),
-job `124693321007`, stalled in runtime installation before #99's bounded fix.
+Rechecked on 2026-11-01: CI-owned committed state is serial `67`, config
+revision `c27a098572629c9a741bf2f0bef5a8bc168dd68d`, with observations at
+`2026-11-01T08:41:13Z` from successful
+[Spec run 41267330287](https://github.com/whiteredhouse/exacly/actions/runs/41267330287).
+REQ-034/035/036 have passed observations. REQ-037/038/039 remain inconclusive
+because required live cases were unconfigured/skipped; successful component
+coverage does not establish their authentic live acceptance.
 
-The current tools can rerun jobs but cannot cancel runs. The operator was asked
-to cancel only obsolete main Spec runs `41253365811`, `41253411322`, `41254079984`,
-`41257610832`, `41262538552`, `41263785826`, `41263848405`, `41263887280`;
-that request has no confirmed completion here. Later obsolete pending runs also
-include `41263931278`, `41264645778` and `41265850353`. Implementation-main
-Spec run `41267189628` has started for `25f075a`; this documentation merge will
-start a newer current-main run. New main commits create newer runs,
-so inspect current run/head identities before cancellation and preserve the
-current main run and all PR checks. Do not introduce a second state writer,
-bypass the canonical queue or hand-edit observed state to close this gap.
+The old runtime-installation queue blockage, including run `41253365811`, is a
+historical incident, not a current state-publication blocker. Do not cancel runs
+based on an old checkpoint. Recheck actual heads and jobs before recovery and
+preserve the canonical state writer; never hand-edit observed state.
 
 ## Exact recovery and completion sequence
 
 1. Re-read remote main, consumer branch, open PRs, actual CI and operator replies.
-   Preserve local changes. The original `/workspace/exacly` remains on clean branch
-   `work` at `461b32f`; use isolated worktrees under `/workspace/work` and never reset
-   the original checkout. Native read-only Git fetch works through the configured
+   Preserve local changes and the original `/workspace/exacly` checkout; use
+   isolated worktrees under `/workspace/work` and never reset the original
+   checkout. Its local branch is not a substitute for rereading remote main.
+   Native read-only Git fetch works through the configured
    proxy; authenticated repository operations use the GitHub connector.
-2. All implementation PRs through #102 are merged. The final handoff worktree is
+2. All first-target implementation/checkpoint PRs through #103 are merged.
+   The historical final handoff worktree is
    `/workspace/work/exacly-final-handoff`; original implementation/review worktrees
    remain under `/workspace/work`. Remote committed code is authoritative.
    Preserve #101's semantic bindings and the exact fixed verifier.
@@ -250,7 +250,10 @@ bypass the canonical queue or hand-edit observed state to close this gap.
    `verification-references/req039.json` selector, re-verify current code/requirement
    semantics, original approval and fresh native admission, and activate delivered
    REQ-037–039 and related capability/process records based on that evidence. Let CI
-   publish observations. Keep REQ-040–043 proposed; do not start later delivery work.
+   publish observations. That verification approval grants no product-delivery
+   authority. Separately authorized implementation of REQ-040–043 proceeds under
+   [its own checkpoint](product-delivery-progress.md); its operational approvals
+   and evidence remain independent.
 
 Current final verification checklist:
 
@@ -260,6 +263,6 @@ Current final verification checklist:
 - [x] #102 final supported CI passed and the correction merged.
 - [x] Final consumer seed, authentic failed baseline and concrete policy proposal are retained.
 - [ ] Actual runner packet and delegation are independently approved before native effects.
-- [ ] Current-main observed state is published by canonical CI.
+- [x] Current-main observed state is published by canonical CI (serial 67 at the recheck above).
 - [ ] Required authentic live “Check again” acceptance passes with retained evidence.
 - [x] Scoped PR descriptions identify changed records and affected OUT-001.
