@@ -27,10 +27,10 @@ component observations into live acceptance.
 
 | Requirement | Source implementation | Verification | Operational acceptance |
 | --- | --- | --- | --- |
-| REQ-040 | First slice in progress: separate implementation planner and immutable proposal CLI | Focused tests and supported CI pending | Advisory planning only; no coding-agent or delivery effect implied |
-| REQ-041 | Research complete; exact-identity merge adapter follows common contracts | Pending | No merge runtime delegation approved |
-| REQ-042 | Research complete; separate owning-publisher contract required | Pending | No public release or publisher destination approved |
-| REQ-043 | Research complete; separate operational observer/evaluator required | Pending | No deployment environment, observer or rollback grant approved |
+| REQ-040 | Merged PR #113: separate implementation planner and immutable proposal CLI | All 149 bound cases passed in supported hosted CI; 146 installed checks passed | Advisory planning only; no coding-agent or delivery effect implied |
+| REQ-041 | Implemented private delivery journal, exact-identity GitHub merge adapter and fixed CLI; focused PR preparation | 233 controlled cases plus all 149 planning/contract compatibility cases passed; 50 independent review cases and 99 installed checks passed; full hosted CI pending | No merge runtime delegation approved; genuine positive observer unconfigured and real negative lease/protection acceptance still pending |
+| REQ-042 | Concrete owning-publisher reference workflow and exact-byte consumer implemented in isolated worktree; shared integration pending | 58 controlled cases passed; independent review found a future-timestamp inconsistency being fixed | No public release or publisher destination approved |
+| REQ-043 | Static deployment, separate HTTP observer/evaluator and bounded rollback reference implemented; shared integration pending | 79 controlled cases passed; independent review found health expiry could incorrectly invalidate an applied effect, being fixed | No deployment environment, observer or rollback grant approved |
 
 CAP-005/PROC-005 remain proposed while the whole delivery process is incomplete.
 REQ-041–043 and APP-025 remain proposed until their complete implemented contracts
@@ -40,10 +40,10 @@ Requirement statements and acceptance criteria unchanged.
 
 ## Current work and file ownership
 
-Current branch: `codex/product-delivery-planning`.
-Worktree: `/workspace/work/exacly-product-delivery/implementation`.
+Current branch: `codex/product-delivery-merge` (stacked on planning commit `63d7ac47f40d2e9fe1c5519be176c2103c54ee2a`).
+Current worktree: `/workspace/work/exacly-product-delivery/merge`. The frozen first-slice worktree remains `/workspace/work/exacly-product-delivery/implementation`.
 Base: `3d8e608b3f2e7f6bd30c47699c7bbcbff1e1b992`.
-No implementation PR has been opened for this target yet.
+First-slice [PR #113](https://github.com/whiteredhouse/exacly/pull/113) merged as `c09bc04684a69bb7cfef354f7d5a240776935343` from exact reviewed head `63d7ac47f40d2e9fe1c5519be176c2103c54ee2a` and tree `2d6d8533dab0c454c2a86e7a56a3a66cbf8de570`. [Spec run 41301035807](https://github.com/whiteredhouse/exacly/actions/runs/41301035807) passed **4,263 tests and all 37 active readiness gates**, including all 149 REQ-040 cases, genuine Bubblewrap and the five mandatory worker/cgroup cases. Its 15 skips are unconfigured live cases for the still-proposed first-target contracts; they establish no live acceptance. [Landing run 41301035793](https://github.com/whiteredhouse/exacly/actions/runs/41301035793) passed. Independent review passed all 149 new tests; a fresh wheel passed 146 checks across 29 isolated CLI invocations, with 71 runtime/schema payloads matching source and RECORD. Local full checks passed 1,423 tests before the existing managed-container UID-map restriction; supported hosted CI supplies the full result. GitHub reported clean ordinary merge eligibility, no blocking reviews or threads, and accepted the expected-head merge without bypass. Post-merge [Spec run 41302839911](https://github.com/whiteredhouse/exacly/actions/runs/41302839911) and [verification-evidence run 41302839974](https://github.com/whiteredhouse/exacly/actions/runs/41302839974) are pending; canonical main observations have not yet been claimed refreshed.
 
 The first slice implements REQ-040's advisory planning contract and introduces
 closed, separately scoped delivery approval/intent/receipt documents. It does not
@@ -122,20 +122,18 @@ as passing acceptance or prevent independent source implementation.
 
 ## Next actions and recovery
 
-1. Finish planner, immutable output and common-document contracts. Independently
-   review their actual behavior and approval boundaries.
-2. Preserve REQ-040's approved criteria; add truthful implementation references
-   and executed observation bindings. Activate only its delivered advisory
-   contract, update the active verification policy and validate model/impact.
-3. Run affected tests, lint/type/model checks and the repository's required full
-   check. This cloud host has a known real isolation limitation; keep genuine
-   supported Linux CI mandatory and separate skipped live cases from its results.
-4. Open a focused PR, verify exact tested/reviewed head and required GitHub
-   reviews/checks, then merge under the user's standing implementation approval.
-   Verify the main CI-owned observation refresh; never hand-edit state.
-5. Refresh from main and continue merge, publication and deployment/observer
-   slices. Record each PR, commit, exact CI/evidence and remaining acceptance here.
-   Do not stop after the first PR or treat planning as implementation execution.
+1. Verify the post-merge main CI-owned observation refresh; never hand-edit state.
+2. Finish and independently review the private delivery journal, bounded native
+   process watchdog, exact GitHub merge adapter and fixed CLI. Exercise crashes,
+   uncertain outcomes, concurrency, revocation and read-only credential recovery.
+3. Continue the owning-publication and deployment/observer reference profiles in
+   isolated worktrees while operational destinations remain unapproved.
+4. For each slice, preserve approved criteria, update truthful references and
+   bindings, validate model/impact, run affected coverage and full supported CI,
+   and merge only the exact independently reviewed/tested head after required
+   GitHub checks/reviews. Keep live gaps explicit and incomplete contracts proposed.
+5. Record each PR, commit, exact CI/evidence and remaining operational approval
+   packet here. Do not stop after the first PR or treat planning as code execution.
 
 Do not merge unrelated dependency PRs. Preserve original worktrees and unrelated
 changes. If a session ends, inspect this branch, current remote main, PR/check
@@ -143,3 +141,37 @@ identities, operator replies and all pending journal/effect histories before
 continuing. Local research and baseline query snapshots are under
 `/workspace/work/exacly-product-delivery/`; committed source and actual remote
 evidence are authoritative.
+
+## Merge slice in progress
+
+The next isolated slice implements a distinct private delivery journal, canonical original-goal budgets, durable pre-effect intent, exact historical replay and discovery-only uncertain recovery. Its concrete GitHub merge adapter uses atomic exact-base/head leases, required non-bypass checks/reviews, authenticated delivery markers and a distinct delivery credential/key. The CLI will expose fixed `delivery init/show/key-init/merge/reconcile` commands; it will not load providers from candidate data.
+
+A structural preview performs no provider I/O and does not claim current readiness. Operational apply uses actual UTC, an externally selected approval pin and actual installed configuration. Historical replay is resolved before credentials or current policy files are loaded. The current repository's existing force/deletion-only protection does not establish the stronger runtime merge profile; unsupported policies must block rather than change repository rules.
+
+Final merge-slice source verification passed **382 tests, one unconfigured genuine
+live skip**, including all 149 existing planning/common-contract cases and 233
+new controlled merge cases. Independent review passed 50 source-guarded cases,
+including actual concurrency, withdrawal, parent death, expiry and recovery.
+Fresh installed wheel/sdist QA passed 99 assertions across 18 isolated CLI calls;
+all 80 code/schema payloads and complete artifact/RECORD rosters matched source.
+Ruff/format passed 268 files; strict typing passed 229 files. The original
+publication-key compatibility suite passed 20 cases. Model validation has no
+errors or warnings, impact is reviewed and approved REQ-040–043 statements and
+criteria are unchanged. The required local full check is running; genuine full
+hosted Linux verification and required GitHub reviews remain merge gates.
+
+Substantive review corrections are retained in the implementation: uncertain
+merges fence the actual repository/base branch across different pull requests;
+watchdog cleanup facts are create-only and imported into SQLite by the parent;
+grants cap real invocation lifetime without refunding reserved slots; runtime
+identity includes bounded actual stdlib/native/TLS/proxy inputs; and policy
+explicitly states GitHub's current server-protection semantics plus trusted
+administrator stability. `updateRefs` leases refs, not check conclusions or a
+protection-policy version. Local preflight still requires literal success; a
+merged effect is never relabelled fresh verification.
+
+The first-slice post-merge check job passed 4,263 tests, 15 first-target live
+skips and all 37 active gates, including all 149 REQ-040 cases. Its separate
+verification-evidence workflow also passed. Main's state writer deliberately
+reruns verification in a separate write-authorized job and is still pending;
+the canonical state refresh is not claimed complete until that job publishes it.

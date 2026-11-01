@@ -297,6 +297,8 @@ def test_resource_conflict_domain_survives_aliases_revisions_and_deployment_roll
     changed["subject"]["head_revision"] = "f" * 40
     assert delivery.resource_key(original) == delivery.resource_key(changed)
     changed["subject"]["pull_request"] += 1
+    assert delivery.resource_key(original) == delivery.resource_key(changed)
+    changed["subject"]["base_ref"] = "refs/heads/another-protected-base"
     assert delivery.resource_key(original) != delivery.resource_key(changed)
     assert delivery.resource_key(request("deploy")) == delivery.resource_key(request("rollback"))
     publication = request("publish")

@@ -899,6 +899,27 @@ no coding agent. The verification planner and fixed inventory worker retain
 their separate scope. See the [product-delivery guide](../docs/product-delivery.md)
 for approval, retention and delivery-contract boundaries.
 
+## Separately authorize a pull-request merge
+
+`exacly delivery` initializes and inspects a private delivery journal, creates a
+distinct marker key, previews or explicitly applies one exact GitHub merge,
+withdraws new effects and reconciles uncertain outcomes without resending them.
+`delivery merge` defaults to a local preview. Applying needs independently pinned
+merge authority for the actual repository, head, base, protected contract,
+configuration, journal and immutable original-goal limits. Other stage receipts
+grant none of that authority.
+
+The narrow GitHub profile uses atomic base/head leases and an authenticated
+operation marker. It blocks unsupported protection or merge-queue semantics and
+has no weaker merge fallback. Native calls have a real Linux watchdog; uncertain
+effects retain their resource reservation and spent capacity. Terminal replay
+works offline. Token rotation for uncertain discovery needs a separate read-only
+recovery grant and cannot change the installed operation profile or refill limits.
+REQ-041 remains proposed pending authentic provider acceptance. See the
+[merge guide](../docs/product-delivery-merge.md) for setup, supported boundaries
+and the nonproduction approval packet. A merge is not fresh verification,
+publication authority or runtime health.
+
 ## Dispatch approved verification work
 
 `exacly dispatch github-issues` renders a read-only proposal by default. It rechecks a saved plan action against the reviewed policies, target and actual current state, then shows the selected GitHub repository, issue contents and advisory authorization template. `--apply` requires a separately reviewed authorization, an explicitly initialized private dispatch journal and an execution-binding ledger. Policy and authorization pin the canonical journal, ledger and state paths plus the journal's unique initialization identity. The adapter verifies the repository's numeric identity and supports issue title/body only; it has no repository, workflow or test-path defaults.

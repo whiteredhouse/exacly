@@ -29,6 +29,10 @@ exacly isolate --runtime-policy FILE [--inputs FILE] --out NEWDIR [--timeout SEC
 exacly plan [-m PATH]... --policy FILE --target FILE --date YYYY-MM-DD [--json] [--out FILE]
 exacly implementation propose -m PATH... --intent FILE --policy FILE --target FILE --date DATE ... --out NEWDIR
 exacly implementation check -m PATH... --intent FILE --policy FILE --target FILE --date DATE ... --bundle DIR
+exacly delivery key-init --key FILE [--json]
+exacly delivery init|show|revoke --journal FILE ... [--json]
+exacly delivery merge --journal FILE --journal-id UUID --request FILE --payload FILE ... [--apply]
+exacly delivery reconcile --journal FILE --journal-id UUID --operation-key DIGEST --policy FILE --config FILE ...
 exacly gate [-m PATH]... --policy FILE --target FILE [--date YYYY-MM-DD] [--json] [--junit FILE --junit-id ID]
 exacly show|trace|impact|gaps [-m PATH]... [--json] ...; exacly mcp [-m PATH]...
 exacly view plan [--base REV] | site [--out DIR]
@@ -1071,10 +1075,16 @@ def exacly_main(argv: list[str] | None = None) -> int:
     if argv and argv[0] == "observe":
         return observe_main(argv[1:])
     github_tokens = (os.environ.get("GH_TOKEN"), os.environ.get("GITHUB_TOKEN"))
+    delivery_command_line = argv[:1] == ["delivery"]
 
     class PolicyDraftParser(argparse.ArgumentParser):
         def error(self, message: str) -> NoReturn:
-            super().error(redact_tokens(message, github_tokens))
+            tokens = (
+                (*github_tokens, os.environ.get("EXACLY_DELIVERY_MERGE_TOKEN"))
+                if delivery_command_line
+                else github_tokens
+            )
+            super().error(redact_tokens(message, tokens))
 
     parser_class = (
         PolicyDraftParser
@@ -1090,6 +1100,7 @@ def exacly_main(argv: list[str] | None = None) -> int:
             ["composition"],
             ["compose"],
             ["implementation"],
+            ["delivery"],
         )
         else argparse.ArgumentParser
     )
@@ -1111,6 +1122,65 @@ def exacly_main(argv: list[str] | None = None) -> int:
     commands.add_parser("validate", help="validate the model and print the section 11 report")
     commands.add_parser("refresh", help="write state for one context from what the bindings observe")
     commands.add_parser("observe", help="write state from an extension source, such as manual-qa observations")
+    delivery_parser = commands.add_parser(
+        "delivery", help="inspect or separately authorize one exact product-delivery effect"
+    )
+    delivery_commands = delivery_parser.add_subparsers(dest="delivery_command", required=True)
+    for delivery_command in ("key-init", "init", "show", "revoke", "merge", "reconcile"):
+        delivery_command_parser = delivery_commands.add_parser(
+            delivery_command,
+            help={
+                "key-init": "initialize a new private merge-marker key without granting delivery authority",
+                "init": "initialize one private delivery journal and immutable objective limits",
+                "show": "read retained delivery history without credentials or a provider",
+                "revoke": "record scope withdrawal; cannot undo or cancel an in-flight remote request",
+                "merge": "preview or separately apply the fixed GitHub atomic merge profile",
+                "reconcile": "discover an uncertain merge outcome without resending the merge",
+            }[delivery_command],
+        )
+        delivery_command_parser.add_argument("--json", action="store_true", help="print the native report as JSON")
+        delivery_command_parser.add_argument("--lock-timeout", type=nonnegative_seconds)
+        if delivery_command == "key-init":
+            delivery_command_parser.add_argument(
+                "--key", required=True, type=Path, help="new private delivery key file"
+            )
+            continue
+        delivery_command_parser.add_argument("--journal", required=True, type=Path)
+        if delivery_command == "init":
+            for name in ("objective", "limits", "native-limits"):
+                delivery_command_parser.add_argument(f"--{name}", required=True, type=Path)
+            continue
+        delivery_command_parser.add_argument("--journal-id", required=True, help="explicit initialized journal UUID")
+        if delivery_command == "show":
+            delivery_command_parser.add_argument("--operation-key", help="select one retained operation")
+            continue
+        if delivery_command == "revoke":
+            delivery_command_parser.add_argument("--reason", required=True, help="retained reason for scope withdrawal")
+            continue
+        delivery_command_parser.add_argument(
+            "--config", required=True, type=Path, help="operator-selected merge config"
+        )
+        delivery_command_parser.add_argument("--policy", required=True, type=Path, help="approved exact merge policy")
+        for name in ("approval",):
+            delivery_command_parser.add_argument(f"--{name}", type=Path)
+        delivery_command_parser.add_argument(
+            "--approved-approval-digest", help="approval digest selected outside its JSON"
+        )
+        delivery_command_parser.add_argument("--issuer", help="independently selected approval issuer")
+        delivery_command_parser.add_argument("--approval-id", help="independently selected approval identity")
+        if delivery_command == "reconcile":
+            delivery_command_parser.add_argument("--operation-key", required=True)
+            delivery_command_parser.set_defaults(apply=False)
+        else:
+            delivery_command_parser.add_argument("--request", required=True, type=Path)
+            delivery_command_parser.add_argument(
+                "--payload", required=True, type=Path, help="exact native merge payload"
+            )
+            delivery_command_parser.add_argument(
+                "--apply",
+                action="store_true",
+                help="separately authorize a new effect; default only previews local inputs",
+            )
     implementation_parser = commands.add_parser(
         "implementation", help="propose product implementation work under separately reviewed planning scope"
     )
@@ -1713,6 +1783,28 @@ def exacly_main(argv: list[str] | None = None) -> int:
         if handoff_operation == "show":
             return 1 if handoff_report["status"] == "missing" else 0
         return 0 if handoff_report["status"] in {"ready", "published", "initialized", "recovered"} else 1
+    if args.command == "delivery":
+        from exacly import delivery_io
+
+        delivery_tokens = (*github_tokens, os.environ.get(delivery_io.TOKEN_ENVIRONMENT))
+        try:
+            delivery_answer = delivery_io.run(args)
+            delivery_status = delivery_io.exit_status(delivery_answer)
+            delivery_rendered = (
+                json.dumps(delivery_answer, indent=2, sort_keys=True)
+                if args.json
+                else (
+                    f"Delivery {args.delivery_command}: {delivery_answer['status']}\n"
+                    "Receipts are exact-stage history; verification and later effects require separate authority."
+                )
+            )
+            if redact_tokens(delivery_rendered, delivery_tokens) != delivery_rendered:
+                raise ValueError("delivery output contains protected credential material; inspect the private journal")
+        except (query.QueryError, ValueError, OSError) as error:
+            print(f"exacly delivery: {redact_tokens(str(error), delivery_tokens)}", file=sys.stderr)
+            return 2
+        print(delivery_rendered)
+        return delivery_status
     if args.command == "implementation":
         from exacly import implementation_planning, implementation_planning_io
 

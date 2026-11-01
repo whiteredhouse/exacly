@@ -72,7 +72,7 @@ records:
     owner: exacly-maintainers
     lifecycle: proposed
     evidence: []
-    last_reviewed_at: "2026-10-31"
+    last_reviewed_at: "2026-11-01"
     statement: Merge only a pull request covered by separate approved merge authority, after resolving its exact head and base and satisfying the repository's required checks and reviews without bypass.
     acceptance_criteria:
       - Resolve independently granted merge scope to the repository, pull request, exact head and base, allowed method and applicable approval decision immediately before the effect; verification, execution and handoff authority alone cannot authorize merging.
@@ -80,7 +80,7 @@ records:
       - Preserve the approved criteria and observation bindings; generated tests or a successful executor cannot approve their own meaning or substitute for independently required review.
       - Persist the conditional merge intent and stable effect identity before invoking the approved external merge workflow; retain the actual resulting commit and remote receipt, and reconcile an uncertain outcome before another request.
       - A merged pull request establishes only the recorded repository effect; the resulting merged commit needs fresh applicable observations before later readiness or delivery claims, and merging grants no publication or deployment authority.
-    verification_method: Future automatic-merge contract and changed-head, review, protection and uncertain-outcome tests.
+    verification_method: Exact GitHub merge identity, protected criteria and bindings, current checks and reviews, durable delivery-journal budgets, real watchdog and recovery, fixed CLI and uncertain-effect tests; authentic GitHub acceptance remains separately selected and cannot be established by controlled provider fixtures.
     observe:
       tests:
         cases:
@@ -88,6 +88,18 @@ records:
           - "python/tests/test_automatic_merge.py::test_required_checks_reviews_and_protection_cannot_be_bypassed"
           - "python/tests/test_automatic_merge.py::test_uncertain_merge_is_reconciled_before_retry"
           - "python/tests/test_automatic_merge.py::test_merged_commit_requires_fresh_observations"
+          - "python/tests/test_automatic_merge.py::*"
+          - "python/tests/test_github_merge.py::*"
+          - "python/tests/test_automatic_merge_faults.py::*"
+          - "python/tests/test_automatic_merge_live_observer.py::*"
+          - "python/tests/test_automatic_merge_live.py::*"
+          - "python/tests/test_delivery_engine.py::*"
+          - "python/tests/test_delivery_engine_faults.py::*"
+          - "python/tests/test_delivery_store.py::*"
+          - "python/tests/test_delivery_conflict_domains.py::*"
+          - "python/tests/test_delivery_profile.py::*"
+          - "python/tests/test_delivery_key.py::*"
+          - "python/tests/test_delivery_cli.py::*"
 
   - id: REQ-042
     type: Requirement
@@ -157,10 +169,10 @@ records:
     owner: exacly-maintainers
     lifecycle: proposed
     evidence: []
-    last_reviewed_at: "2026-10-31"
+    last_reviewed_at: "2026-11-01"
     responsibility: Invoke only independently approved external delivery workflows for exact permitted identities, retain conditional effects and receipts, and integrate explicitly approved deployment and runtime observation contracts without granting itself policy, verification or broader delivery authority.
-    interfaces: [Planned pull-request merge adapter, Planned release-publisher adapter, Planned deployment and rollback adapter]
-    implementation_ref: { locator: python/src/exacly/delivery_automation.py, planned: true }
+    interfaces: [exacly delivery command, exacly.delivery_engine Python API, Exact GitHub merge adapter, Planned release-publisher adapter, Planned deployment and rollback adapter]
+    implementation_ref: { locator: python/src/exacly/delivery_engine.py }
 
   - id: INFO-013
     type: Information
@@ -181,7 +193,7 @@ records:
     owner: exacly-maintainers
     lifecycle: proposed
     evidence: []
-    last_reviewed_at: "2026-10-31"
+    last_reviewed_at: "2026-11-01"
     definition: Versioned per-stage authorization decisions, durable conditional intents, external workflow and effect identities, exact pull-request heads and bases or artifact/version/environment scope, actual resulting commits and destinations, retained receipts and applicable observation references, with uncertain-outcome, retry and separately authorized rollback history; earlier stage outcomes never imply later authority.
     identifiers: [effect ID and stage, authorization digest, proposal revision, repository and pull-request identity, expected head and base, resulting commit, artifact digest, immutable release version, destination and environment, workflow run, observation and receipt digests]
     steward: exacly-maintainers

@@ -181,3 +181,9 @@ The current package's tag-triggered release workflow retains its existing
 ownership. It rebuilds from source, so it is not an adapter for promotion of
 separately approved existing bytes. No publication or deployment invocation is
 introduced by these document interfaces.
+
+The separately implemented [merge profile](product-delivery-merge.md) adds the
+private journal, current merge authority, real bounded native invocation and
+exact GitHub effect adapter. Its controlled verification does not establish live
+provider acceptance. Publication and deployment stay separately configured and
+authorized; they cannot inherit a merge grant.
