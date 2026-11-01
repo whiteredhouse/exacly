@@ -863,6 +863,42 @@ Plans are advisory. The command does not create tasks, dispatch agents, change o
 
 In Python, `exacly.planning.create(documents, policy_doc, target, date)` produces the same plan from named documents, a policy, an `exacly.applicability.Target` and a date. `exacly.planning.as_text(plan)` renders it for people, and `exacly.planning.SCHEMA` defines the JSON artifact contract.
 
+## Propose implementation work
+
+`exacly implementation propose` generates advisory criterion-level tasks from
+independently approved product intent. Missing, expired or inconclusive evidence
+remains an observation gap; it does not by itself establish missing code.
+Independently reviewed behavior findings and explicit intent dependencies produce
+traceable tasks, output scopes and a dependency graph. Unresolved choices and
+proposed criteria, test, binding or policy changes remain subject to review.
+
+```sh
+exacly implementation propose -m spec/exacly \
+  --intent reviewed/product-intent.json --policy reviewed/planning-policy.json \
+  --target reviewed/source-target.json --date 2026-11-01 \
+  --approved-intent-digest "$APPROVED_INTENT_DIGEST" \
+  --approved-policy-digest "$APPROVED_POLICY_DIGEST" \
+  --issuer "$APPROVED_ISSUER" --approval-id "$APPROVAL_ID" \
+  --out reports/product-proposal-1 --json
+```
+
+The policy independently pins the model, source/target, allowed scope and initial
+contract digest. Proposal identity includes that genesis pin; changed inputs in
+the same series require explicit revision and predecessor selection. The new
+private bundle retains exact input snapshots, a manifest and `proposal.json`,
+published last without overwriting earlier revisions. Use
+`implementation check --bundle DIR` with the same current input/pin options to
+check retained bytes and current fingerprints. Add `--previous FILE` for a
+revision that explicitly supersedes an earlier proposal.
+
+Exit 0 means a valid unblocked advisory proposal/currentness check, 1 means
+explicit review blockers and 2 means invalid/stale inputs or output failure.
+The pure Python API is `exacly.implementation_planning`. Planning grants no
+execution, merge, release or deployment authority, implements no code and invokes
+no coding agent. The verification planner and fixed inventory worker retain
+their separate scope. See the [product-delivery guide](../docs/product-delivery.md)
+for approval, retention and delivery-contract boundaries.
+
 ## Dispatch approved verification work
 
 `exacly dispatch github-issues` renders a read-only proposal by default. It rechecks a saved plan action against the reviewed policies, target and actual current state, then shows the selected GitHub repository, issue contents and advisory authorization template. `--apply` requires a separately reviewed authorization, an explicitly initialized private dispatch journal and an execution-binding ledger. Policy and authorization pin the canonical journal, ledger and state paths plus the journal's unique initialization identity. The adapter verifies the repository's numeric identity and supports issue title/body only; it has no repository, workflow or test-path defaults.

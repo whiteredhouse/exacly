@@ -27,6 +27,8 @@ exacly executions audit --ledger FILE [--lock-timeout SECONDS] [--json]
 exacly isolation inspect --rootfs DIR [--json]
 exacly isolate --runtime-policy FILE [--inputs FILE] --out NEWDIR [--timeout SECONDS] [--json] -- COMMAND...
 exacly plan [-m PATH]... --policy FILE --target FILE --date YYYY-MM-DD [--json] [--out FILE]
+exacly implementation propose -m PATH... --intent FILE --policy FILE --target FILE --date DATE ... --out NEWDIR
+exacly implementation check -m PATH... --intent FILE --policy FILE --target FILE --date DATE ... --bundle DIR
 exacly gate [-m PATH]... --policy FILE --target FILE [--date YYYY-MM-DD] [--json] [--junit FILE --junit-id ID]
 exacly show|trace|impact|gaps [-m PATH]... [--json] ...; exacly mcp [-m PATH]...
 exacly view plan [--base REV] | site [--out DIR]
@@ -1087,6 +1089,7 @@ def exacly_main(argv: list[str] | None = None) -> int:
             ["handoffs"],
             ["composition"],
             ["compose"],
+            ["implementation"],
         )
         else argparse.ArgumentParser
     )
@@ -1108,6 +1111,50 @@ def exacly_main(argv: list[str] | None = None) -> int:
     commands.add_parser("validate", help="validate the model and print the section 11 report")
     commands.add_parser("refresh", help="write state for one context from what the bindings observe")
     commands.add_parser("observe", help="write state from an extension source, such as manual-qa observations")
+    implementation_parser = commands.add_parser(
+        "implementation", help="propose product implementation work under separately reviewed planning scope"
+    )
+    implementation_commands = implementation_parser.add_subparsers(dest="implementation_command", required=True)
+    for implementation_command in ("propose", "check"):
+        implementation_command_parser = implementation_commands.add_parser(
+            implementation_command,
+            help=(
+                "retain an immutable advisory proposal and its input snapshots"
+                if implementation_command == "propose"
+                else "check a complete proposal bundle against currently selected inputs"
+            ),
+        )
+        implementation_command_parser.add_argument(
+            "-m",
+            "--model",
+            required=True,
+            action="append",
+            type=Path,
+            metavar="PATH",
+            help="explicit model files/folders",
+        )
+        implementation_command_parser.add_argument("--intent", required=True, type=Path)
+        implementation_command_parser.add_argument("--policy", required=True, type=Path)
+        implementation_command_parser.add_argument("--target", required=True, type=Path)
+        implementation_command_parser.add_argument("--date", required=True, type=dt.date.fromisoformat)
+        implementation_command_parser.add_argument(
+            "--approved-intent-digest", required=True, help="intent content digest selected by independent review"
+        )
+        implementation_command_parser.add_argument(
+            "--approved-policy-digest", required=True, help="planning-policy digest selected by independent review"
+        )
+        implementation_command_parser.add_argument("--issuer", required=True, help="independent planning approver")
+        implementation_command_parser.add_argument("--approval-id", required=True, help="planning approval identity")
+        implementation_command_parser.add_argument(
+            "--previous", type=Path, help="exact predecessor proposal JSON required for an explicitly revised intent"
+        )
+        implementation_command_parser.add_argument("--json", action="store_true")
+        if implementation_command == "propose":
+            implementation_command_parser.add_argument("--out", required=True, type=Path, help="new private bundle")
+        else:
+            implementation_command_parser.add_argument(
+                "--bundle", required=True, type=Path, help="complete retained implementation proposal directory"
+            )
     composition_parser = commands.add_parser(
         "composition", help="validate the complete independently reviewed composition definition offline"
     )
@@ -1666,6 +1713,50 @@ def exacly_main(argv: list[str] | None = None) -> int:
         if handoff_operation == "show":
             return 1 if handoff_report["status"] == "missing" else 0
         return 0 if handoff_report["status"] in {"ready", "published", "initialized", "recovered"} else 1
+    if args.command == "implementation":
+        from exacly import implementation_planning, implementation_planning_io
+
+        try:
+            implementation_inputs = implementation_planning_io.load_inputs(
+                args.model, intent=args.intent, policy=args.policy, target=args.target, previous=args.previous
+            )
+            planning_options = {
+                "approved_intent_digest": args.approved_intent_digest,
+                "approved_policy_digest": args.approved_policy_digest,
+                "issuer": args.issuer,
+                "approval_id": args.approval_id,
+                "previous": implementation_inputs.previous,
+            }
+            if args.implementation_command == "propose":
+                implementation_planning_io.protect_output(args.out, implementation_inputs)
+                implementation_answer = implementation_planning.create(
+                    implementation_inputs.documents,
+                    implementation_inputs.intent,
+                    implementation_inputs.policy,
+                    Target(implementation_inputs.target),
+                    args.date,
+                    **planning_options,
+                )
+                implementation_planning_io.retain(args.out, implementation_inputs, implementation_answer)
+            else:
+                implementation_answer = implementation_planning.validate_current(
+                    implementation_planning_io.load_bundle(args.bundle),
+                    implementation_inputs.documents,
+                    implementation_inputs.intent,
+                    implementation_inputs.policy,
+                    Target(implementation_inputs.target),
+                    args.date,
+                    **planning_options,
+                )
+        except (query.QueryError, ValueError, OSError) as error:
+            print(f"exacly implementation: {redact_tokens(str(error), github_tokens)}", file=sys.stderr)
+            return 2
+        if args.json:
+            print(json.dumps(implementation_answer, indent=2, sort_keys=True))
+        else:
+            print(f"Implementation {args.implementation_command}: {implementation_answer['status']}")
+            print("Advisory planning only; execution, merge, release and deployment require separate authority.")
+        return 1 if implementation_answer["status"] == "blocked" else 0
     if args.command in {"composition", "compose"}:
         from exacly import composition, composition_io, github_evidence
 
