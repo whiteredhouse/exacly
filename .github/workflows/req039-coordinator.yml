@@ -62,7 +62,7 @@ jobs:
           fi
           uv run --locked python -m ci.req039_pilot "${args[@]}"
       - name: Retain concrete review packet
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: exacly-req039-review-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -76,7 +76,7 @@ jobs:
         run: uv run --locked python -m ci.req039_pilot wait-approval --root "$PILOT_ROOT"
       - name: Retain immutable approved-goal fence
         id: goal_fence
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: exacly-req039-approval-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.PILOT_ROOT }}/public/approval-receipt.json
@@ -110,7 +110,7 @@ jobs:
           fi
       - name: Retain terminal no-authority receipt
         if: always() && steps.cleanup.outputs.noauthority == 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: exacly-req039-noauthority-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.PILOT_ROOT }}/public/terminal-noauthority.json
@@ -120,7 +120,7 @@ jobs:
           include-hidden-files: false
       - name: Retain live acceptance evidence
         if: always() && steps.cleanup.outputs.evidence == 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: exacly-req039-acceptance-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.PILOT_ROOT }}/public/acceptance-evidence.json
