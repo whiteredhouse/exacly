@@ -343,15 +343,16 @@ def resource_key(value: Any) -> str:
 
     Concrete adapters must verify canonical native identities and reject aliases of the same actual
     destination. This helper cannot discover that two user-provided labels name one environment.
-    Deployment and rollback deliberately share a conflict domain.
+    Merges share the repository/base-branch conflict domain across pull requests. Deployment and
+    rollback deliberately share an environment conflict domain.
     """
     request = validate_request(value)
     stage, subject = request["stage"], request["subject"]
     if stage == "merge":
         resource = {
-            "kind": "pull-request",
+            "kind": "merge-base-branch",
             "repository_id": subject["repository"]["id"],
-            "number": subject["pull_request"],
+            "base_ref": subject["base_ref"],
         }
     elif stage == "publish":
         resource = {"kind": "publication", "destination": subject["destination"], "version": subject["version"]}
