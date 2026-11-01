@@ -245,3 +245,26 @@ then approve actual run-specific policy/delegation and credentials before live e
 The selected bounded same-runner scope and dedicated-policy protection opt-out are unchanged.
 
 This bridge head inherits merged bounded installer #99 through the refreshed #95 branch. Reviewed transport bytes are unchanged; fresh exact-head CI remains required.
+
+
+## Fixed consumer and producer checkpoint (2026-11-01)
+
+The new fixed consumer model is `fixtures/unattended-pilot/model.yaml`, namespace
+`req039-consumer`, with one byte-inventory requirement. Its immutable observer is
+`verification/req039_inventory_test.py`; worker authority is limited to fixture
+input reads and the exact result path outside protected observer/model paths.
+No generated result is seeded: the initial producer should authentically fail
+for missing output. `ci/req039-producer.json` defines the dedicated push-only,
+single-job `pilot/req039-consumer` producer. Existing main evidence workflow bytes
+are unchanged. Nine producer/verifier contract tests and native workflow validation
+pass; independent technical review clears this scope. Full exact-head CI remains required.
+
+`docs/unattended-pilot-approval.md` records the concrete operational proposal, exact
+refs, permissions, non-Actions GitHub App token configuration, pilot-only
+`branch_protection: not_required`, same-runner lifetime and independent approval
+handshake. It is not an approval or live receipt. Actual per-run journal identities,
+policy/verifier/source pins, credential mint facts and delegation must be finalized
+in the coordinator packet and independently approved before authority.
+REQ-039 and APP-026 remain proposed. Missing credentials affect live execution only.
+
+This fixed-producer head inherits bounded runtime setup #99 through the refreshed prerequisite stack. Producer and verifier implementation bytes are unchanged; fresh exact-head CI remains required.

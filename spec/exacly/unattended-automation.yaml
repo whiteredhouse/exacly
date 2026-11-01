@@ -136,7 +136,7 @@ records:
     owner: exacly-maintainers
     lifecycle: proposed
     evidence: []
-    last_reviewed_at: "2026-10-31"
+    last_reviewed_at: "2026-11-01"
     statement: >-
       Demonstrate a narrowly scoped consumer verification objective progressing under independently
       approved standing authority through real execution, remote publication, trusted CI, fresh admission
@@ -149,10 +149,10 @@ records:
       - Exercise failed CI, unavailable producer, wrong revision or attempt, changed criteria or verifier, revoked or expired delegation and exhausted objective budgets. Each blocks completion or new authority as appropriate, preserves history and reports a bounded actionable escalation.
       - If the declared pilot uses a required-member composition, run each required producer live and demonstrate a missing or failed member blocks the aggregate. A single-target pilot establishes no untested multi-target or cross-model completion contract.
       - Publish a supported operational procedure covering protected storage, restart and recovery, bounded scheduling and service limits, monitoring, cancellation and escalation. Verification completion grants no automatic PR merge, release or deployment authority.
-    verification_method: Future opt-in controlled-consumer live end-to-end acceptance, interruption and negative-path evidence.
+    verification_method: The fixed nonproduction fixture verifier and separate supported push producer have contract tests; opt-in live end-to-end, interruption and negative-path evidence remains required.
     observe:
       tests:
-        cases: ["python/tests/test_unattended_live_end_to_end.py::*", "python/tests/test_unattended_live_recovery.py::*"]
+        cases: ["tests/test_req039_pilot_contract.py::*", "python/tests/test_unattended_live_end_to_end.py::*", "python/tests/test_unattended_live_recovery.py::*"]
 
   - id: APP-020
     type: Application
@@ -201,6 +201,18 @@ records:
     responsibility: Publish exact approved commits under checked remote preconditions, reconcile ambiguous effects and retain exact approved workflow run selections without granting verification or merge authority.
     interfaces: [exacly.remote_publication journal API, exacly.git_remote_transport authenticated GitHub transport, exacly.publication_key protected marker key API, exacly.producer_selection exact producer API]
     implementation_ref: { locator: python/src/exacly/remote_publication.py }
+
+  - id: APP-026
+    type: Application
+    name: Fixed nonproduction pilot observer
+    description: Fixed fixture inventory verifier and separate single-job push producer; independent live policy approval remains required.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-11-01"
+    responsibility: Verify actual bounded fixture bytes under a protected observer and package honest producer evidence without granting worker completion authority.
+    interfaces: [Fixed pytest fixture observer, Dedicated pilot push producer]
+    implementation_ref: { locator: verification/req039_inventory_test.py }
 
   - id: INFO-011
     type: Information
@@ -280,3 +292,5 @@ relationships:
   - { source: APP-023, type: writes, target: INFO-011 }
   - { source: INF-008, type: stores, target: INFO-011, role: system_of_record, conditions: Proposed control-plane progress and remote intents only; component journals remain authoritative for their original effects. }
   - { source: INF-008, type: stores, target: INFO-012, role: system_of_record, conditions: Independently approved delegation and its bounded exact-effect decisions remain outside candidate storage. }
+
+  - { source: APP-026, type: implements, target: REQ-039 }
