@@ -29,6 +29,11 @@ refs and credential configuration. The session's GitHub connector is not an Acti
 Missing publishing credentials block the live run only; continue independent implementation.
 The user's consumer/host choice does not itself independently approve the final policy/delegation.
 
+The user explicitly selected proposed `branch_protection: not_required` only for the dedicated
+`pilot/req039-consumer` policy. Preserve every other check, the default behavior and repository rules;
+receipts must report protection unverified with no check timestamp. Final policy/delegation still
+require independent approval before live execution.
+
 ## Baseline and decisions
 
 - Inspected remote main `461b32fe1e35a8a7f89dde3b74103c7856dbfb62` and open PRs on 2026-10-31; there were no open PRs.
@@ -145,3 +150,9 @@ also be checked from current PR metadata and checks. Never infer permission to b
 
 The unattended verification target is incomplete. No requirement activation, live acceptance,
 unattended completion, release or deployment is claimed by this checkpoint.
+
+Resource PR #94 first full CI head `b25941c0a9ec545868c899117b83f559868eaee3` executed all five real
+resource/lifecycle cases successfully; total 3,584 tests passed and one development-subset contract
+test failed because its explicit backend-module list had not added the two new mandatory runtime
+modules. The expected list is corrected without excluding anything from full verification. Fresh
+exact-head CI is required before merging; the failed run is not a successful model publication.
