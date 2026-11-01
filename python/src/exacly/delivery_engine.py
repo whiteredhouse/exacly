@@ -1,7 +1,7 @@
 """Separately approved, durable product-delivery effects through trusted installed adapters.
 
-Only the merge stage is supported by this engine slice. Preview is local and advisory. Native
-effects require the real Linux watchdog, fresh current approval, authoritative journal reservations
+The merge and publication stages are supported by this engine slice. Preview is local and advisory.
+Native effects require the real Linux watchdog, fresh current approval, authoritative journal reservations
 and the adapter's verified provider preconditions. Historical receipts confer no new authority.
 """
 
@@ -21,7 +21,7 @@ from exacly import delivery_store as journal_store
 from exacly import execution_store as store
 
 Doc = dict[str, Any]
-SUPPORTED_STAGES = {"merge"}
+SUPPORTED_STAGES = {"merge", "publish"}
 APPROVAL_CONTEXT = planning.fields({"policy_digest": contracts.DIGEST, "contract": contracts.CONTRACT})
 READ_RECOVERY_SCHEMA = journal_store.READ_RECOVERY_SCHEMA
 validate_read_recovery = journal_store.validate_read_recovery
@@ -101,7 +101,10 @@ class DeliveryEngine:
         return journal_store.show(self.path, self.journal_id, key, lock_timeout=self._lock_timeout)
 
     def _scope(self, request: Doc) -> None:
-        store.require(request["stage"] in SUPPORTED_STAGES, "this engine profile supports only merge delivery")
+        store.require(
+            request["stage"] in SUPPORTED_STAGES,
+            "this engine profile supports only separately configured merge and publication delivery",
+        )
         store.require(
             request["objective"] == self._metadata["objective"], "delivery objective differs from initialized scope"
         )

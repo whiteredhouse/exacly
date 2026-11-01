@@ -187,3 +187,10 @@ private journal, current merge authority, real bounded native invocation and
 exact GitHub effect adapter. Its controlled verification does not establish live
 provider acceptance. Publication and deployment stay separately configured and
 authorized; they cannot inherit a merge grant.
+
+The [local owning-publisher profile](product-delivery-publication.md) promotes
+exact independently accepted prebuilt bytes through its separately configured
+owner. Its private immutable registry, original-goal journal, authenticated
+receipt and actual-byte discovery implement a bounded reference workflow without
+changing the existing tag-triggered package release. Selected operational
+acceptance and deployment remain separate.

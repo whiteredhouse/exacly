@@ -31,7 +31,7 @@ exacly implementation propose -m PATH... --intent FILE --policy FILE --target FI
 exacly implementation check -m PATH... --intent FILE --policy FILE --target FILE --date DATE ... --bundle DIR
 exacly delivery key-init --key FILE [--json]
 exacly delivery init|show|revoke --journal FILE ... [--json]
-exacly delivery merge --journal FILE --journal-id UUID --request FILE --payload FILE ... [--apply]
+exacly delivery merge|publish --journal FILE --journal-id UUID --request FILE --payload FILE ... [--apply]
 exacly delivery reconcile --journal FILE --journal-id UUID --operation-key DIGEST --policy FILE --config FILE ...
 exacly gate [-m PATH]... --policy FILE --target FILE [--date YYYY-MM-DD] [--json] [--junit FILE --junit-id ID]
 exacly show|trace|impact|gaps [-m PATH]... [--json] ...; exacly mcp [-m PATH]...
@@ -1126,7 +1126,7 @@ def exacly_main(argv: list[str] | None = None) -> int:
         "delivery", help="inspect or separately authorize one exact product-delivery effect"
     )
     delivery_commands = delivery_parser.add_subparsers(dest="delivery_command", required=True)
-    for delivery_command in ("key-init", "init", "show", "revoke", "merge", "reconcile"):
+    for delivery_command in ("key-init", "init", "show", "revoke", "merge", "publish", "reconcile"):
         delivery_command_parser = delivery_commands.add_parser(
             delivery_command,
             help={
@@ -1135,7 +1135,8 @@ def exacly_main(argv: list[str] | None = None) -> int:
                 "show": "read retained delivery history without credentials or a provider",
                 "revoke": "record scope withdrawal; cannot undo or cancel an in-flight remote request",
                 "merge": "preview or separately apply the fixed GitHub atomic merge profile",
-                "reconcile": "discover an uncertain merge outcome without resending the merge",
+                "publish": "preview or separately apply the fixed private owning publisher profile",
+                "reconcile": "discover a retained uncertain outcome without resending the effect",
             }[delivery_command],
         )
         delivery_command_parser.add_argument("--json", action="store_true", help="print the native report as JSON")
@@ -1158,9 +1159,9 @@ def exacly_main(argv: list[str] | None = None) -> int:
             delivery_command_parser.add_argument("--reason", required=True, help="retained reason for scope withdrawal")
             continue
         delivery_command_parser.add_argument(
-            "--config", required=True, type=Path, help="operator-selected merge config"
+            "--config", required=True, type=Path, help="operator-selected installed adapter config"
         )
-        delivery_command_parser.add_argument("--policy", required=True, type=Path, help="approved exact merge policy")
+        delivery_command_parser.add_argument("--policy", required=True, type=Path, help="approved exact stage policy")
         for name in ("approval",):
             delivery_command_parser.add_argument(f"--{name}", type=Path)
         delivery_command_parser.add_argument(
@@ -1174,7 +1175,7 @@ def exacly_main(argv: list[str] | None = None) -> int:
         else:
             delivery_command_parser.add_argument("--request", required=True, type=Path)
             delivery_command_parser.add_argument(
-                "--payload", required=True, type=Path, help="exact native merge payload"
+                "--payload", required=True, type=Path, help="exact native stage payload"
             )
             delivery_command_parser.add_argument(
                 "--apply",

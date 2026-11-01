@@ -920,6 +920,34 @@ REQ-041 remains proposed pending authentic provider acceptance. See the
 and the nonproduction approval packet. A merge is not fresh verification,
 publication authority or runtime health.
 
+## Publish exact prebuilt artifacts through their owner
+
+`exacly delivery publish` previews or explicitly invokes the fixed
+`local-owning-publisher-v1` workflow. It supports one private POSIX registry with
+create-only immutable versions. The owner independently pins the source,
+artifact inventory, producer/verification contract, destination, workflow code,
+keys and expiry. Selected artifacts are read as prebuilt bytes and never rebuilt.
+The existing package release workflow keeps its ownership.
+
+```sh
+exacly delivery publish --journal /private/delivery/publication.sqlite \
+  --journal-id JOURNAL_UUID --config publisher-config.json --policy publisher-policy.json \
+  --request publication-request.json --payload publication-payload.json --json
+```
+
+The default is a local preview. `--apply` additionally requires the independent
+approval document, its externally selected digest, issuer and approval ID.
+`delivery reconcile` selects its retained operation and discovers the actual
+immutable receipt and artifact bytes without another publication. Partial
+reservations keep their identity and cannot be overwritten or resumed. A
+historical publication remains readable after current grants expire; future or
+inapplicable publication timestamps are rejected consistently.
+
+This reference profile does not publish to PyPI or GitHub Releases. See the
+[owning-publisher guide](../docs/product-delivery-publication.md) for setup,
+separate owner/engine trust boundaries, verification provenance, budget units
+and operational acceptance. Publication grants no deployment authority or health.
+
 ## Dispatch approved verification work
 
 `exacly dispatch github-issues` renders a read-only proposal by default. It rechecks a saved plan action against the reviewed policies, target and actual current state, then shows the selected GitHub repository, issue contents and advisory authorization template. `--apply` requires a separately reviewed authorization, an explicitly initialized private dispatch journal and an execution-binding ledger. Policy and authorization pin the canonical journal, ledger and state paths plus the journal's unique initialization identity. The adapter verifies the repository's numeric identity and supports issue title/body only; it has no repository, workflow or test-path defaults.
