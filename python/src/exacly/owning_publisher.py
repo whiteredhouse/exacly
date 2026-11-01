@@ -23,14 +23,16 @@ from pathlib import Path
 from typing import Any
 
 from exacly import delivery_automation as delivery
+from exacly import delivery_profile, planning
 from exacly import execution_store as store
-from exacly import planning
 
 Doc = dict[str, Any]
 FIELDS = planning.fields
 PROFILE = "local-owning-publisher-v1"
 OWNER_PROFILE = "local-owning-publisher-configuration-v1"
 VERIFICATION_PROFILE = "local-artifact-verification-v1"
+RUNTIME_PROFILE = "local-owning-publisher-runtime-v1"
+RUNTIME_PROFILE_LIMIT = 1024 * 1024
 FILE_LIMIT = 256 * 1024
 ARTIFACT_LIMIT = 64 * 1024 * 1024
 PURPOSES = {"publisher", "artifact-verifier"}
@@ -48,6 +50,7 @@ OWNER_SCHEMA = FIELDS(
         "profile": {"const": OWNER_PROFILE},
         "publisher_id": delivery.TEXT,
         "workflow_code_digest": delivery.DIGEST,
+        "owner_runtime_digest": delivery.DIGEST,
         "scope": FIELDS(
             {"objective": delivery.OBJECTIVE, "operation_key": delivery.DIGEST, "subject": delivery.SUBJECTS["publish"]}
         ),
@@ -103,6 +106,7 @@ RECEIPT_BODY = FIELDS(
         "verification_digest": delivery.DIGEST,
         "published_at": delivery.TEXT,
         "owner_window": WINDOW,
+        "owner_runtime_digest": delivery.DIGEST,
         "claims": {"const": delivery.CLAIMS},
     }
 )
@@ -133,6 +137,33 @@ def byte_digest(data: bytes) -> str:
 
 def workflow_code_digest() -> str:
     return byte_digest(Path(__file__).read_bytes())
+
+
+def runtime_profile() -> Doc:
+    """Measure this actual owning role, independently of any configuration or expected pin.
+
+    Probe and writer share the same fixed preload path. An ambient controller process may have a
+    different native inventory; its identity is neither substituted nor compared to this role.
+    """
+    from exacly import release_publication  # noqa: F401 - preload the fixed dispatch-validation module
+
+    hmac.new(b"publisher-runtime-preload", b"", hashlib.sha256).digest()
+    body = {
+        "profile": RUNTIME_PROFILE,
+        "implementation": delivery_profile.implementation(
+            required=("owning_publisher.py", "release_publication.py", "delivery_automation.py")
+        ),
+    }
+    store.require(
+        len(store.canonical(body).encode()) <= RUNTIME_PROFILE_LIMIT, "owner runtime profile exceeds its bound"
+    )
+    return {**body, "digest": delivery.digest(body)}
+
+
+def _writer_runtime(configuration: Doc) -> str:
+    actual = runtime_profile()["digest"]
+    store.require(actual == configuration["owner_runtime_digest"], "actual owning publisher runtime changed")
+    return str(actual)
 
 
 def decode(data: bytes) -> Doc:
@@ -477,6 +508,7 @@ def validate_provenance(request: Doc, payload: Doc, value: Doc, configuration: D
             and receipt["payload_digest"] == delivery.digest(payload)
             and receipt["registry_id"] == configuration["registry"]["id"]
             and receipt["publisher_id"] == configuration["publisher_id"]
+            and receipt["owner_runtime_digest"] == configuration["owner_runtime_digest"]
             and receipt["verification_digest"] == payload["verification_digest"],
             "owner publication receipt applies to another exact operation",
         )
@@ -720,6 +752,7 @@ def publish(
     payload: Doc,
     authorization: Doc,
     *,
+    owner_configuration: Doc,
     adapter_configuration: Doc,
     policy: Doc,
     deadline: store.Deadline,
@@ -739,28 +772,31 @@ def publish(
         "dispatch input is outside independently approved owning publisher scope",
     )
     _delivery_current(configuration, intent, authorization, deadline=deadline)
-    publication.validate_payload(request, payload, adapter_configuration, policy)
-    store.require(
-        publication._owner(adapter_configuration) == configuration,
-        "dispatch adapter selected a different trusted owner configuration",
+    native = publication.validate_owner_dispatch(
+        configuration,
+        intent,
+        payload,
+        authorization,
+        owner_configuration=owner_configuration,
+        adapter_configuration=adapter_configuration,
+        policy=policy,
     )
-    native = delivery._schema(payload, publication.PAYLOAD_SCHEMA)
-    store.require(
-        delivery.digest(native) == request["native_payload_digest"]
-        and native["inputs"] == configuration["inputs"]
-        and native["verification_digest"] == configuration["verification"]["digest"],
-        "dispatch artifact or verification input differs from independently approved owner scope",
-    )
+    actual_runtime_digest = _writer_runtime(configuration)
     verification = _verification(configuration, deadline=deadline)
     inputs = _inputs(configuration, deadline=deadline)
     path = _version(configuration)
     with store.locked(path, write=True, deadline=deadline) as (_, registry_fd):
         _delivery_current(configuration, intent, authorization, deadline=deadline)
-        store.require(
-            intent["adapter"]
-            == {"id": PROFILE, "configuration_digest": publication.configuration_digest(adapter_configuration, policy)},
-            "publisher code or policy changed before version reservation",
+        publication.validate_owner_dispatch(
+            configuration,
+            intent,
+            native,
+            authorization,
+            owner_configuration=owner_configuration,
+            adapter_configuration=adapter_configuration,
+            policy=policy,
         )
+        actual_runtime_digest = _writer_runtime(configuration)
         _key(configuration["key"], "publisher")
         # Fingerprinting may be expensive. Recheck actual UTC after it and before the first write.
         _delivery_current(configuration, intent, authorization, deadline=deadline)
@@ -795,6 +831,7 @@ def publish(
             "verification_digest": native["verification_digest"],
             "published_at": dt.datetime.now(dt.UTC).isoformat(),
             "owner_window": {key: configuration[key] for key in ("not_before", "expires_at")},
+            "owner_runtime_digest": actual_runtime_digest,
             "claims": delivery.CLAIMS,
         }
         delivery._schema(body, RECEIPT_BODY)
@@ -806,6 +843,7 @@ def publish(
         _write_new(path / "receipt.json", store.canonical(receipt).encode())
         _sync_directory(path)
         deadline.check()
+        _writer_runtime(configuration)
         _delivery_current(configuration, intent, authorization, deadline=deadline)
         _verification_current(verification, deadline)
         os.mkdir(path / "published", 0o700)
@@ -821,9 +859,22 @@ def main() -> int:
     Candidate code must not be able to invoke this host command or read its private configuration.
     """
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--configuration", type=Path, required=True)
-    parser.add_argument("--configuration-digest", required=True)
+    parser.add_argument(
+        "--runtime-profile", action="store_true", help="Read the actual owner role runtime without config or keys"
+    )
+    parser.add_argument("--configuration", type=Path)
+    parser.add_argument("--configuration-digest")
     arguments = parser.parse_args()
+    if arguments.runtime_profile:
+        if arguments.configuration is not None or arguments.configuration_digest is not None:
+            parser.error("runtime inspection accepts no configuration or expected digest")
+        try:
+            sys.stdout.write(store.canonical(runtime_profile()))
+            return 0
+        except (OSError, ValueError):
+            return 2
+    if arguments.configuration is None or arguments.configuration_digest is None:
+        parser.error("publication requires its independently selected configuration path and digest")
     try:
         configuration = load_configuration(arguments.configuration, arguments.configuration_digest)
         envelope = delivery._schema(
@@ -843,6 +894,7 @@ def main() -> int:
             envelope["intent"],
             envelope["payload"],
             envelope["authorization"],
+            owner_configuration={"path": str(arguments.configuration), "digest": arguments.configuration_digest},
             adapter_configuration=envelope["adapter_configuration"],
             policy=envelope["policy"],
             deadline=store.Deadline(120),

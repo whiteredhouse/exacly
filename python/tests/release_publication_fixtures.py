@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import os
+import subprocess
+import sys
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from exacly import delivery_automation as delivery
 from exacly import execution_store as store
@@ -14,6 +17,7 @@ from exacly import owning_publisher as owner
 from exacly import release_publication as publication
 
 Doc = dict[str, Any]
+_OPERATOR_POPEN = subprocess.Popen
 
 
 def retained(path: Path, value: Doc | bytes) -> str:
@@ -23,7 +27,31 @@ def retained(path: Path, value: Doc | bytes) -> str:
     return owner.byte_digest(raw)
 
 
-def make_case(root: Path, *, data: bytes = b"approved prebuilt artifact\n") -> Doc:
+def selected_owner_runtime(role: Literal["fresh", "current"]) -> str:
+    if role == "current":
+        return str(owner.runtime_profile()["digest"])
+    process = _OPERATOR_POPEN(
+        [sys.executable, "-I", "-m", "exacly.owning_publisher", "--runtime-profile"],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        output, _ = process.communicate(timeout=30)
+    except BaseException:
+        process.kill()
+        process.wait()
+        raise
+    assert process.returncode == 0 and len(output) <= owner.RUNTIME_PROFILE_LIMIT
+    report = json.loads(output, object_pairs_hook=store.unique_object, parse_constant=store.invalid_constant)
+    assert set(report) == {"profile", "implementation", "digest"} and report["profile"] == owner.RUNTIME_PROFILE
+    assert report["digest"] == delivery.digest({key: value for key, value in report.items() if key != "digest"})
+    return str(report["digest"])
+
+
+def make_case(
+    root: Path, *, data: bytes = b"approved prebuilt artifact\n", owner_role: Literal["fresh", "current"] = "fresh"
+) -> Doc:
     root.mkdir(mode=0o700, exist_ok=True)
     root.chmod(0o700)
     for label in ("registry", "artifacts", "keys", "operator"):
@@ -96,6 +124,7 @@ def make_case(root: Path, *, data: bytes = b"approved prebuilt artifact\n") -> D
         "profile": owner.OWNER_PROFILE,
         "publisher_id": "approved-local-publisher",
         "workflow_code_digest": owner.workflow_code_digest(),
+        "owner_runtime_digest": selected_owner_runtime(owner_role),
         "scope": {"objective": objective, "operation_key": operation_key, "subject": subject},
         "contract": contract,
         "registry": registry,

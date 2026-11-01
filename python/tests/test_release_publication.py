@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import copy
+import ctypes
 import datetime as dt
 import json
 import multiprocessing
 import os
 import signal
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -39,6 +41,30 @@ def refresh_owner(case: Doc) -> None:
         Path(case["configuration"]["owner_configuration"]["path"]), case["owner"]
     )
     case["adapter"] = publication.ReleasePublicationAdapter(case["configuration"], case["policy"])
+
+
+def repin_dispatch(case: Doc) -> None:
+    """Controlled operator bootstrap independently selects changed owner config before caller pins."""
+    refresh_owner(case)
+    case["payload"]["operation_profile_digest"] = case["adapter"].operation_profile_digest
+    case["request"]["native_payload_digest"] = delivery.digest(case["payload"])
+    selected = case["request"]
+    case["approval"].update(
+        request_digest=delivery.digest(selected),
+        subject_digest=delivery.digest(selected["subject"]),
+        resource_key=delivery.resource_key(selected),
+        adapter={"id": publication.PROFILE, "configuration_digest": case["adapter"].configuration_digest},
+    )
+    case["intent"].update(
+        request=copy.deepcopy(selected),
+        request_digest=delivery.digest(selected),
+        subject_digest=delivery.digest(selected["subject"]),
+        resource_key=delivery.resource_key(selected),
+        authority_digest=delivery.digest(case["approval"]),
+        adapter=copy.deepcopy(case["approval"]["adapter"]),
+    )
+    case["intent"]["id"] = delivery.digest({key: value for key, value in case["intent"].items() if key != "id"})
+    delivery.validate_intent(case["intent"], approval=case["approval"])
 
 
 def test_publication_needs_exact_artifact_version_and_destination_authority(tmp_path: Path) -> None:
@@ -143,7 +169,7 @@ def test_wrong_verification_window_is_not_applicable(tmp_path: Path, expired: bo
 
 
 def test_owner_rechecks_expired_delivery_approval_without_writing(tmp_path: Path) -> None:
-    case = make_case(tmp_path)
+    case = make_case(tmp_path, owner_role="current")
     approval = copy.deepcopy(case["approval"])
     approval["expires_at"] = (dt.datetime.now(dt.UTC) - dt.timedelta(seconds=1)).isoformat()
     intent = copy.deepcopy(case["intent"])
@@ -155,6 +181,7 @@ def test_owner_rechecks_expired_delivery_approval_without_writing(tmp_path: Path
             intent,
             case["payload"],
             approval,
+            owner_configuration=case["configuration"]["owner_configuration"],
             adapter_configuration=case["configuration"],
             policy=case["policy"],
             deadline=store.Deadline(30),
@@ -163,7 +190,7 @@ def test_owner_rechecks_expired_delivery_approval_without_writing(tmp_path: Path
 
 
 def test_owner_rejects_a_different_journal_and_original_budget(tmp_path: Path) -> None:
-    case = make_case(tmp_path)
+    case = make_case(tmp_path, owner_role="current")
     approval = copy.deepcopy(case["approval"])
     approval["limits"]["operations"] += 1
     intent = copy.deepcopy(case["intent"])
@@ -175,6 +202,7 @@ def test_owner_rejects_a_different_journal_and_original_budget(tmp_path: Path) -
             intent,
             case["payload"],
             approval,
+            owner_configuration=case["configuration"]["owner_configuration"],
             adapter_configuration=case["configuration"],
             policy=case["policy"],
             deadline=store.Deadline(30),
@@ -213,6 +241,7 @@ def _crash_after_file(case: Doc, name: str) -> None:
         case["intent"],
         case["payload"],
         case["approval"],
+        owner_configuration=case["configuration"]["owner_configuration"],
         adapter_configuration=case["configuration"],
         policy=case["policy"],
         deadline=store.Deadline(120),
@@ -221,7 +250,7 @@ def _crash_after_file(case: Doc, name: str) -> None:
 
 @pytest.mark.parametrize("name", ["claim.json", "package.whl", "verification.json", "receipt.json"])
 def test_real_process_crash_preserves_partial_reservation(tmp_path: Path, name: str) -> None:
-    case = make_case(tmp_path)
+    case = make_case(tmp_path, owner_role="current")
     process = multiprocessing.get_context("fork").Process(target=_crash_after_file, args=(case, name))
     process.start()
     process.join(30)
@@ -446,25 +475,26 @@ def test_consumer_rejects_cross_revision_and_workflow_receipts(tmp_path: Path) -
 def test_authority_expiring_during_profile_work_blocks_first_reservation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    case = make_case(tmp_path)
-    original = publication.configuration_digest
+    case = make_case(tmp_path, owner_role="current")
+    original = owner.runtime_profile
     calls = 0
 
-    def expired_after_profile(configuration: Doc, policy: Doc) -> str:
+    def expired_after_profile() -> Doc:
         nonlocal calls
-        result = original(configuration, policy)
+        result = original()
         calls += 1
         if calls == 2:
             case["owner"]["expires_at"] = (dt.datetime.now(dt.UTC) - dt.timedelta(seconds=1)).isoformat()
         return result
 
-    monkeypatch.setattr(publication, "configuration_digest", expired_after_profile)
+    monkeypatch.setattr(owner, "runtime_profile", expired_after_profile)
     with pytest.raises(ValueError, match="not current"):
         owner.publish(
             case["owner"],
             case["intent"],
             case["payload"],
             case["approval"],
+            owner_configuration=case["configuration"]["owner_configuration"],
             adapter_configuration=case["configuration"],
             policy=case["policy"],
             deadline=store.Deadline(120),
@@ -474,7 +504,7 @@ def test_authority_expiring_during_profile_work_blocks_first_reservation(
 
 
 def test_scope_must_outlive_whole_bounded_workflow_call(tmp_path: Path) -> None:
-    case = make_case(tmp_path)
+    case = make_case(tmp_path, owner_role="current")
     case["owner"]["expires_at"] = (dt.datetime.now(dt.UTC) + dt.timedelta(seconds=10)).isoformat()
     with pytest.raises(ValueError, match="outlive"):
         owner.publish(
@@ -482,6 +512,7 @@ def test_scope_must_outlive_whole_bounded_workflow_call(tmp_path: Path) -> None:
             case["intent"],
             case["payload"],
             case["approval"],
+            owner_configuration=case["configuration"]["owner_configuration"],
             adapter_configuration=case["configuration"],
             policy=case["policy"],
             deadline=store.Deadline(120),
@@ -709,7 +740,7 @@ def test_genuine_other_intent_child_reply_is_uncertain_without_discarding_actual
 def test_engine_retains_foreign_intent_uncertainty_and_fences_replay_and_conflicting_dispatch(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    case = make_case(tmp_path)
+    case = make_case(tmp_path, owner_role="current")
     journal = Path(case["owner"]["delivery_authority"]["journal"]["path"])
     metadata = delivery_store.initialize(
         journal,
@@ -735,6 +766,7 @@ def test_engine_retains_foreign_intent_uncertainty_and_fences_replay_and_conflic
                 other_intent,
                 envelope["payload"],
                 other_approval,
+                owner_configuration=case["configuration"]["owner_configuration"],
                 adapter_configuration=case["configuration"],
                 policy=case["policy"],
                 deadline=store.Deadline(timeout),
@@ -782,3 +814,132 @@ def test_engine_retains_foreign_intent_uncertainty_and_fences_replay_and_conflic
         engine.apply(case["request"], case["payload"], approval=case["approval"], pin=pin())
     assert journal.read_bytes() == journal_before and audit.read_bytes() == audit_before
     assert snapshot(Path(case["owner"]["registry"]["path"])) == registry_before
+
+
+def test_unrelated_parent_isolation_library_has_distinct_profile_and_preserves_actual_owner_publication(
+    tmp_path: Path,
+) -> None:
+    # Other legitimate workflows can load this isolation compiler in a long-lived host process.
+    # Loading it installs no filter and grants the publisher no isolation or delivery authority.
+    isolation_library = ctypes.CDLL("libseccomp.so.2")
+    assert isolation_library._handle
+    parent_profile = delivery.digest(publication._runtime_profile())
+    fresh_profile = (
+        subprocess.check_output(
+            [
+                sys.executable,
+                "-I",
+                "-c",
+                "from exacly import owning_publisher, release_publication, delivery_automation; "
+                "print(delivery_automation.digest(release_publication._runtime_profile()))",
+            ],
+            timeout=30,
+        )
+        .decode()
+        .strip()
+    )
+    assert parent_profile != fresh_profile
+    case = make_case(tmp_path)
+    assert owner.runtime_profile()["digest"] != case["owner"]["owner_runtime_digest"]
+    assert case["adapter"].inspect(case["request"], case["payload"], deadline=store.Deadline(120))["ready"]
+    result = publish(case)
+    assert result["outcome"] == "applied"
+    assert result["provenance"]["receipt"]["owner_runtime_digest"] == case["owner"]["owner_runtime_digest"]
+    assert consume(case) == case["artifact_bytes"]
+
+
+def test_wrong_sealed_owner_runtime_pin_fails_before_any_version_reservation(tmp_path: Path) -> None:
+    case = make_case(tmp_path)
+    case["owner"]["owner_runtime_digest"] = delivery.digest("independently selected but incorrect owner runtime")
+    repin_dispatch(case)
+    # Caller pins are applicable, while the actual independent writing role must reject its wrong pin.
+    assert case["adapter"].validate_payload(case["request"], case["payload"]) == case["payload"]
+    with pytest.raises(ValueError, match="actual owning publisher runtime changed"):
+        owner.publish(
+            case["owner"],
+            case["intent"],
+            case["payload"],
+            case["approval"],
+            owner_configuration=case["configuration"]["owner_configuration"],
+            adapter_configuration=case["configuration"],
+            policy=case["policy"],
+            deadline=store.Deadline(120),
+        )
+    result = publish(case)
+    assert result["outcome"] == "uncertain" and result["effect"] is None
+    assert len(list(Path(case["owner"]["registry"]["path"]).iterdir())) == 1
+
+
+def test_runtime_probe_is_actual_config_free_read_only_and_does_not_echo_input(tmp_path: Path) -> None:
+    command = [sys.executable, "-I", "-m", "exacly.owning_publisher", "--runtime-profile"]
+    canary = b"not-a-configuration-or-key-and-never-an-approved-runtime-digest"
+    result = subprocess.run(command, input=canary, capture_output=True, timeout=30, check=False)
+    assert result.returncode == 0 and result.stderr == b"" and canary not in result.stdout
+    assert len(result.stdout) <= owner.RUNTIME_PROFILE_LIMIT
+    report = json.loads(result.stdout, object_pairs_hook=store.unique_object, parse_constant=store.invalid_constant)
+    assert set(report) == {"profile", "implementation", "digest"}
+    assert report["profile"] == owner.RUNTIME_PROFILE
+    assert report["digest"] == delivery.digest({key: value for key, value in report.items() if key != "digest"})
+    assert report["implementation"]["delivery_runtime"]["native"]
+    assert not list(tmp_path.iterdir())
+    rejected = subprocess.run(
+        [
+            *command,
+            "--configuration",
+            str(tmp_path / "not-read.json"),
+            "--configuration-digest",
+            delivery.digest("not-an-input-to-measurement"),
+        ],
+        input=canary,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    assert rejected.returncode == 2 and rejected.stdout == b"" and not list(tmp_path.iterdir())
+
+
+def test_signed_receipt_cannot_substitute_a_different_recorded_owner_runtime(tmp_path: Path) -> None:
+    case = make_case(tmp_path)
+    assert publish(case)["outcome"] == "applied"
+    resign_receipt(case, {"owner_runtime_digest": delivery.digest("a different recorded owning role")})
+    with pytest.raises(ValueError, match="another exact operation"):
+        discover(case)
+
+
+@pytest.mark.parametrize("change", ["descriptor", "controller-binding", "policy", "input-blob", "extra-config"])
+def test_owner_role_preserves_closed_dispatch_semantics_without_controller_runtime_recomputation(
+    tmp_path: Path,
+    change: str,
+) -> None:
+    case = make_case(tmp_path, owner_role="current")
+    descriptor = copy.deepcopy(case["configuration"]["owner_configuration"])
+    configuration, payload, policy = (
+        copy.deepcopy(case["configuration"]),
+        copy.deepcopy(case["payload"]),
+        copy.deepcopy(case["policy"]),
+    )
+    if change == "descriptor":
+        # Identical config bytes at another path still cannot replace the trusted bootstrap descriptor.
+        alias = Path(descriptor["path"]).with_name("same-owner-at-another-path.json")
+        retained(alias, Path(descriptor["path"]).read_bytes())
+        configuration["owner_configuration"]["path"] = str(alias)
+    elif change == "controller-binding":
+        payload["operation_profile_digest"] = delivery.digest("different controller configuration")
+    elif change == "policy":
+        policy["contract"]["criteria"] = delivery.digest("weaker acceptance meaning")
+    elif change == "input-blob":
+        payload["inputs"][0]["blob"] = delivery.digest("substituted input artifact")
+    else:
+        configuration["unexpected-provider"] = "unapproved"
+    with pytest.raises(ValueError):
+        owner.publish(
+            case["owner"],
+            case["intent"],
+            payload,
+            case["approval"],
+            owner_configuration=descriptor,
+            adapter_configuration=configuration,
+            policy=policy,
+            deadline=store.Deadline(120),
+        )
+    assert len(list(Path(case["owner"]["registry"]["path"]).iterdir())) == 1

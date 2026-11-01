@@ -137,6 +137,64 @@ def validate_payload(request: Any, payload: Any, configuration: Any, policy: Any
     return native
 
 
+def validate_owner_dispatch(
+    configuration: Doc,
+    intent: Doc,
+    payload: Doc,
+    authorization: Doc,
+    *,
+    owner_configuration: Doc,
+    adapter_configuration: Doc,
+    policy: Doc,
+) -> Doc:
+    """Check sealed owning scope without pretending this writer is the controller runtime.
+
+    The engine checks actual controller identity, ApprovalPin, reservation and revocation before
+    dispatch. Here the independently approved private owner scope remains authoritative; controller
+    digests are exact structural bindings, never a measurement of the writer's different runtime.
+    """
+    from exacly import owning_publisher as owner
+
+    checked = delivery.validate_intent(intent, approval=authorization)
+    request = checked["request"]
+    config, rule = validate_configuration(adapter_configuration), validate_policy(policy)
+    descriptor = delivery._schema(owner_configuration, CONFIG_SCHEMA["properties"]["owner_configuration"])
+    store.require(
+        config["owner_configuration"] == descriptor, "dispatch selected a different owner configuration descriptor"
+    )
+    sealed = owner.load_configuration(Path(descriptor["path"]), descriptor["digest"])
+    store.require(
+        sealed == configuration, "dispatch differs from the independently selected sealed owner configuration"
+    )
+    native = delivery._schema(payload, PAYLOAD_SCHEMA)
+    store.require(request["stage"] == "publish", "publication requires its own stage authority")
+    store.require(
+        configuration["scope"] == {key: request[key] for key in ("objective", "operation_key", "subject")},
+        "dispatch is outside independently approved owner scope",
+    )
+    store.require(
+        rule["contract"] == configuration["contract"] == authorization["contract"]
+        and delivery.digest(rule) == checked["policy_digest"] == authorization["policy_digest"],
+        "dispatch policy or artifact acceptance contract changed",
+    )
+    store.require(
+        checked["adapter"]["id"] == PROFILE
+        and native["operation_profile_digest"]
+        == checked["adapter"]["configuration_digest"]
+        == authorization["adapter"]["configuration_digest"],
+        "dispatch differs from its retained controller profile binding",
+    )
+    store.require(
+        delivery.digest(native) == request["native_payload_digest"]
+        and native["inputs"] == configuration["inputs"]
+        and native["verification_digest"] == configuration["verification"]["digest"]
+        and [item["artifact"] for item in native["inputs"]] == request["subject"]["artifacts"]
+        and all(item["blob"] == item["artifact"]["digest"] for item in native["inputs"]),
+        "dispatch artifact or verification input differs from independently approved owner scope",
+    )
+    return native
+
+
 def _bind_owner_receipt(intent: Doc, result: Doc) -> Doc:
     """Bind authenticated native facts to the explicit retained intent without discarding foreign facts."""
     receipt = result["provenance"]["receipt"]

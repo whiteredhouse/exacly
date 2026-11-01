@@ -13,9 +13,38 @@ version, destination UUID, workflow revision and installed contract bytes,
 delivery reviewer identity, journal UUID, original limits, scope expiry and
 separate publisher and artifact-verifier purpose keys. Dispatch JSON cannot
 select another configuration, executable, producer policy, destination or key.
-The delivery approval additionally pins the actual installed package, schemas,
-runtime, dependencies, owner configuration and policy. These content pins are
-trusted bootstrap decisions, not proof that a human review was independent.
+The delivery approval additionally pins the controller's actual installed
+package, schemas, runtime, dependencies, owner configuration and policy. The
+sealed owner configuration separately pins `owner_runtime_digest`, measured
+from the actual approved writing role. These content pins are trusted bootstrap
+decisions, not proof that a human review was independent.
+
+Before approving the owner configuration, inspect the installed owner runtime
+with its selected Python executable:
+
+```
+python -I -m exacly.owning_publisher --runtime-profile
+```
+
+This read-only setup command accepts no configuration, key or expected digest.
+It does not read stdin. Its canonical JSON contains `profile`, `implementation`
+and `digest`; the digest covers the complete other two fields. Independently
+review the actual implementation/runtime inputs and select that digest for
+`owner_runtime_digest` before deriving controller configuration, payload and
+approval pins. The probe and normal writer preload the same fixed enforcement
+dependencies. The probe is not called by a preview, configuration property,
+inspection or reconciliation and consumes no delivery invocation slot.
+
+Controller and owner runtimes can differ. For example, an earlier isolation
+workflow can load an unrelated native library into the controller. Its full
+controller fingerprint still records that library; the fresh publisher does
+not have to load it. Each role derives and checks its own actual identity. The
+owner validates its independently selected runtime before the first version
+write and terminal publication, and records that measured identity in its
+signed receipt. It checks exact sealed dispatch semantics and the retained
+controller digest binding without pretending to reproduce the controller's
+different process. Changing either role requires applicable independently
+reviewed pins; no expected digest is echoed as a measurement.
 
 The independently selected private owner configuration is a separate
 predelegation for this one immutable version. Matching caller issuer, approval
@@ -79,6 +108,11 @@ does not independently reauthenticate that verifier. Optional independently
 selected verification-contract and producer expectations bind downstream
 artifact acceptance meaning. They do not admit a new provider or turn the
 native readiness gate into runtime health evidence.
+Historical readers authenticate the signed recorded owner runtime; they do not
+require the reader's present process to have that same runtime. The local
+direct-writer Python API requires an explicitly selected trusted owner-config
+descriptor and an owner-runtime pin for the actual executing role. It does not
+implicitly treat a controller process as the fresh writing role.
 
 Publisher and verifier HMAC keys use different file formats and signature
 domains. These keys authenticate the selected local roles. The same-user host,
