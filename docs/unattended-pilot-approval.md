@@ -140,7 +140,13 @@ by reconstructing journals. A narrowly authenticated earlier job that never exec
 be classified as never launched only when its immutable workflow bytes and
 server step history prove it. Failed or uncertain launch still requires the
 actual stopped-unit no-authority proof. Prior approved-goal fences, expired/deleted/unknown
-history or ambiguous cleanup block a new coordination domain. A prior run can
+history or ambiguous cleanup block a new coordination domain. The original
+coordinator definition was rejected by GitHub because it used `runner.temp` in
+job-level `env`. Only that exact historical workflow digest may be classified as
+server-rejected, and only with fresh terminal failed first-attempt push metadata,
+zero attempt jobs and a fully empty artifact history. This exception grants no
+authority and does not excuse unknown workflow bytes or executed/rerun histories.
+A prior run can
 be classified as never authorized only from its skipped fence step and authentic
 immutable terminal no-authority receipt. Trusted operators deleting repository
 history are outside this cooperating boundary and must escalate, never reset.

@@ -31,6 +31,11 @@ NOAUTH_PREFIX = "exacly-req039-noauthority-"
 FENCE_MEMBER = "approval-receipt.json"
 NOAUTH_MEMBER = "terminal-noauthority.json"
 LIMIT = 128 * 1024
+# This exact, immutable historical template used runner.temp in jobs.coordinate.env.
+# GitHub rejected it before creating any job. It is not a rolling workflow allowlist:
+# only fresh terminal API metadata and an empty attempt/job/artifact history can
+# establish that this known rejected definition never acquired runner authority.
+REJECTED_WORKFLOW_SHA256 = "f6b2e9671f50c14fe9a4f7ca5f4e6ec6e9a47c873b4a0bde634286e039bfcb80"
 
 
 class FencePending(ValueError):
@@ -234,6 +239,48 @@ def never_launched(
     return True
 
 
+def server_rejected_before_execution(source: admission.Source, run: Doc, stored: list[Doc], context: Doc) -> bool:
+    """Recognize only the known invalid template's first, jobless push attempt."""
+    if not (
+        run.get("status") == "completed"
+        and run.get("conclusion") == "failure"
+        and run.get("event") == "push"
+        and run.get("run_attempt") == 1
+    ):
+        return False
+    actual = source.get_json(f"/repos/{setup.REPOSITORY}/actions/runs/{run['id']}/attempts/1")
+    setup.require(
+        type(actual.get("id")) is int
+        and actual.get("id") == run["id"]
+        and type(actual.get("workflow_id")) is int
+        and actual.get("workflow_id") == run.get("workflow_id") == context["workflow_id"]
+        and type(actual.get("run_number")) is int
+        and actual.get("run_number") == run.get("run_number")
+        and type(actual.get("run_attempt")) is int
+        and actual.get("run_attempt") == 1
+        and actual.get("status") == "completed"
+        and actual.get("conclusion") == "failure"
+        and actual.get("event") == "push"
+        and actual.get("path") == COORDINATOR_WORKFLOW
+        and actual.get("head_sha") == run.get("head_sha")
+        and isinstance(actual.get("head_branch"), str)
+        and 0 < len(actual["head_branch"]) <= 256
+        and actual.get("head_branch") == run.get("head_branch")
+        and actual.get("repository", {}).get("id") == setup.REPOSITORY_ID
+        and actual.get("head_repository", {}).get("id") == setup.REPOSITORY_ID,
+        "server-rejected workflow attempt provenance is incomplete or conflicting",
+    )
+    if hashlib.sha256(workflow_bytes(source, actual["head_sha"])).hexdigest() != REJECTED_WORKFLOW_SHA256:
+        return False
+    setup.require(not stored, "server-rejected workflow has conflicting retained control metadata")
+    observed = source.get_json(f"/repos/{setup.REPOSITORY}/actions/runs/{run['id']}/attempts/1/jobs?per_page=100")
+    setup.require(
+        type(observed.get("total_count")) is int and observed["total_count"] == 0 and observed.get("jobs") == [],
+        "server-rejected workflow has missing, partial or nonempty job history",
+    )
+    return True
+
+
 def reject_prior_authority(source: admission.Source, context: Doc) -> None:
     """Require immutable no-authority proof for every earlier potentially relevant coordinator run."""
     workflow = source.get_json(f"/repos/{setup.REPOSITORY}/actions/workflows/req039-coordinator.yml")
@@ -301,6 +348,8 @@ def reject_prior_authority(source: admission.Source, context: Doc) -> None:
         stored = artifacts(source, run["id"])
         if any(isinstance(item.get("name"), str) and item["name"].startswith(FENCE_PREFIX) for item in stored):
             raise ValueError("a prior consumed-goal fence forbids new-runner journals or objective budget reset")
+        if not current and max_attempt == 1 and server_rejected_before_execution(source, run, stored, context):
+            continue
         for attempt in range(1, max_attempt + 1):
             observed = job(source, str(run["id"]), str(attempt))
             setup.require(observed.get("status") == "completed", "prior coordinator job has not terminated")

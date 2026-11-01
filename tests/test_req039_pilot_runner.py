@@ -1108,6 +1108,128 @@ def test_exact_immutable_workflow_and_server_skipped_launch_allow_setup_retry() 
         history.reject_prior_authority(api, context())
 
 
+def rejected_history(monkeypatch: pytest.MonkeyPatch) -> tuple[ArtifactHistory, Doc]:
+    api, _, _ = prior_history()
+    prefix = f"/repos/{setup.REPOSITORY}/actions"
+    run = api.pages[prefix + "/workflows/99/runs?per_page=100&page=1"]["workflow_runs"][1]
+    run.update(
+        event="push",
+        head_branch="pilot/req039-consumer",
+        head_sha="a" * 40,
+        status="completed",
+        conclusion="failure",
+    )
+    actual = {
+        **run,
+        "repository": {"id": setup.REPOSITORY_ID},
+        "head_repository": {"id": setup.REPOSITORY_ID},
+        "path": history.COORDINATOR_WORKFLOW,
+    }
+    api.pages[prefix + "/runs/122/attempts/1"] = actual
+    api.pages[prefix + "/runs/122/attempts/1/jobs?per_page=100"] = {"total_count": 0, "jobs": []}
+    api.pages[prefix + "/runs/122/artifacts?per_page=100&page=1"] = {"total_count": 0, "artifacts": []}
+    # Substitute only the historical immutable-template pin, leaving every live API join intact.
+    content = b"one known server-rejected immutable workflow template\n"
+    monkeypatch.setattr(history, "REJECTED_WORKFLOW_SHA256", hashlib.sha256(content).hexdigest())
+    api.pages[f"/repos/{setup.REPOSITORY}/contents/{history.COORDINATOR_WORKFLOW}?ref={run['head_sha']}"] = {
+        "path": history.COORDINATOR_WORKFLOW,
+        "type": "file",
+        "encoding": "base64",
+        "size": len(content),
+        "content": base64.b64encode(content).decode(),
+        "sha": hashlib.sha1(b"blob " + str(len(content)).encode() + b"\0" + content).hexdigest(),
+    }
+    return api, run
+
+
+def test_known_server_rejected_template_needs_fresh_empty_execution_history(monkeypatch: pytest.MonkeyPatch) -> None:
+    api, _ = rejected_history(monkeypatch)
+    history.reject_prior_authority(api, context())
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "unreviewed-template",
+        "false-blob-sha",
+        "changed-revision",
+        "changed-run",
+        "changed-workflow",
+        "changed-order",
+        "changed-branch",
+        "foreign-repository",
+        "foreign-head-repository",
+        "wrong-path",
+        "still-running",
+        "success",
+        "different-event",
+        "rerun",
+        "boolean-attempt",
+        "missing-jobs",
+        "partial-jobs",
+        "boolean-job-count",
+        "executed-job",
+        "retained-review-packet",
+        "retained-goal-fence",
+        "partial-artifacts",
+    ],
+)
+def test_jobless_history_cannot_discard_unknown_or_potentially_authorized_runs(
+    monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    api, _ = rejected_history(monkeypatch)
+    prefix = f"/repos/{setup.REPOSITORY}/actions"
+    actual = api.pages[prefix + "/runs/122/attempts/1"]
+    jobs = api.pages[prefix + "/runs/122/attempts/1/jobs?per_page=100"]
+    artifacts = api.pages[prefix + "/runs/122/artifacts?per_page=100&page=1"]
+    blob = api.pages[f"/repos/{setup.REPOSITORY}/contents/{history.COORDINATOR_WORKFLOW}?ref={'a' * 40}"]
+    if fault == "unreviewed-template":
+        monkeypatch.setattr(history, "REJECTED_WORKFLOW_SHA256", "0" * 64)
+    elif fault == "false-blob-sha":
+        blob["sha"] = "0" * 40
+    elif fault == "changed-revision":
+        actual["head_sha"] = "b" * 40
+    elif fault == "changed-run":
+        actual["id"] = 121
+    elif fault == "changed-workflow":
+        actual["workflow_id"] = 100
+    elif fault == "changed-order":
+        actual["run_number"] = 5
+    elif fault == "changed-branch":
+        actual["head_branch"] = "main"
+    elif fault == "foreign-repository":
+        actual["repository"]["id"] += 1
+    elif fault == "foreign-head-repository":
+        actual["head_repository"]["id"] += 1
+    elif fault == "wrong-path":
+        actual["path"] = ".github/workflows/another.yml"
+    elif fault == "still-running":
+        actual["status"] = "in_progress"
+    elif fault == "success":
+        actual["conclusion"] = "success"
+    elif fault == "different-event":
+        actual["event"] = "workflow_dispatch"
+    elif fault == "rerun":
+        actual["run_attempt"] = 2
+    elif fault == "boolean-attempt":
+        actual["run_attempt"] = True
+    elif fault == "missing-jobs":
+        jobs.pop("jobs")
+    elif fault == "partial-jobs":
+        jobs["total_count"] = 1
+    elif fault == "boolean-job-count":
+        jobs["total_count"] = False
+    elif fault == "executed-job":
+        jobs.update(total_count=1, jobs=[{"id": 456, "run_id": 122, "status": "completed", "steps": []}])
+    elif fault in {"retained-review-packet", "retained-goal-fence"}:
+        name = ("exacly-req039-review-" if fault == "retained-review-packet" else history.FENCE_PREFIX) + "122-1"
+        artifacts.update(total_count=1, artifacts=[{"id": 55, "name": name}])
+    else:
+        artifacts["total_count"] = 1
+    with pytest.raises(ValueError):
+        history.reject_prior_authority(api, context())
+
+
 @pytest.mark.parametrize("bootstrap_case", [True], indirect=True)
 def test_literal_remote_precondition_reader_is_paid_bounded_and_cannot_publish(
     bootstrap_case: tuple[Path, Doc], monkeypatch: pytest.MonkeyPatch
