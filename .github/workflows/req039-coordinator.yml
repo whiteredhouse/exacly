@@ -28,9 +28,11 @@ jobs:
     name: coordinate
     runs-on: ubuntu-24.04
     timeout-minutes: 45
-    env:
-      PILOT_ROOT: ${{ runner.temp }}/exacly-req039
     steps:
+      - name: Initialize same-runner pilot root
+        env:
+          PILOT_ROOT: ${{ runner.temp }}/exacly-req039
+        run: printf '%s\n' "PILOT_ROOT=$PILOT_ROOT" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}

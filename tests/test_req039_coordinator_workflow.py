@@ -47,6 +47,26 @@ def test_one_manual_coordinator_serializes_the_original_goal_with_read_only_cred
     }
 
 
+def test_runner_root_is_initialized_in_a_supported_step_context(tmp_path: Path) -> None:
+    # GitHub rejects runner context in job.env before creating any jobs.
+    assert "env" not in JOB
+    initialize_index, initialize = step("Initialize same-runner pilot root")
+    launch_index, _ = step(history.LAUNCH_STEP)
+    assert initialize_index == 0 < launch_index
+    assert initialize["env"] == {"PILOT_ROOT": "${{ runner.temp }}/exacly-req039"}
+    pilot_root = str(tmp_path / "runner temp $literal `literal`" / "exacly-req039")
+    environment = tmp_path / "github-env"
+    result = subprocess.run(
+        ["/bin/bash", "-c", initialize["run"]],
+        env={"PATH": os.defpath, "PILOT_ROOT": pilot_root, "GITHUB_ENV": str(environment)},
+        capture_output=True,
+        timeout=5,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert environment.read_text() == "PILOT_ROOT=" + pilot_root + "\n"
+
+
 def test_workflow_retains_the_exact_approval_fence_before_referencing_native_authority() -> None:
     launch_index, _ = step(history.LAUNCH_STEP)
     wait_index, wait = step("Await independent approval")
