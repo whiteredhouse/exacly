@@ -1,4 +1,4 @@
-# Proposed unattended verification contracts. These records describe future behavior, not shipped commands.
+# Unattended verification contracts. Lifecycle distinguishes delivered contracts from remaining proposals.
 # The existing per-effect primitives retain their own authority, journals and verification contracts.
 exacly: "0.2.0"
 
@@ -60,7 +60,7 @@ records:
     name: Integrate one concrete external worker through the approved execution boundary
     description: Delegate repair or evidence work to an actual reviewed command or coding-agent integration.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
     last_reviewed_at: "2026-10-31"
     statement: >-
@@ -75,10 +75,10 @@ records:
       - Enforce declared wall-clock, retry and concurrency budgets plus the integration's host resource and model-service limits. Establish CPU, memory and process containment through a reviewed disposable host or runtime resource controls rather than claiming existing timeout and tmpfs limits provide it.
       - Retain trusted worker lifecycle and termination facts separately from candidate logs, status and artifacts, preserving content build identities for handoff. Failure, cancellation, unavailable infrastructure or exhausted resources cannot be salvaged into success from candidate output alone.
       - Verify one local coordination deployment first; another physical backend or distributed ownership requires its own reviewed contract, fencing and real verification. A first workflow-only evidence pilot may use a deterministic reviewed command without claiming coding-agent support.
-    verification_method: Immutable snapshot and fixed-recipe preparation tests cover the foundation; concrete runtime lifecycle, resource-budget and real-runtime integration acceptance remain future work.
+    verification_method: Exact snapshot and resource-policy tests plus mandatory supported Linux runtime tests for the fixed inventory command, native lifecycle/replay/failure/cancellation/process recovery, and actual kernel CPU, memory and process enforcement.
     observe:
       tests:
-        cases: ["python/tests/test_worker_integration.py::*", "python/tests/test_worker_integration_runtime.py::*", "python/tests/test_unattended_foundations_integration.py::*"]
+        cases: ["python/tests/test_worker_integration.py::*", "python/tests/test_resource_guard.py::*", "python/tests/test_worker_integration_runtime.py::*", "python/tests/test_unattended_foundations_integration.py::*"]
 
   - id: REQ-037
     type: Requirement
@@ -181,13 +181,13 @@ records:
   - id: APP-022
     type: Application
     name: Concrete worker integration
-    description: Immutable source-snapshot and deterministic inventory-recipe foundation for a planned reviewed integration with the supported execution boundary.
+    description: Exact immutable snapshots and one fixed inventory command through native Bubblewrap lifecycle with kernel-checked cgroup resource containment.
     owner: exacly-maintainers
-    lifecycle: proposed
+    lifecycle: active
     evidence: []
     last_reviewed_at: "2026-10-31"
     responsibility: Prepare exact approved snapshots and delegate bounded work while the selected verified runtime enforces candidate isolation and privileged service credentials remain outside it.
-    interfaces: [exacly.worker_integration snapshot preparation API, Planned concrete worker lifecycle and resource integration]
+    interfaces: [exacly.worker_integration preparation and execution API, exacly.resource_guard checked cgroup and transient service API]
     implementation_ref: { locator: python/src/exacly/worker_integration.py }
 
   - id: APP-023

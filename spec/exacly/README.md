@@ -83,11 +83,17 @@ REQ-033 and APP-019 cover [reviewed output handoff](../../docs/output-handoff.md
 
 The remaining work is explicitly proposed in [unattended-automation.yaml](unattended-automation.yaml). These records describe incomplete contracts; they do not authorize unattended operation today. The [foundation guide](../../docs/unattended-automation.md) describes delivered subsets and the [implementation checkpoint](../../docs/automation-progress.md) records progress and blockers.
 
+REQ-036 and APP-022 describe the delivered fixed inventory command, immutable snapshot preparation
+and exact kernel resource integration. Native policy and authorization pin the checked cgroup
+identity and CPU/memory/process bounds; mandatory supported-runtime tests establish actual behavior.
+This provides no coding-agent or model-service access. The other unattended contracts remain
+proposed until their complete acceptance coverage and live pilot are delivered.
+
 | Requirement | Proposed contract | Planned implementer |
 | --- | --- | --- |
 | REQ-034 | Durable scheduling, phase correlation and recovery across the complete verification workflow | APP-020, unattended verification controller |
 | REQ-035 | Independently approved standing scope, exact one-shot grants, revocation and objective-wide budgets | APP-021, standing effect authorizer |
-| REQ-036 | One concrete reviewed worker or coding-agent integration with verified capability and resource boundaries | APP-022, concrete worker integration |
+| REQ-036 (active) | Fixed inventory worker with exact snapshots, native lifecycle and checked kernel resource boundaries | APP-022, concrete worker integration |
 | REQ-037 | Exact remote Git publication, ambiguous-effect recovery and approved CI run selection | APP-023, remote publication and CI bridge |
 | REQ-038 | Explicit output-binding supersession, fresh required evidence and native completion | APP-020, unattended verification controller |
 | REQ-039 | A real consumer pilot through remote publication, live CI, admission and completion, including interruption and negative paths | APP-020, with dedicated live acceptance coverage |

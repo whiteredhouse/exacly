@@ -21,6 +21,8 @@ BACKEND_TESTS = {
     "python/tests/test_handoff.py",
     "python/tests/test_handoff_faults.py",
     "python/tests/test_handoff_end_to_end.py",
+    "python/tests/test_unattended_foundations_integration.py",
+    "python/tests/test_worker_integration_runtime.py",
 }
 
 

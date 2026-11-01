@@ -9,13 +9,23 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
-from exacly import execution_store, executor_contract, handoff_git, isolation, planning
+from exacly import (
+    execution_store,
+    executor,
+    executor_contract,
+    executor_local,
+    handoff_git,
+    isolation,
+    planning,
+    resource_guard,
+)
+from exacly.executor_interfaces import CoordinatorBackends, InvocationLease, WorkerSpec
 
 VERSION = "0.1.0"
 RECIPE = "snapshot-inventory-v1"
@@ -219,3 +229,143 @@ def prepare(
         "worker source repository identity changed during preparation",
     )
     return PreparedWorker(tuple(sorted(files.items())), json.dumps(result, sort_keys=True).encode())
+
+
+def bind(request: executor.Request, prepared: PreparedWorker, *, guard: resource_guard.Guard) -> executor.Request:
+    """Bind exact prepared bytes only to an already approved fixed-recipe executor policy.
+
+    Source and model identity remain distinct, and this helper never rewrites policy, target,
+    binding, deadline or attempt limits. Preview and exact native authorization remain required.
+    """
+    execution_store.require(isinstance(prepared, PreparedWorker), "an explicit prepared worker is required")
+    identity = prepared.identity
+    selected = executor_contract.validate_policy(request.executor_policy)
+    execution_store.require(
+        isinstance(guard, resource_guard.Guard) and selected.get("resource_guard") == guard.descriptor,
+        "approved executor policy selects another exact resource envelope",
+    )
+    execution_store.require(
+        selected["argv"] == list(ARGV)
+        and selected["expected_outputs"] == [OUTPUT]
+        and selected["runtime"]["python"] == ARGV[0],
+        "approved executor policy differs from the fixed inventory recipe",
+    )
+    execution_store.require(
+        identity["revision"] == request.target.data["revision"]
+        and identity["model_digest"] == request.trust_policy["model"]["digest"],
+        "prepared worker source or approved model differs from the native execution contract",
+    )
+    inputs = prepared.inputs
+    execution_store.require(
+        inputs.get(SCRIPT) == _SCRIPT and identity["inputs"] == executor_contract.roster(inputs),
+        "prepared worker bytes differ from their retained identities",
+    )
+    snapshot = {
+        key: identity[key]
+        for key in (
+            "schema_version",
+            "recipe",
+            "repository",
+            "revision",
+            "tree",
+            "model_digest",
+            "allowed_paths",
+            "protected_paths",
+            "files",
+        )
+    }
+    execution_store.require(
+        planning.digest(snapshot) == identity["snapshot_digest"]
+        and json.loads(inputs[MANIFEST])
+        == {"snapshot_digest": identity["snapshot_digest"], "files": identity["files"]},
+        "prepared worker snapshot identity or fixed manifest changed",
+    )
+    return replace(request, inputs=inputs)
+
+
+class _GuardedLocalWorker(executor_local.LocalWorkerLifecycle):
+    """The fixed local lifecycle, with actual aggregate caps checked at both release gates."""
+
+    def __init__(self, domain: object, guard: resource_guard.Guard) -> None:
+        super().__init__(domain)
+        self.guard = guard
+
+    def supervise(
+        self,
+        spec: WorkerSpec,
+        *,
+        on_worker: Callable[[dict[str, Any]], None],
+        on_boundary: Callable[[dict[str, Any]], None],
+        is_cancelled: Callable[[], bool],
+        lease: InvocationLease,
+    ) -> dict[str, Any]:
+        self.guard.check()
+
+        def checked(callback: Callable[[dict[str, Any]], None], identity: dict[str, Any]) -> None:
+            self.guard.check_process(identity["pid"])
+            callback(identity)
+            self.guard.check_process(identity["pid"])
+
+        return super().supervise(
+            spec,
+            on_worker=lambda identity: checked(on_worker, identity),
+            on_boundary=lambda identity: checked(on_boundary, identity),
+            is_cancelled=is_cancelled,
+            lease=lease,
+        )
+
+
+def guarded_backends(guard: resource_guard.Guard) -> CoordinatorBackends:
+    """Construct only reviewed local adapters; native recovery and cancellation remain native."""
+    execution_store.require(isinstance(guard, resource_guard.Guard), "an actual kernel resource guard is required")
+    guard.check()
+    storage = executor_local.LocalAttemptStorage()
+    return CoordinatorBackends(
+        storage,
+        executor_local.LocalInvocationOwnership(storage.domain),
+        _GuardedLocalWorker(storage.domain, guard),
+    )
+
+
+def preview(
+    documents: Mapping[str, Any],
+    state_path: Path,
+    request: executor.Request,
+    *,
+    prepared: PreparedWorker,
+    guard: resource_guard.Guard,
+    lock_timeout: float = execution_store.DEFAULT_LOCK_TIMEOUT,
+) -> dict[str, Any]:
+    """Preview the exact fixed worker under checked caps; this grants no execution authority."""
+    return executor.preview(
+        documents,
+        state_path,
+        bind(request, prepared, guard=guard),
+        lock_timeout=lock_timeout,
+        backends=guarded_backends(guard),
+    )
+
+
+def apply(
+    journal: Path,
+    ledger: Path,
+    documents: Mapping[str, Any],
+    state_path: Path,
+    request: executor.Request,
+    *,
+    authorization: Any,
+    prepared: PreparedWorker,
+    guard: resource_guard.Guard,
+    lock_timeout: float = execution_store.DEFAULT_LOCK_TIMEOUT,
+) -> dict[str, Any]:
+    """Run the concrete deterministic worker through exact native authorization and journals."""
+    return executor.apply(
+        journal,
+        ledger,
+        documents,
+        state_path,
+        bind(request, prepared, guard=guard),
+        authorization=authorization,
+        lock_timeout=lock_timeout,
+        backends=guarded_backends(guard),
+    )

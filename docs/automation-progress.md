@@ -29,6 +29,11 @@ refs and credential configuration. The session's GitHub connector is not an Acti
 Missing publishing credentials block the live run only; continue independent implementation.
 The user's consumer/host choice does not itself independently approve the final policy/delegation.
 
+The user explicitly selected proposed `branch_protection: not_required` only for the dedicated
+`pilot/req039-consumer` policy. Preserve every other check, the default behavior and repository rules;
+receipts must report protection unverified with no check timestamp. Final policy/delegation still
+require independent approval before live execution.
+
 ## Baseline and decisions
 
 - Inspected remote main `461b32fe1e35a8a7f89dde3b74103c7856dbfb62` and open PRs on 2026-10-31; there were no open PRs.
@@ -45,7 +50,7 @@ The user's consumer/host choice does not itself independently approve the final 
 | --- | --- | --- |
 | REQ-035 / APP-021 / INFO-012 / INF-008 | [PR #88](https://github.com/whiteredhouse/exacly/pull/88) merged; 53 focused tests and exact-head full CI passed; independent technical review found no blockers | Implement independently selected standing scope, expiry/revocation and native effect grants; accounting alone grants no authority |
 | REQ-037 / APP-023 / INFO-011 | [PR #91](https://github.com/whiteredhouse/exacly/pull/91) merged; 39 tests and exact-head full CI passed; independent review passed after directory durability correction | Implement concrete CAS transport with independently established operation proof, approved CI selection and live acceptance |
-| REQ-036 / APP-022 | [PR #89](https://github.com/whiteredhouse/exacly/pull/89) merged; 37 preparation tests and exact-head full CI passed; actual fixed recipe also passed the later supported-runtime integration | Deliver declared CPU/memory/process containment and complete worker lifecycle/resource acceptance on the approved host |
+| REQ-036 / APP-022 | Fixed recipe now bound to native exact resource policy, checked kernel cgroup limits and mandatory real runtime cases; 86 unit/snapshot tests and independent review pass on `codex/unattended-resources` | Supported Ubuntu CI must execute the mandatory real resource/lifecycle cases before merge; lifecycle describes the delivered contract, not a successful observation claim |
 | REQ-038 / APP-020 | [PR #90](https://github.com/whiteredhouse/exacly/pull/90) merged; 25 tests and exact-head full CI passed; independent review passed after directory durability correction | Integrate whole-workflow recovery and any required composition/output mapping; single-producer native completion now has controlled integration coverage |
 | REQ-034 | Not implemented | Integrate native phases, approved scope, accounting and recovery after the primitives above |
 | REQ-039 | Consumer/ref and same-runner coordinator selected; implementation and independent policy/delegation approval remain outstanding | Deliver separate fixed-verifier producer and concrete approval packet; unavailable publishing credentials block live execution only |
@@ -95,7 +100,7 @@ the workflow queues state jobs and only a publication for current main establish
 Check current main and its state job before treating any observation as refreshed. A later checkpoint
 documentation merge also starts its own main run. Never edit state to close this gap.
 
-REQ-034–039 and CAP-004/PROC-004 remain proposed. The complete future selectors remain required:
+REQ-036/APP-022 now describe the delivered fixed-command resource integration; actual supported-runtime CI must verify it. REQ-034–035, REQ-037–039 and CAP-004/PROC-004 remain proposed. Complete future selectors remain required:
 accounting tests cannot establish standing scope, recipe execution cannot establish resource
 containment, and controlled transport cannot establish live publication. REQ-040–043 are unchanged.
 
@@ -137,7 +142,7 @@ also be checked from current PR metadata and checks. Never infer permission to b
 
 1. Read this checkpoint and inspect remote main and all open PRs again before resuming.
 2. Inspect `git status` in each worktree; preserve uncommitted work. The five implementation worktrees are clean at the exact remote heads listed above. `/workspace/work/exacly-integration` contains old untracked import copies; the committed test on main is authoritative. Do not overwrite current source from those copies or reset the original checkout.
-3. First verify current main's actual CI state publication, including state serial/config revision and the six proposed requirements' missing-coverage reasons. The repository checkpoint update is documentation, not observed state.
+3. First verify current main's actual CI state publication, including state serial/config revision, current requirement lifecycle and matching coverage. The repository checkpoint update is documentation, not observed state.
 4. Use the selected consumer/ref and dedicated same-runner coordinator; do not ask for a persistent host or repeat those decisions. Keep the approved verifier fixed and worker changes confined to exact fixture paths outside its closure. Prepare the separate branch producer and exact policy/delegation/credential packet for independent approval. Missing credentials block live execution, not implementation.
 5. Next engineering slice: trusted standing-scope evaluation, expiry/revocation and native exact grants around the existing objective-accounting store. Then implement the controller's durable phase correlation/recovery, concrete leased/correlated remote adapter and exact approved run selection, and resource envelope. Use the delivered controlled integration as the native API seam; it does not substitute for these contracts.
 6. Add the remaining fault and live acceptance coverage, independently approve the exact pilot configuration, and run the real nonproduction end-to-end and negative/recovery cases with retained evidence before activating complete contracts.
@@ -145,3 +150,9 @@ also be checked from current PR metadata and checks. Never infer permission to b
 
 The unattended verification target is incomplete. No requirement activation, live acceptance,
 unattended completion, release or deployment is claimed by this checkpoint.
+
+Resource PR #94 first full CI head `b25941c0a9ec545868c899117b83f559868eaee3` executed all five real
+resource/lifecycle cases successfully; total 3,584 tests passed and one development-subset contract
+test failed because its explicit backend-module list had not added the two new mandatory runtime
+modules. The expected list is corrected without excluding anything from full verification. Fresh
+exact-head CI is required before merging; the failed run is not a successful model publication.
