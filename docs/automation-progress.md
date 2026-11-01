@@ -148,13 +148,37 @@ also be checked from current PR metadata and checks. Never infer permission to b
 6. Add the remaining fault and live acceptance coverage, independently approve the exact pilot configuration, and run the real nonproduction end-to-end and negative/recovery cases with retained evidence before activating complete contracts.
 7. For each next PR, update model/bindings accurately, validate/impact/test, obtain independent technical review, require exact-head CI and GitHub reviews, merge without bypass, then verify actual CI publication and update this checkpoint.
 
-The unattended verification target is incomplete. REQ-036 has delivered acceptance coverage and is active; REQ-034–035 and REQ-037–039 remain proposed. No live acceptance, unattended live completion, release or deployment is claimed.
+The unattended verification target is incomplete. REQ-036 is delivered and active; REQ-034–035 and REQ-037–039 remain proposed until their complete coverage is delivered. No live acceptance, release or deployment is claimed.
 
 Resource PR #94 first full CI head `b25941c0a9ec545868c899117b83f559868eaee3` executed all five real
 resource/lifecycle cases successfully; total 3,584 tests passed and one development-subset contract
 test failed because its explicit backend-module list had not added the two new mandatory runtime
 modules. The expected list is corrected without excluding anything from full verification. Fresh
 exact-head CI is required before merging; the failed run is not a successful model publication.
+
+
+## Bounded installer recovery checkpoint (2026-11-01)
+
+Open implementation PRs #95–98 have cleared independent source review but their
+full checks are stalled in the existing isolation-runtime installation step.
+The older main Spec run 41253365811 (association merge 748487f5d9c1d4078091cfa6384763acf2df742a)
+has state job124693321007 stuck in that same step since00:20UTC. Later main
+state jobs remain queued; committed state is still serial66/config5ba9e66.
+No current publication or successful open-PR full check is claimed.
+
+The installer now uses noninteractive sudo, explicit GNU timeout TERM/KILL bounds,
+finite mirror retries/HTTP timeouts and bounded package-lock waits. Exact packages,
+vendor-profile refusal, scoped AppArmor policy load and before/after enforcement
+checks remain mandatory. Timeout or package/profile failure fails setup and the job;
+a partly installed disposable host is not salvaged as a supported runtime.
+The existing main-only verification-evidence.yml bytes are unchanged.
+
+After exact-head CI passes and this focused fix merges, refresh #95–98 onto it
+without changing their independently reviewed implementation bytes, require fresh
+exact-head CI/reviews, and merge prerequisites in order. The bounded coordinator
+and retained-proof checker are staged separately and still need final integrated
+review/CI. Actual live execution additionally requires the independently approved
+run-specific packet and a real scoped App publishing credential.
 
 
 ## Standing scope implementation checkpoint (2026-11-01)
@@ -191,10 +215,13 @@ run-specific approval packet and verify the declared live recovery/negative case
 Preserve every existing private journal; never recreate the original approved goal on another runner.
 
 
+Runtime setup PR #99 merged as 0f7bf455c710797ea900f9a2daa72dd941d41bb4 after exact-head supported CI passed 3,593 tests and all other checks. This standing-scope head inherits that fix through an ordinary merge; reviewed implementation bytes are unchanged. Fresh exact-head CI remains required. Main state publication is still behind the older queued jobs; no fresh publication is claimed.
+
+
 ## Concrete remote bridge checkpoint (2026-11-01)
 
 Standing-scope PR [#95](https://github.com/whiteredhouse/exacly/pull/95), head
-`8cb20c3b0bce27b7861f449d188561e9b43f3ddf`, is independently reviewed and
+`3440d6854a997bd119fde581e2fae1cd5c7fd08f`, is independently reviewed and
 awaiting exact-head full CI/merge at this checkpoint.
 
 The concrete remote bridge now uses explicit atomic Git receive-pack old/new commands,
@@ -217,6 +244,8 @@ Next: install the separate fixed fixture producer and finish controller/coordina
 then approve actual run-specific policy/delegation and credentials before live execution.
 The selected bounded same-runner scope and dedicated-policy protection opt-out are unchanged.
 
+This bridge head inherits merged bounded installer #99 through the refreshed #95 branch. Reviewed transport bytes are unchanged; fresh exact-head CI remains required.
+
 
 ## Fixed consumer and producer checkpoint (2026-11-01)
 
@@ -237,6 +266,8 @@ handshake. It is not an approval or live receipt. Actual per-run journal identit
 policy/verifier/source pins, credential mint facts and delegation must be finalized
 in the coordinator packet and independently approved before authority.
 REQ-039 and APP-026 remain proposed. Missing credentials affect live execution only.
+
+This fixed-producer head inherits bounded runtime setup #99 through the refreshed prerequisite stack. Producer and verifier implementation bytes are unchanged; fresh exact-head CI remains required.
 
 
 ## Native controller checkpoint (2026-11-01)
@@ -267,7 +298,9 @@ planner-directed investigation/evidence/configuration escalation and already-sat
 have native acceptance coverage. REQ-038 still requires
 its whole declared contract, and REQ-039 requires actual approved live acceptance.
 
-Current staged PR stack: #95 standing scope (8cb20c3), #96 concrete Git bridge
-(1483a8b), #97 fixed fixture producer (9db3901). Merge prerequisites in order,
+Current staged PR stack: #95 standing scope (3440d68), #96 concrete Git bridge
+(61f4ef3), #97 fixed fixture producer (7a7429f). Merge prerequisites in order,
 retarget each next PR to main, inspect exact-head required checks/reviews and unresolved
 threads afresh, and verify CI state publication. No automatic merge bypass is authorized.
+
+This native-controller head incorporates bounded runtime setup #99 through the refreshed prerequisite stack. All reviewed controller/runtime/store and b155 authorizer implementation bytes are unchanged; fresh exact-head CI remains mandatory.

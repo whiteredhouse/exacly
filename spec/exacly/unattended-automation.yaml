@@ -169,7 +169,7 @@ records:
   - id: APP-021
     type: Application
     name: Standing effect authorizer
-    description: Protected independently selected delegation evaluator with exact native grants, objective-wide accounting, metered reads and cross-policy write exclusion; complete workflow integration remains proposed.
+    description: Protected independently selected delegation evaluator with exact native grants, objective-wide accounting, metered reads and cross-policy write exclusion; live whole-workflow acceptance remains proposed.
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
