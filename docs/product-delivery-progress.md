@@ -12,7 +12,7 @@ Work started from main
 implementation merge `c27a098572629c9a741bf2f0bef5a8bc168dd68d` (#103).
 [Main Spec run 41267330287](https://github.com/whiteredhouse/exacly/actions/runs/41267330287)
 and [verification evidence run 41267330058](https://github.com/whiteredhouse/exacly/actions/runs/41267330058)
-passed. Committed main state is serial 67, config revision `c27a098…`, with
+passed. At that starting point, committed main state was serial 67, config revision `c27a098…`, with
 passed observations for REQ-034/035/036. REQ-037/038/039 observations remain
 inconclusive because their required live cases were unconfigured/skipped.
 The earlier state-publication blockage is resolved; it is not a current blocker.
@@ -28,9 +28,9 @@ component observations into live acceptance.
 | Requirement | Source implementation | Verification | Operational acceptance |
 | --- | --- | --- | --- |
 | REQ-040 | Merged PR #113: separate implementation planner and immutable proposal CLI | All 149 bound cases passed in supported hosted CI; 146 installed checks passed | Advisory planning only; no coding-agent or delivery effect implied |
-| REQ-041 | Implemented private delivery journal, exact-identity GitHub merge adapter and fixed CLI; focused PR preparation | 233 controlled cases plus all 149 planning/contract compatibility cases passed; 50 independent review cases and 99 installed checks passed; full hosted CI pending | No merge runtime delegation approved; genuine positive observer unconfigured and real negative lease/protection acceptance still pending |
-| REQ-042 | Concrete owning-publisher reference workflow and exact-byte consumer implemented in isolated worktree; shared integration pending | 58 controlled cases passed; independent review found a future-timestamp inconsistency being fixed | No public release or publisher destination approved |
-| REQ-043 | Static deployment, separate HTTP observer/evaluator and bounded rollback reference implemented; shared integration pending | 79 controlled cases passed; independent review found health expiry could incorrectly invalidate an applied effect, being fixed | No deployment environment, observer or rollback grant approved |
+| REQ-041 | Implemented in PR #114: private delivery journal, exact-identity GitHub merge adapter and fixed CLI | 233 controlled cases plus all 149 planning/contract compatibility cases passed; 50 independent review cases and 99 installed checks passed; full hosted CI pending | No merge runtime delegation approved; genuine positive observer unconfigured and real negative lease/protection acceptance still pending |
+| REQ-042 | Owning workflow and exact-byte consumer integrated with the shared engine and fixed publication CLI | 82 controlled publication/CLI cases, 43 prior delivery cases and 175 earlier CLI compatibility cases passed; integrated independent review, installed QA and full hosted CI pending | No public release or operational publisher destination approved |
+| REQ-043 | Static deployment, separate HTTP observer/evaluator and bounded rollback reference implemented; shared integration pending | 83 controlled cases passed; independent review cleared the health-expiry fix with 22 targeted cases | No deployment environment, observer or rollback grant approved |
 
 CAP-005/PROC-005 remain proposed while the whole delivery process is incomplete.
 REQ-041–043 and APP-025 remain proposed until their complete implemented contracts
@@ -40,8 +40,8 @@ Requirement statements and acceptance criteria unchanged.
 
 ## Current work and file ownership
 
-Current branch: `codex/product-delivery-merge` (stacked on planning commit `63d7ac47f40d2e9fe1c5519be176c2103c54ee2a`).
-Current worktree: `/workspace/work/exacly-product-delivery/merge`. The frozen first-slice worktree remains `/workspace/work/exacly-product-delivery/implementation`.
+Current branch: `codex/product-delivery-publication`, stacked on merge-slice commit `39ddd94695aa84dbf48e9000fd0c0e32486f0076` while its hosted CI runs.
+Current worktree: `/workspace/work/exacly-product-delivery/publication`. The frozen merge worktree remains `/workspace/work/exacly-product-delivery/merge`; the frozen first-slice worktree remains `/workspace/work/exacly-product-delivery/implementation`.
 Base: `3d8e608b3f2e7f6bd30c47699c7bbcbff1e1b992`.
 First-slice [PR #113](https://github.com/whiteredhouse/exacly/pull/113) merged as `c09bc04684a69bb7cfef354f7d5a240776935343` from exact reviewed head `63d7ac47f40d2e9fe1c5519be176c2103c54ee2a` and tree `2d6d8533dab0c454c2a86e7a56a3a66cbf8de570`. [Spec run 41301035807](https://github.com/whiteredhouse/exacly/actions/runs/41301035807) passed **4,263 tests and all 37 active readiness gates**, including all 149 REQ-040 cases, genuine Bubblewrap and the five mandatory worker/cgroup cases. Its 15 skips are unconfigured live cases for the still-proposed first-target contracts; they establish no live acceptance. [Landing run 41301035793](https://github.com/whiteredhouse/exacly/actions/runs/41301035793) passed. Independent review passed all 149 new tests; a fresh wheel passed 146 checks across 29 isolated CLI invocations, with 71 runtime/schema payloads matching source and RECORD. Local full checks passed 1,423 tests before the existing managed-container UID-map restriction; supported hosted CI supplies the full result. GitHub reported clean ordinary merge eligibility, no blocking reviews or threads, and accepted the expected-head merge without bypass. Post-merge [Spec run 41302839911](https://github.com/whiteredhouse/exacly/actions/runs/41302839911) and [verification-evidence run 41302839974](https://github.com/whiteredhouse/exacly/actions/runs/41302839974) are pending; canonical main observations have not yet been claimed refreshed.
 
@@ -173,5 +173,45 @@ merged effect is never relabelled fresh verification.
 The first-slice post-merge check job passed 4,263 tests, 15 first-target live
 skips and all 37 active gates, including all 149 REQ-040 cases. Its separate
 verification-evidence workflow also passed. Main's state writer deliberately
-reruns verification in a separate write-authorized job and is still pending;
-the canonical state refresh is not claimed complete until that job publishes it.
+reran verification in a separate write-authorized job and published state serial
+68 as `27b3284d9d5a4623751ceafe4e39186a81be627c`, config revision
+`c09bc04684a69bb7cfef354f7d5a240776935343`, written at
+`2026-11-01T12:17:32Z`. The exact CI-owned file was reread: REQ-034/035/036 and
+all 149 REQ-040 cases are passed; REQ-037/038/039 remain inconclusive because
+their live cases were skipped. No state file was edited by this work.
+
+## Owning-publication slice in progress
+
+[PR #114](https://github.com/whiteredhouse/exacly/pull/114) is open at exact
+reviewed head `39ddd94695aa84dbf48e9000fd0c0e32486f0076`, tree
+`5496799d976e9717cdaafa2880a43bcdc79c6431`.
+[Spec run 41305511088](https://github.com/whiteredhouse/exacly/actions/runs/41305511088)
+is running; [landing run 41305511064](https://github.com/whiteredhouse/exacly/actions/runs/41305511064)
+passed. Its required local full check passed 1,617 tests with one unconfigured
+live skip before the existing managed-container Bubblewrap UID-map restriction.
+No isolation fallback or coverage waiver was substituted.
+
+The next slice integrates the independently reviewed local owning publisher with
+the frozen shared journal/runtime profile and fixed `delivery publish` command.
+It invokes the exact installed workflow in a separate process, verifies an
+independently signed artifact prerequisite and publishes only the approved
+prebuilt bytes to one private immutable version. A signed original owner window
+and retained verification window make reconciliation and downstream consumers
+agree on historical publication times. Current expiry does not invalidate a
+valid historical publication. The owner config is a separate one-version
+predelegation; structural caller fields do not prove engine reservation,
+revocation or an external approval pin.
+
+Independent publication review cleared the future-timestamp inconsistency with
+seven targeted cases and an actual re-signed receipt probe. Subsequent integrated
+review found and corrected a genuine other-intent child-reply replay: the native
+boundary now binds the signed receipt to its supplied retained intent, keeps
+foreign facts only as diagnostics and retains uncertainty without resending.
+The original reproduction passes after the fix. Integrated fixed CLI and owning
+workflow tests cover real subprocess execution,
+durable-before-effect, private intent, lost reply/discover-only, missing or
+substituted bytes/proof, original offline history and unrelated-version
+preservation. All 76 package Python sources stayed unchanged during those tests.
+Original delivery CLI passed 43 cases and earlier CLI compatibility passed 175.
+Integrated source review, installed artifact QA and full hosted CI remain
+required before merging this slice.

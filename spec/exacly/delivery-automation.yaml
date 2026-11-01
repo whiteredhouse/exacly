@@ -108,7 +108,7 @@ records:
     owner: exacly-maintainers
     lifecycle: proposed
     evidence: []
-    last_reviewed_at: "2026-10-31"
+    last_reviewed_at: "2026-11-01"
     statement: Publish only the independently approved artifact and source identities to an explicitly authorized immutable release version and destination through an approved publisher workflow.
     acceptance_criteria:
       - Publication authority identifies the publisher, destination, immutable version, source revision and exact artifact digests or build identities; merge and verification authority do not grant tag, registry or release-writing capability.
@@ -116,7 +116,7 @@ records:
       - Invoke only the separately configured and approved owning release workflow; automation cannot assume ownership of an existing tag workflow, modify that workflow or approve its producer policy as part of publication.
       - Persist a stable effect intent before publication and refuse replacing an existing tag or version; an exact replay must establish the same remote content, while an uncertain outcome is reconciled before any retry rather than moving a tag or overwriting a release.
       - Retain the actual version, artifact, destination and publisher receipt with their identities; publication alone does not establish deployment, operational health or verification of another revision, and authoritative observations remain independently produced.
-    verification_method: Future release-publication identity, workflow-ownership, immutable-version and uncertain-effect tests.
+    verification_method: Concrete local owning-workflow exact-byte publication, independent artifact-verification provenance, immutable version reservation, actual byte discovery, process-crash and concurrent-write tests, plus fixed delivery-engine and CLI acceptance; selected operational publisher acceptance remains separate from controlled verification.
     observe:
       tests:
         cases:
@@ -124,6 +124,8 @@ records:
           - "python/tests/test_release_publication.py::test_publisher_cannot_rebuild_or_take_ownership_of_a_workflow"
           - "python/tests/test_release_publication.py::test_existing_version_and_uncertain_publication_cannot_be_overwritten"
           - "python/tests/test_release_publication.py::test_publication_is_not_deployment_or_operational_evidence"
+          - "python/tests/test_release_publication.py::*"
+          - "python/tests/test_release_publication_cli.py::*"
 
   - id: REQ-043
     type: Requirement
@@ -171,7 +173,7 @@ records:
     evidence: []
     last_reviewed_at: "2026-11-01"
     responsibility: Invoke only independently approved external delivery workflows for exact permitted identities, retain conditional effects and receipts, and integrate explicitly approved deployment and runtime observation contracts without granting itself policy, verification or broader delivery authority.
-    interfaces: [exacly delivery command, exacly.delivery_engine Python API, Exact GitHub merge adapter, Planned release-publisher adapter, Planned deployment and rollback adapter]
+    interfaces: [exacly delivery command, exacly.delivery_engine Python API, Exact GitHub merge adapter, Local owning-publisher workflow and exact-byte consumer, Planned deployment and rollback adapter]
     implementation_ref: { locator: python/src/exacly/delivery_engine.py }
 
   - id: INFO-013

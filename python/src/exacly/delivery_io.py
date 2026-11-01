@@ -1,4 +1,4 @@
-"""Explicit delivery command inputs and the fixed installed merge-adapter bootstrap.
+"""Explicit delivery command inputs and fixed installed delivery-adapter bootstraps.
 
 This module loads no provider by name from JSON. Configuration and policy are captured lazily so
 local history and exact terminal replay do not require a token, a key or the original config files.
@@ -17,7 +17,9 @@ from typing import TYPE_CHECKING, Any
 from exacly import delivery_automation as contracts
 
 if TYPE_CHECKING:
+    from exacly.delivery_engine import EngineAdapter
     from exacly.github_merge import GitHubMergeAdapter
+    from exacly.release_publication import ReleasePublicationAdapter
 
 Doc = dict[str, Any]
 TOKEN_ENVIRONMENT = "EXACLY_DELIVERY_MERGE_TOKEN"
@@ -60,6 +62,13 @@ def merge_adapter(configuration: Doc, policy: Doc) -> GitHubMergeAdapter:
     from exacly.github_merge import GitHubMergeAdapter
 
     return GitHubMergeAdapter(configuration, policy)
+
+
+def publication_adapter(configuration: Doc, policy: Doc) -> ReleasePublicationAdapter:
+    """Construct only the installed owning publisher; configuration never chooses executable code."""
+    from exacly.release_publication import ReleasePublicationAdapter
+
+    return ReleasePublicationAdapter(configuration, policy)
 
 
 def _pin(args: argparse.Namespace) -> tuple[Doc | None, contracts.ApprovalPin | None]:
@@ -107,10 +116,12 @@ def run(args: argparse.Namespace) -> Doc:
     approval, pin = _pin(args)
     request: Doc | None = None
     payload: Doc | None = None
-    if args.delivery_command == "merge":
+    if args.delivery_command in {"merge", "publish"}:
         request = contracts.validate_request(read_document(args.request))
-        if request["stage"] != "merge":
-            raise ValueError("delivery merge requires an exact merge-stage request")
+        if request["stage"] != args.delivery_command:
+            raise ValueError(
+                f"delivery {args.delivery_command} requires an exact {args.delivery_command}-stage request"
+            )
         payload = read_document(args.payload)
     elif args.delivery_command != "reconcile":
         raise ValueError("unsupported installed delivery command")
@@ -118,8 +129,23 @@ def run(args: argparse.Namespace) -> Doc:
         raise ValueError("reconciliation requires a current, separately pinned read approval")
     from exacly.delivery_engine import DeliveryEngine
 
-    def adapter_factory() -> GitHubMergeAdapter:
-        return merge_adapter(read_document(args.config), read_document(args.policy))
+    def adapter_factory() -> EngineAdapter:
+        # Terminal replay is handled before this factory. Uncertain reconciliation chooses its
+        # installed adapter from the immutable native journal, never from a candidate provider name.
+        stage = args.delivery_command
+        if stage == "reconcile":
+            from exacly import delivery_store
+
+            history = delivery_store.show(args.journal, args.journal_id, operation_key=args.operation_key, **options)
+            operation = history["operation"]
+            if operation is None:
+                raise ValueError("unknown delivery operation")
+            stage = operation["intent"]["request"]["stage"]
+        if stage == "merge":
+            return merge_adapter(read_document(args.config), read_document(args.policy))
+        if stage == "publish":
+            return publication_adapter(read_document(args.config), read_document(args.policy))
+        raise ValueError("retained operation has no supported installed delivery adapter")
 
     engine = DeliveryEngine(args.journal, journal_id=args.journal_id, adapter_factory=adapter_factory, **options)
     if args.delivery_command == "reconcile":
