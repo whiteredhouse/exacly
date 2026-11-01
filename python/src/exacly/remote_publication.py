@@ -8,6 +8,7 @@ An uncertain send is discover-only: even observing the old ref never permits a s
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import math
 import os
@@ -21,7 +22,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from exacly import execution_store as store
-from exacly import handoff, handoff_git, operation_locks, planning
+from exacly import handoff, handoff_git, operation_locks, planning, publication_key
 
 Doc = dict[str, Any]
 VERSION = "0.1.0"
@@ -34,6 +35,10 @@ SCHEMA = {
 }
 MAX_EVENTS = 128
 CLAIMS = {"evidence_admitted": False, "completion_authorized": False, "merge_authorized": False}
+
+
+class PublicationRejected(store.StoreError):
+    """The trusted transport authenticated an explicit atomic server rejection, not a lost reply."""
 
 
 class _Connection(sqlite3.Connection):
@@ -75,6 +80,9 @@ class Request:
     adapter: str
     ref: str
     expected_revision: str | None
+    operation_marker_ref: str | None = None
+    operation_key: Path | None = None
+    operation_key_id: str | None = None
 
 
 def _uuid(value: Any) -> None:
@@ -114,7 +122,7 @@ def _request(request: Request) -> Doc:
         or (isinstance(request.expected_revision, str) and re.fullmatch(r"[0-9a-f]{40}", request.expected_revision)),
         "remote publication requires an exact expected revision or absent ref",
     )
-    return {
+    document = {
         "schema_version": VERSION,
         "journal": str(request.journal),
         "journal_id": request.journal_id,
@@ -126,6 +134,63 @@ def _request(request: Request) -> Doc:
         "ref": request.ref,
         "expected_revision": request.expected_revision,
     }
+    if request.operation_marker_ref is not None:
+        marker = request.operation_marker_ref
+        store.require(
+            isinstance(marker, str)
+            and marker.startswith(("refs/tags/exacly-operations/", "refs/tags/req039-operations/")),
+            "operation markers require an explicitly authorized operation-tag namespace",
+        )
+        handoff_git.reference("refs/heads/" + marker.removeprefix("refs/tags/"))
+        key = request.operation_key
+        store.require(
+            isinstance(key, Path)
+            and key.is_absolute()
+            and ".." not in key.parts
+            and key.parent not in (request.journal.parent, request.handoff_journal.parent),
+            "operation signing key requires its own canonical protected storage directory",
+        )
+        store.require(
+            isinstance(request.operation_key_id, str) and store.DIGEST.fullmatch(request.operation_key_id),
+            "operation signing key requires its exact initialized identity",
+        )
+        document["operation_marker_ref"] = marker
+        document["operation_key"] = str(key)
+        document["operation_key_id"] = request.operation_key_id
+    else:
+        store.require(
+            request.operation_key is None and request.operation_key_id is None,
+            "operation key scope requires an explicit marker effect",
+        )
+    return document
+
+
+def request_document(request: Request) -> Doc:
+    """Return the closed exact request contract, preserving pre-marker historical identities."""
+    return _request(request)
+
+
+def request_from_document(value: Any) -> Request:
+    store.require(isinstance(value, dict), "invalid remote request document")
+    try:
+        request = Request(
+            Path(value["journal"]),
+            value["journal_id"],
+            Path(value["handoff_journal"]),
+            value["handoff_journal_id"],
+            value["handoff_id"],
+            value["repository_id"],
+            value["adapter"],
+            value["ref"],
+            value["expected_revision"],
+            value.get("operation_marker_ref"),
+            Path(value["operation_key"]) if "operation_key" in value else None,
+            value.get("operation_key_id"),
+        )
+        store.require(_request(request) == value, "remote request has unsupported fields or values")
+        return request
+    except (KeyError, TypeError, AttributeError) as error:
+        raise store.StoreError("invalid remote request document") from error
 
 
 def _decoded(value: str) -> Doc:
@@ -234,7 +299,7 @@ def initialize(path: Path, *, lock_timeout: float = store.DEFAULT_LOCK_TIMEOUT) 
     return identity
 
 
-def _load(connection: sqlite3.Connection, identity: str) -> Doc | None:
+def _load(connection: sqlite3.Connection, identity: str, *, deadline: store.Deadline) -> Doc | None:
     store.require(isinstance(identity, str) and store.DIGEST.fullmatch(identity), "invalid remote operation identity")
     row = connection.execute("SELECT document, digest FROM operations WHERE id=?", (identity,)).fetchone()
     if row is None:
@@ -251,25 +316,16 @@ def _load(connection: sqlite3.Connection, identity: str) -> Doc | None:
         "remote operation identity changed",
     )
     request = intent["request"]
-    reconstructed = Request(
-        Path(request["journal"]),
-        request["journal_id"],
-        Path(request["handoff_journal"]),
-        request["handoff_journal_id"],
-        request["handoff_id"],
-        request["repository_id"],
-        request["adapter"],
-        request["ref"],
-        request["expected_revision"],
-    )
+    reconstructed = request_from_document(request)
     store.require(_request(reconstructed) == request, "retained remote request changed")
-    expected = _authorization(request, intent["handoff"])
+    expected = _authorization(request, intent["handoff"], lock_timeout=deadline.remaining())
     store.require(intent["authorization"] == expected, "retained remote authorization changed")
     events = record["events"]
     store.require(isinstance(events, list) and 1 <= len(events) <= MAX_EVENTS, "invalid remote history size")
     previous = planning.digest(intent)
     phase = "prepared"
     sent = False
+    rejected = False
     for index, event in enumerate(events):
         store.require(
             isinstance(event, dict)
@@ -294,10 +350,14 @@ def _load(connection: sqlite3.Connection, identity: str) -> Doc | None:
             observed = _observation(event["data"].get("precondition"), intent)
             store.require(observed["revision"] == request["expected_revision"], "retained send precondition changed")
             sent = True
+        if event["data"].get("server_rejected") is True:
+            store.require(event["phase"] == "conflict" and sent, "retained server rejection lacks a sent operation")
+            rejected = True
         if event["phase"] == "published":
             observed = _observation(event["data"].get("observation"), intent)
             store.require(
                 sent
+                and not rejected
                 and observed["revision"] == expected["commit"]
                 and observed["commit_present"]
                 and observed["operation_id"] == identity,
@@ -331,7 +391,7 @@ def _event(connection: _Connection, record: Doc, phase: str, data: Doc) -> Doc:
     return record
 
 
-def _authorization(request: Doc, receipt: Doc) -> Doc:
+def _authorization(request: Doc, receipt: Doc, *, lock_timeout: float = store.DEFAULT_LOCK_TIMEOUT) -> Doc:
     store.require(
         isinstance(receipt, dict)
         and receipt.get("handoff_id") == request["handoff_id"]
@@ -343,7 +403,7 @@ def _authorization(request: Doc, receipt: Doc) -> Doc:
     )
     store.require(re.fullmatch(r"[0-9a-f]{40}", receipt["commit"]), "invalid retained handoff commit")
     identity = {"schema_version": VERSION, "request": request, "handoff_receipt": receipt["digest"]}
-    return {
+    authorization = {
         "schema_version": VERSION,
         "operation_id": planning.digest(identity),
         "effect": "publish_remote_git_ref",
@@ -354,13 +414,62 @@ def _authorization(request: Doc, receipt: Doc) -> Doc:
         "tree": receipt["tree"],
         "repository": copy.deepcopy(receipt["repository"]),
     }
+    if "operation_marker_ref" in request:
+        marker = request["operation_marker_ref"]
+        payload = {
+            "schema_version": VERSION,
+            "operation_id": authorization["operation_id"],
+            "repository_id": request["repository_id"],
+            "ref": request["ref"],
+            "expected_revision": request["expected_revision"],
+            "commit": receipt["commit"],
+            "base_revision": receipt["base_revision"],
+            "handoff_receipt": receipt["digest"],
+            "key_id": request["operation_key_id"],
+        }
+        key = Path(request["operation_key"])
+        repository = Path(receipt["repository"]["path"])
+        store.require(
+            repository not in key.parents and key.parent != repository.parent,
+            "operation signing key overlaps source Git storage or its lock domain",
+        )
+        payload["proof"] = publication_key.sign(payload, key, request["operation_key_id"], lock_timeout=lock_timeout)
+        content = (
+            f"object {receipt['commit']}\ntype commit\ntag {marker.removeprefix('refs/tags/')}\n"
+            "tagger Exacly publication <publication@exacly.invalid> 0 +0000\n\n" + store.canonical(payload) + "\n"
+        )
+        raw = content.encode()
+        authorization["operation_marker"] = {
+            "effect": "create_operation_tag",
+            "ref": marker,
+            "expected_revision": None,
+            "object": hashlib.sha1(b"tag " + str(len(raw)).encode() + b"\0" + raw).hexdigest(),
+            "content": content,
+        }
+    return authorization
+
+
+def validate_operation(value: Any, *, lock_timeout: float = store.DEFAULT_LOCK_TIMEOUT) -> Doc:
+    """Check the exact retained grant passed to a trusted transport; this establishes no approval."""
+    store.require(
+        isinstance(value, dict) and set(value) == {"id", "request", "handoff", "authorization"},
+        "invalid remote operation",
+    )
+    request = request_document(request_from_document(value["request"]))
+    expected = _authorization(request, value["handoff"], lock_timeout=lock_timeout)
+    store.require(
+        value["id"] == expected["operation_id"] and value["authorization"] == expected,
+        "remote operation differs from its exact handoff and authorization",
+    )
+    return copy.deepcopy(value)
 
 
 def _source(request: Doc, timeout: float) -> Doc:
-    report = handoff.show(Path(request["handoff_journal"]), request["handoff_id"], lock_timeout=timeout)
+    deadline = store.Deadline(timeout)
+    report = handoff.show(Path(request["handoff_journal"]), request["handoff_id"], lock_timeout=deadline.remaining())
     store.require(report["status"] == "published", "remote publication needs a native published handoff")
     receipt: Doc = report["receipt"]
-    _authorization(request, receipt)
+    _authorization(request, receipt, lock_timeout=deadline.remaining())
     return copy.deepcopy(receipt)
 
 
@@ -385,7 +494,7 @@ def preview(request: Request, *, lock_timeout: float = store.DEFAULT_LOCK_TIMEOU
     with _opened(request.journal, request.journal_id, write=False, deadline=deadline):
         pass
     receipt = _source(document, deadline.remaining())
-    authorization = _authorization(document, receipt)
+    authorization = _authorization(document, receipt, lock_timeout=deadline.remaining())
     return {
         "schema_version": VERSION,
         "status": "ready",
@@ -427,6 +536,8 @@ def _discover(connection: _Connection, record: Doc, transport: RemoteTransport, 
     intent = record["intent"]
     if not any(event["phase"] == "sent" for event in record["events"]):
         return _view(record)
+    if any(event["data"].get("server_rejected") is True for event in record["events"]):
+        return _view(record)
     try:
         observed = _observation(transport.inspect(copy.deepcopy(intent), timeout=timeout), intent)
     except Exception:
@@ -464,7 +575,7 @@ def apply(
     )
     deadline = store.Deadline(lock_timeout)
     with _opened(request.journal, request.journal_id, write=False, deadline=deadline) as connection:
-        retained = _load(connection, authorization["operation_id"])
+        retained = _load(connection, authorization["operation_id"], deadline=deadline)
         if retained is not None:
             store.require(
                 retained["intent"]["request"] == document and retained["intent"]["authorization"] == authorization,
@@ -474,7 +585,8 @@ def apply(
                 return _view(retained)
     receipt = _source(document, deadline.remaining())
     store.require(
-        authorization == _authorization(document, receipt), "remote authorization differs from current handoff"
+        authorization == _authorization(document, receipt, lock_timeout=deadline.remaining()),
+        "remote authorization differs from current handoff",
     )
     repository = Path(receipt["repository"]["path"])
     store.require(repository not in request.journal.parents, "remote journal overlaps the handoff repository")
@@ -490,7 +602,7 @@ def apply(
             parent_fd=directories[request.journal.parent],
         ) as connection,
     ):
-        retained = _load(connection, authorization["operation_id"])
+        retained = _load(connection, authorization["operation_id"], deadline=deadline)
         if retained is not None:
             store.require(
                 retained["intent"]["request"] == document and retained["intent"]["authorization"] == authorization,
@@ -522,17 +634,42 @@ def apply(
         _event(connection, record, "sent", {"precondition": observed})
         try:
             transport.publish(copy.deepcopy(intent), repository, timeout=timeout)
+        except PublicationRejected:
+            return _view(
+                _event(
+                    connection,
+                    record,
+                    "conflict",
+                    {
+                        "reason": "The remote server explicitly rejected the atomic operation; retain the conflict.",
+                        "server_rejected": True,
+                    },
+                )
+            )
         except Exception:
             return _view(_event(connection, record, "ambiguous", {"reason": "Remote send outcome requires discovery."}))
         return _discover(connection, record, transport, timeout)
 
 
+def lookup(
+    journal: Path, journal_id: str, identity: str, *, lock_timeout: float = store.DEFAULT_LOCK_TIMEOUT
+) -> Doc | None:
+    """Read an exact initialized journal; only a validated missing operation returns None.
+
+    Missing/replaced storage, invalid identities, unsupported schemas and unavailable durability
+    barriers remain errors. Callers must not interpret them as permission for a new effect.
+    """
+    deadline = store.Deadline(lock_timeout)
+    with _opened(journal, journal_id, write=False, deadline=deadline) as connection:
+        record = _load(connection, identity, deadline=deadline)
+        return _view(record) if record is not None else None
+
+
 def show(journal: Path, journal_id: str, identity: str, *, lock_timeout: float = store.DEFAULT_LOCK_TIMEOUT) -> Doc:
-    with _opened(journal, journal_id, write=False, deadline=store.Deadline(lock_timeout)) as connection:
-        record = _load(connection, identity)
-        store.require(record is not None, "remote operation is not retained")
-        assert record is not None
-        return _view(record)
+    retained = lookup(journal, journal_id, identity, lock_timeout=lock_timeout)
+    store.require(retained is not None, "remote operation is not retained")
+    assert retained is not None
+    return retained
 
 
 def recover(
@@ -546,8 +683,9 @@ def recover(
 ) -> Doc:
     """Discover an uncertain exact effect. No recovery path sends or retries publication."""
     timeout = _timeout(timeout)
-    with _opened(journal, journal_id, write=True, deadline=store.Deadline(lock_timeout)) as connection:
-        record = _load(connection, identity)
+    deadline = store.Deadline(lock_timeout)
+    with _opened(journal, journal_id, write=True, deadline=deadline) as connection:
+        record = _load(connection, identity, deadline=deadline)
         store.require(record is not None, "remote operation is not retained")
         assert record is not None
         store.require(transport.adapter == record["intent"]["request"]["adapter"], "trusted remote adapter changed")
