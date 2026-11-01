@@ -49,6 +49,7 @@ CAPABILITIES = {
     *ADAPTERS.values(),
 }
 READERS = {
+    "remote-precondition": "native-remote-precondition-v1",
     "budget-exhaustion": "req039-budget-exhaustion-v1",
     "negative-admission": "native-negative-admission-v1",
     "authority-preflight": "req039-authority-preflight-v1",
@@ -143,21 +144,32 @@ def _uuid(value: Any) -> str:
     return str(value)
 
 
-def _absolute(value: Any) -> Path:
+def _lexical_absolute(value: Any) -> Path:
+    """Check only the retained POSIX locator spelling, without consulting this host."""
     _text(value)
-    path = Path(value)
+    path = PurePosixPath(value)
     store.require(
-        path.is_absolute() and str(path) == value and ".." not in path.parts and path.resolve() == path,
-        "standing storage requires canonical absolute paths without symbolic links",
+        path.is_absolute()
+        and path.root == "/"
+        and path.as_posix() == value
+        and path.name not in ("", ".", "..")
+        and ".." not in path.parts,
+        "standing storage requires normalized absolute file paths",
     )
+    return Path(value)
+
+
+def _absolute(value: Any) -> Path:
+    path = _lexical_absolute(value)
+    store.require(path.resolve() == path, "standing storage requires canonical absolute paths without symbolic links")
     store.location(path)
     return path
 
 
-def _store(value: Any, *, accounting_store: bool = False) -> Doc:
+def _store(value: Any, *, accounting_store: bool = False, path_validator: Callable[[Any], Path] = _absolute) -> Doc:
     key = "store_id" if accounting_store else "id"
     result = _object(value, {"path", key})
-    _absolute(result["path"])
+    path_validator(result["path"])
     if accounting_store or not (isinstance(result[key], str) and store.DIGEST.fullmatch(result[key])):
         _uuid(result[key])
     return result
@@ -257,7 +269,7 @@ def _capabilities(value: Any) -> list[str]:
     return list(value)
 
 
-def validate_delegation(value: Any) -> Doc:
+def _validated_delegation(value: Any, *, path_validator: Callable[[Any], Path]) -> Doc:
     """Validate a closed candidate contract without approving it or selecting an authorizer."""
     result = _object(
         value,
@@ -289,9 +301,9 @@ def validate_delegation(value: Any) -> Doc:
     _digest(result["native_configuration_digest"])
     for key in ("id", "issuer", "approval_id"):
         _text(result[key])
-    _absolute(result["config_path"])
-    _store(result["accounting"], accounting_store=True)
-    _store(result["revocations"], accounting_store=True)
+    path_validator(result["config_path"])
+    _store(result["accounting"], accounting_store=True, path_validator=path_validator)
+    _store(result["revocations"], accounting_store=True, path_validator=path_validator)
     store.require(
         result["accounting"]["path"] != result["revocations"]["path"], "accounting and revocation stores overlap"
     )
@@ -359,7 +371,7 @@ def validate_delegation(value: Any) -> Doc:
         store.require(
             "intent-before-effects-v1" in capabilities, "standing adapter requires native intent-before-effects"
         )
-        _store(scope["native_store"])
+        _store(scope["native_store"], path_validator=path_validator)
         costs = _units(scope["max_cost"])
         store.require(
             costs["attempts"] >= 1 and costs["wall_time_ms"] >= 1, "standing effects require bounded attempts and time"
@@ -386,7 +398,22 @@ def validate_delegation(value: Any) -> Doc:
     return result
 
 
-def validate_facts(value: Any) -> Doc:
+def validate_delegation(value: Any) -> Doc:
+    """Validate a closed candidate against current physical storage; this alone approves nothing."""
+    return _validated_delegation(value, path_validator=_absolute)
+
+
+def parse_retained_delegation(value: Any) -> Doc:
+    """Parse historical delegation data without reading its former host's paths or keys.
+
+    This validates closed content and lexical POSIX locators only. It establishes no approval,
+    current precondition, initialized store, ownership, symlink safety or effect authority. Runtime
+    authorization always uses validate_delegation and independently protected operator inputs.
+    """
+    return _validated_delegation(value, path_validator=_lexical_absolute)
+
+
+def _validated_facts(value: Any, *, path_validator: Callable[[Any], Path]) -> Doc:
     """Closed facts supplied by a reviewed native adapter, never accepted from a candidate report."""
     result = _object(
         value,
@@ -422,7 +449,7 @@ def validate_facts(value: Any) -> Doc:
     if result["destination"] is not None:
         _destination(result["destination"])
     native = _object(result["native"], {"store", "operation_id"})
-    _store(native["store"])
+    _store(native["store"], path_validator=path_validator)
     _digest(native["operation_id"])
     _capabilities(result["capabilities"])
     costs = _units(result["cost"])
@@ -433,6 +460,20 @@ def validate_facts(value: Any) -> Doc:
     _digest(preconditions.get("native_configuration_digest"))
     store.require(bool(_object(result["authorization"])), "native effect requires an exact nonempty authorization")
     return result
+
+
+def validate_facts(value: Any) -> Doc:
+    """Validate native adapter facts against current physical storage without approving them."""
+    return _validated_facts(value, path_validator=_absolute)
+
+
+def parse_retained_facts(value: Any) -> Doc:
+    """Parse historical native facts with lexical path checks and no filesystem access.
+
+    A parsed claim is neither fresh observation nor authorization. Ownership, symlinks, active
+    bindings and current native preconditions remain unverified; Authorizer uses validate_facts.
+    """
+    return _validated_facts(value, path_validator=_lexical_absolute)
 
 
 def _outcome(value: Any, facts: Doc) -> Doc:

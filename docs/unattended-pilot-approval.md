@@ -51,7 +51,15 @@ Mint with `repository_ids: [1411700094]` and these permissions:
 - `issues: write` for native dispatch task creation and reconciliation.
 
 No workflows-write, actions-write, administration, secrets, deployments, releases
-or pull-request merge permission is required. Do not grant them for this pilot.
+or pull-request merge permission is required. Do not grant them for this pilot. The external mint request is:
+
+```json
+{"repository_ids":[1411700094],"permissions":{"contents":"write","actions":"read","issues":"write"}}
+```
+
+The independent approver must verify the actual mint response/installation settings;
+the packet explicitly does not server-attest issuer or permission metadata, and
+its human approval body affirms the real permission configuration.
 A general PAT is unsupported: the adapter requires the same publishing token's
 authenticated `/installation/repositories` response to contain exactly the one
 numeric repository identity. The source push uses atomic Git receive-pack
@@ -79,7 +87,8 @@ receive neither credential.
 Permitted remote destinations are the exact existing
 `refs/heads/pilot/req039-consumer` and the individually allocated
 `refs/tags/req039-operations/...` marker bound in each native grant. Markers are
-nonversioned operation receipts; they confer no release authority. No force
+nonversioned operation receipts; they confer no release authority. The separately allocated `refs/tags/req039-operations/<nonce>-precondition` name is used only
+by the read-only expected-ref precondition probe and is never created. No force
 overwrite, ref deletion, main update, repository-rule change or arbitrary tag is
 authorized. Initial branch creation/base-object import occurs in trusted setup
 with its own explicit review; runtime publication cannot silently import a base
@@ -95,10 +104,15 @@ persisted credentials. The fixed initial branch intentionally has no result file
 so its producer provides authentic failed-CI evidence before the worker repairs
 the fixture result. Never commit a manufactured successful result as setup.
 
+The job has a 45-minute envelope for bounded host setup, the service and artifact retention.
 The transient service has one CPU, 1 GiB memory, no swap, 128 tasks and an
 absolute 1,800 second lifetime. Approval waits at most 900 seconds. Native calls
 and producer polls have finite bounds; objective-wide accounting is authoritative
-and retains uncertain reservations. The packet states the exact conservative
+and retains uncertain reservations. The proposed accounting wall capacity is
+160 conservative 45-second reservation units (7,200,000 ms); these are capacity
+units, not a hard count of API requests. The 1,800-second physical unit limit
+remains independent. The exact producer-read cap is 20 retained paid calls,
+including uncertain calls across restart. The packet states the exact conservative
 call/time reservations, deadline and physical cgroup identity. There is global
 coordinator serialization with no cancellation of the current run.
 
@@ -122,7 +136,10 @@ artifact named `exacly-req039-approval-<run_id>-<run_attempt>`, with overwrite
 disabled and 90-day retention. The service independently downloads and checks
 server digest, bytes, exact run/attempt/job and successful upload step before
 releasing any authority. A new runner cannot resume this original approved goal
-by reconstructing journals. Prior approved-goal fences, expired/deleted/unknown
+by reconstructing journals. A narrowly authenticated earlier job that never executed the launch step can
+be classified as never launched only when its immutable workflow bytes and
+server step history prove it. Failed or uncertain launch still requires the
+actual stopped-unit no-authority proof. Prior approved-goal fences, expired/deleted/unknown
 history or ambiguous cleanup block a new coordination domain. A prior run can
 be classified as never authorized only from its skipped fence step and authentic
 immutable terminal no-authority receipt. Trusted operators deleting repository
@@ -135,7 +152,16 @@ on the same runner. The controller persists intent before effects and reconciles
 native operations before retrying. Its independent deadline supervisor cleans up
 descendants even after controller death. The pilot declares a controller crash
 after native dispatch settlement and loss of the first successful real publication
-response, exercising exact discovery without duplicate effects. Recovery preserves
+response, exercising exact discovery without duplicate effects. Declared fresh
+admission probes cover unavailable producer, wrong revision/attempt and changed
+expected criteria/verifier. A read-only native remote-precondition probe compares
+the genuine previous base with the actual published ref and retains a conflict;
+it performs no remote writes and makes no actor-induced CAS-race claim. After
+completion and exact replay, local bounded state reads drain the remaining original
+wall reservation capacity before a fresh read is denied. A genuinely expired
+preapproved test policy version shares the same original goal/account/limits;
+finally the main delegation is revoked and a fresh effect is denied. There are
+no replacement verification goals, accounting stores, fake clocks or budget refunds. Recovery preserves
 all goal budgets and native identities.
 
 Runner loss ends the supported recovery domain. Do not restore journals, create
@@ -159,3 +185,25 @@ Cancellation prevents new effects and retains uncertain ones for separately
 approved reconciliation. At deadline or any stale policy, unavailable runtime,
 failed producer, budget exhaustion or conflicting remote state, retain the
 actionable escalation and receipts. No live completion is claimed by this document.
+
+
+After a successful actual pilot, retain its non-authoritative evidence selection
+in `verification-references/req039.json` (repository/run/attempt/artifact IDs, no
+credentials). This selector is outside the executed-code closure: it selects
+which proof to authenticate and cannot approve an origin, policy or result.
+The existing read-only CI job token permits fresh verification of that retained
+proof. The live tests independently check actual server artifact bytes/digest,
+code/requirement semantics, original approval and fresh native producer admission.
+Absence is inconclusive; a configured invalid or incomplete proof fails.
+Requirement semantic pins exclude lifecycle/evidence/review-date fields, allowing
+an evidence-based lifecycle activation without invalidating its own proof.
+
+The authenticated live-proof test contract is selected explicitly by
+`EXACLY_REQ039_VERIFY_RETAINED_PROOF=1` in the Spec check/state jobs, or by direct
+live run/artifact environment IDs. The selector file alone does not activate
+this read capability in other producers. The unchanged main-only evidence
+workflow does not configure this contract: its live cases are explicitly skipped
+and cannot establish REQ-037/039. Spec's authenticated model/check jobs consume
+the retained reference and gate the actual observations. Before a reference exists
+verification is inconclusive; a selected malformed/incomplete proof or missing
+read credential fails. There is no silent skip of a configured proof.

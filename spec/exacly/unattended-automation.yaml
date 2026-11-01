@@ -53,7 +53,7 @@ records:
     verification_method: Objective accounting, protected delegation scope, revocation, native grant identity, metered reads, cross-policy exclusion and native whole-workflow wiring have acceptance coverage; live deployment evidence is separate.
     observe:
       tests:
-        cases: ["python/tests/test_standing_authorization.py::*", "python/tests/test_standing_authorization_faults.py::*", "python/tests/test_standing_authorization_scope.py::*", "python/tests/test_standing_authorization_scope_faults.py::*", "python/tests/test_unattended_completion.py::*"]
+        cases: ["python/tests/test_standing_authorization.py::*", "python/tests/test_standing_authorization_faults.py::*", "python/tests/test_standing_authorization_scope.py::*", "python/tests/test_standing_authorization_scope_faults.py::*", "python/tests/test_retained_authorization.py::*", "python/tests/test_unattended_completion.py::*"]
 
   - id: REQ-036
     type: Requirement
@@ -103,7 +103,7 @@ records:
     verification_method: Native journal, real local receive-pack, exact producer selection and HMAC marker tests cover the concrete adapter; opt-in live transport acceptance remains required and skipped live tests are inconclusive.
     observe:
       tests:
-        cases: ["python/tests/test_remote_publication.py::*", "python/tests/test_remote_publication_faults.py::*", "python/tests/test_git_remote_transport.py::*", "python/tests/test_producer_selection.py::*", "python/tests/test_publication_key.py::*", "python/tests/test_remote_publication_live.py::*"]
+        cases: ["python/tests/test_remote_publication.py::*", "python/tests/test_remote_publication_faults.py::*", "python/tests/test_git_remote_transport.py::*", "python/tests/test_producer_selection.py::*", "python/tests/test_publication_key.py::*", "python/tests/test_unattended_live_end_to_end.py::test_live_isolated_output_reaches_fresh_native_completion"]
 
   - id: REQ-038
     type: Requirement
@@ -152,7 +152,7 @@ records:
     verification_method: The fixed nonproduction fixture verifier and separate supported push producer have contract tests; opt-in live end-to-end, interruption and negative-path evidence remains required.
     observe:
       tests:
-        cases: ["tests/test_req039_pilot_contract.py::*", "python/tests/test_unattended_live_end_to_end.py::*", "python/tests/test_unattended_live_recovery.py::*"]
+        cases: ["tests/test_req039_coordinator_workflow.py::*", "tests/test_req039_pilot_runner.py::*", "python/tests/test_live_pilot_evidence.py::*", "tests/test_req039_pilot_contract.py::*", "python/tests/test_unattended_live_end_to_end.py::*", "python/tests/test_unattended_live_recovery.py::*"]
 
   - id: APP-020
     type: Application
@@ -213,6 +213,42 @@ records:
     responsibility: Verify actual bounded fixture bytes under a protected observer and package honest producer evidence without granting worker completion authority.
     interfaces: [Fixed pytest fixture observer, Dedicated pilot push producer]
     implementation_ref: { locator: verification/req039_inventory_test.py }
+
+  - id: APP-027
+    type: Application
+    name: Bounded same-runner pilot coordinator
+    description: Dedicated protected GitHub Actions coordinator and authentic retained live acceptance checker; live approval and evidence remain required.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-11-01"
+    responsibility: Prepare exact reviewable pilot configuration, enforce independent approval and immutable consumed-goal fencing, coordinate one bounded runner and retain authenticated native evidence.
+    interfaces: [ci.req039_pilot bounded coordinator CLI, exacly.live_pilot_evidence acceptance API]
+    implementation_ref: { locator: ci/req039_pilot.py }
+
+  - id: INFO-015
+    type: Information
+    name: Retained pilot approval and native acceptance chain
+    description: Public review and immutable approval metadata plus sanitized native evidence; no credential or publication-key export.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-11-01"
+    definition: Exact approved run, host, policy, delegation, component and code identities joined to authenticated Actions artifact origins, native journals, fresh producer admission, completion and declared failure/recovery evidence.
+    identifiers: [Original goal, Packet digest, Approval comment node, Run and attempt, Job ID, Artifact ID and server digest, Native receipt identity]
+    steward: exacly-maintainers
+
+  - id: INF-009
+    type: Infrastructure
+    name: Bounded GitHub Actions pilot host and immutable artifacts
+    description: One dedicated ubuntu-24.04 runner and externally uploaded immutable public artifacts; runner-loss recovery is unsupported.
+    owner: exacly-maintainers
+    lifecycle: proposed
+    evidence: []
+    last_reviewed_at: "2026-11-01"
+    kind: Dedicated disposable coordination job and v4 Actions artifacts
+    purpose: Enforce finite service CPU, memory, process and wall limits, retain protected journals during same-runner process recovery and fence approved goals against replacement-runner resets.
+    operational_ref: { locator: .github/workflows/req039-coordinator.yml }
 
   - id: INFO-011
     type: Information
@@ -294,3 +330,11 @@ relationships:
   - { source: INF-008, type: stores, target: INFO-012, role: system_of_record, conditions: Independently approved delegation and its bounded exact-effect decisions remain outside candidate storage. }
 
   - { source: APP-026, type: implements, target: REQ-039 }
+
+  - { source: APP-027, type: implements, target: REQ-039 }
+  - { source: APP-027, type: reads, target: INFO-011 }
+  - { source: APP-027, type: reads, target: INFO-012 }
+  - { source: APP-027, type: writes, target: INFO-015 }
+  - { source: APP-027, type: depends_on, target: INF-008 }
+  - { source: APP-027, type: depends_on, target: INF-009 }
+  - { source: INF-009, type: stores, target: INFO-015, role: system_of_record }

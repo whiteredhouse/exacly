@@ -10,6 +10,11 @@ on:
       - "mise.toml"
       - "tests/**"
       - "ci/**"
+      - "verification/**"
+      - "verification-references/**"
+      - "fixtures/unattended-pilot/**"
+      - ".github/workflows/req039-evidence.yml"
+      - ".github/workflows/req039-coordinator.yml"
       - ".github/workflows/spec.yml"
       - ".github/workflows/release.yml"
       - ".github/workflows/verification-evidence.yml"
@@ -24,6 +29,11 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      issues: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install the Linux isolation test runtime
@@ -32,6 +42,9 @@ jobs:
         run: /usr/bin/python3 ci/check_isolation_runtime.py
       - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
       - name: Test, lint, type-check, validate the examples, and refresh and validate Exacly's own state
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          EXACLY_REQ039_VERIFY_RETAINED_PROOF: "1"
         run: mise run check
 
   plan:
@@ -85,6 +98,9 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      actions: read
+      issues: read
+      pull-requests: read
     concurrency:
       group: exacly-state
       cancel-in-progress: false
@@ -99,6 +115,9 @@ jobs:
         run: /usr/bin/python3 ci/check_isolation_runtime.py
       - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
       - name: Refresh Exacly's own state
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          EXACLY_REQ039_VERIFY_RETAINED_PROOF: "1"
         run: mise run model
       - name: Commit the state to main
         run: |
