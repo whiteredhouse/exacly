@@ -148,11 +148,44 @@ also be checked from current PR metadata and checks. Never infer permission to b
 6. Add the remaining fault and live acceptance coverage, independently approve the exact pilot configuration, and run the real nonproduction end-to-end and negative/recovery cases with retained evidence before activating complete contracts.
 7. For each next PR, update model/bindings accurately, validate/impact/test, obtain independent technical review, require exact-head CI and GitHub reviews, merge without bypass, then verify actual CI publication and update this checkpoint.
 
-The unattended verification target is incomplete. No requirement activation, live acceptance,
-unattended completion, release or deployment is claimed by this checkpoint.
+The unattended verification target is incomplete. REQ-036 has delivered acceptance coverage and is active; REQ-034–035 and REQ-037–039 remain proposed. No live acceptance, unattended live completion, release or deployment is claimed.
 
 Resource PR #94 first full CI head `b25941c0a9ec545868c899117b83f559868eaee3` executed all five real
 resource/lifecycle cases successfully; total 3,584 tests passed and one development-subset contract
 test failed because its explicit backend-module list had not added the two new mandatory runtime
 modules. The expected list is corrected without excluding anything from full verification. Fresh
 exact-head CI is required before merging; the failed run is not a successful model publication.
+
+
+## Standing scope implementation checkpoint (2026-11-01)
+
+Resource PR [#94](https://github.com/whiteredhouse/exacly/pull/94) merged as
+`b2e429c195d4e73ef8f30e79e72f373b03919d54`. Final head
+`faa60a32341fa78e19f84ac25ea030e8b3e658a5` passed the full supported Ubuntu
+CI suite: 3,585 tests, including all real resource/lifecycle cases, plus lint,
+types, model refresh/validation and verification gate. The earlier failed head is superseded.
+Main observed-state publication remains to be checked against current main; merged code is not publication.
+
+The standing authorizer now evaluates a protected operator-selected independent delegation,
+current exact native facts and independently approved native component configuration.
+Every effect and bounded read reserves from the original goal's single accounting store;
+uncertainty retains reservations. A goal-wide fence spans policy files and all write adapters.
+Expiry/revocation deny new effects; separately approved recovery and exact cancellation remain metered.
+The native configuration digest is mandatory, preventing provider self-reports from approving
+a different installed implementation. See `docs/standing-authorization.md`. Independent technical
+review cleared the final implementation and an unchanged cross-policy adversarial repro
+(177 repository tests plus that repro passed). Exact PR-head supported CI is still required.
+REQ-035, APP-021 and INFO-012 remain proposed pending complete native controller acceptance;
+the full completion selector remains present so accounting and scope tests alone cannot establish it.
+
+The user selected `branch_protection: not_required` only for the dedicated
+`pilot/req039-consumer` admission policy. Defaults and repository rules stay unchanged.
+All other admission checks, fixed observer pins, fixture restrictions and bounded delegation
+remain mandatory. Receipts must report that branch protection was not verified.
+The finalized policy/delegation still require independent approval before any live effects.
+Missing publishing credentials block the live run only.
+
+Next: merge the independently reviewed concrete remote transport, fixed pilot producer,
+whole-workflow controller and bounded coordinator in focused PRs, then finalize the exact
+run-specific approval packet and verify the declared live recovery/negative cases.
+Preserve every existing private journal; never recreate the original approved goal on another runner.

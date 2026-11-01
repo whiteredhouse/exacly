@@ -36,7 +36,7 @@ records:
     owner: exacly-maintainers
     lifecycle: proposed
     evidence: []
-    last_reviewed_at: "2026-10-31"
+    last_reviewed_at: "2026-11-01"
     statement: >-
       Let a trusted authorizer evaluate current effect proposals against a protected independently approved
       standing policy and retain exact one-shot decisions within its declared scope, lifetime and total budgets.
@@ -50,10 +50,10 @@ records:
       - Recheck expiry and revocation before new effects or retries. Revocation prevents new grants and requests cancellation where supported; it does not claim to recall an already sent remote request, erase history or invent permission for a new effect under the name of recovery.
       - Changes to acceptance criteria, observation bindings, trusted verifier or observer code, producer policy or the delegation itself require independent review and a new approved contract. A permitted product-source path does not authorize weakening the checks deciding success, including Exacly's own pinned observer source.
       - Merge, release, deployment, destruction and unsupported runtime capabilities require separate explicit contracts; the first verification delegation does not inherit them. Unknown decisions and unavailable authorizer or budget storage stop new effects with an inspectable escalation.
-    verification_method: Objective-accounting and fault tests cover the local accounting foundation; delegation-scope, protected-path, revocation and native exact-authorization compatibility acceptance remain future work.
+    verification_method: Objective accounting, delegation scope, revocation, native grant identity, metered reads and cross-policy exclusion have acceptance coverage; complete native controller wiring remains required.
     observe:
       tests:
-        cases: ["python/tests/test_standing_authorization.py::*", "python/tests/test_standing_authorization_faults.py::*", "python/tests/test_standing_authorization_scope.py::*"]
+        cases: ["python/tests/test_standing_authorization.py::*", "python/tests/test_standing_authorization_faults.py::*", "python/tests/test_standing_authorization_scope.py::*", "python/tests/test_standing_authorization_scope_faults.py::*", "python/tests/test_unattended_completion.py::*"]
 
   - id: REQ-036
     type: Requirement
@@ -169,14 +169,14 @@ records:
   - id: APP-021
     type: Application
     name: Standing effect authorizer
-    description: Local objective-accounting foundation for a planned trusted evaluator of independently approved delegation and exact current effect proposals.
+    description: Protected independently selected delegation evaluator with exact native grants, objective-wide accounting, metered reads and cross-policy write exclusion; complete workflow integration remains proposed.
     owner: exacly-maintainers
     lifecycle: proposed
     evidence: []
-    last_reviewed_at: "2026-10-31"
+    last_reviewed_at: "2026-11-01"
     responsibility: Issue and retain exact one-shot decisions within protected scope and objective-wide budgets without granting authority to candidate templates or approving policy drift.
-    interfaces: [Objective accounting through exacly.standing_authorization, Planned trusted standing-authority integration, Planned exacly.automation_authorization Python API]
-    implementation_ref: { locator: python/src/exacly/automation_authorization.py, planned: true }
+    interfaces: [exacly.standing_authorization objective accounting, exacly.automation_authorization scoped effect and read APIs, exacly.automation_revocations protected revocation API]
+    implementation_ref: { locator: python/src/exacly/automation_authorization.py }
 
   - id: APP-022
     type: Application
@@ -217,11 +217,11 @@ records:
   - id: INFO-012
     type: Information
     name: Standing delegation and exact authorization decisions
-    description: Protected local objective accounting and retained trusted decisions; independent delegation evaluation and native effect grants remain planned.
+    description: Protected objective accounting and retained independently selected scope decisions, exact native grants, metered reads and revocation facts.
     owner: exacly-maintainers
     lifecycle: proposed
     evidence: []
-    last_reviewed_at: "2026-10-31"
+    last_reviewed_at: "2026-11-01"
     definition: Independently approved versioned delegation, issuer and revocation facts, eligible objective and effect scope, finite budget reservations and consumption, and exact current proposal decisions with native one-shot authorization identities; hashes identify content and do not establish approval authority.
     identifiers: [delegation ID and version, approval identity, objective ID, effect proposal digest, authorization digest, revocation identity]
     steward: exacly-maintainers
