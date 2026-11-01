@@ -99,7 +99,7 @@ records:
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-30"
+    last_reviewed_at: "2026-11-01"
     statement: >-
       Before running candidate-controlled code, enforce an execution boundary that denies access to
       the operator's ledger, authoritative state and policy originals, privileged credentials and
@@ -118,7 +118,7 @@ records:
       - Real integration tests for each supported backend attempt forbidden reads, writes, inherited-descriptor access, host process access, cross-boundary performance monitoring, kernel credential access and host network or socket access from candidate processes and descendants; they also verify immutable permitted inputs, safe output exchange, failed setup and descendant cleanup without substituting mocked or skipped runtime checks.
       - Each supported backend declares its required protections, trusted components and exclusions in a reviewed contract. The current local linux-bubblewrap-v1 backend must satisfy docs/candidate-isolation.md#linux-bubblewrap-v1-backend-contract in full; another backend needs its own reviewed contract and real verification before support can be claimed.
       - Trusted local completion of existing work does not require launching candidate code; this isolation requirement becomes mandatory before an executor runs candidate-controlled code, while durable dispatch and executor attempt supervision retain their own requirements.
-    verification_method: Real integration tests of the currently supported local Linux Bubblewrap backend for namespace and kernel-interface denials, descendants, input immutability, safe artifacts, failed setup and termination, plus policy, snapshot, publication and CLI contract tests; these establish no support for another backend.
+    verification_method: Real integration tests of the currently supported local Linux Bubblewrap backend for namespace and kernel-interface denials, descendants, input immutability, safe artifacts, failed setup and termination, plus policy, snapshot, publication, CLI and bounded fail-closed administrator setup tests; these establish no support for another backend.
     observe:
       tests:
         cases:
@@ -126,6 +126,8 @@ records:
           - "python/tests/test_isolation_contract.py::*"
           - "python/tests/test_isolation_cli.py::*"
           - "python/tests/test_isolation_syscalls.py::*"
+          - "tests/test_evidence_workflow.py::test_ci_namespace_permission_is_scoped_to_system_bubblewrap_and_preserves_global_restrictions"
+          - "tests/test_evidence_workflow.py::test_runtime_setup_propagates_admin_package_and_timeout_failures*"
 
   - id: REQ-026
     type: Requirement
@@ -392,11 +394,11 @@ records:
   - id: INF-004
     type: Infrastructure
     name: Local Bubblewrap execution runtime
-    description: The optional local linux-bubblewrap-v1 backend with a detached reviewed root filesystem, private staging and output storage.
+    description: The optional local linux-bubblewrap-v1 backend with a detached reviewed root filesystem, private storage and bounded fail-closed disposable CI host setup.
     owner: exacly-maintainers
     lifecycle: active
     evidence: []
-    last_reviewed_at: "2026-10-29"
+    last_reviewed_at: "2026-11-01"
     kind: Linux namespace execution boundary and private run storage
     purpose: When the local Bubblewrap backend is explicitly selected, run candidate-controlled code with immutable inputs, no host network or operator interfaces and a verified boundary, then retain safely collected untrusted results.
     operational_ref: { locator: docs/candidate-isolation.md }

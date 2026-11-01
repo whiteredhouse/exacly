@@ -8,8 +8,14 @@ isolation_enforcement=$(cat /sys/module/apparmor/parameters/enabled)
 test "$isolation_restriction" = 1
 test "$isolation_enforcement" = Y
 
-sudo apt-get update
-sudo apt-get install --yes apparmor bubblewrap libseccomp2
+# Package mirrors and dpkg locks must not occupy a disposable runner indefinitely.
+# Timeout/noninteractive failures stop setup; the exact runtime is still checked below.
+sudo -n env DEBIAN_FRONTEND=noninteractive timeout --signal=TERM --kill-after=15s 300s \
+  apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 \
+  -o DPkg::Lock::Timeout=30 update
+sudo -n env DEBIAN_FRONTEND=noninteractive timeout --signal=TERM --kill-after=15s 300s \
+  apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 \
+  -o DPkg::Lock::Timeout=30 install --yes apparmor bubblewrap libseccomp2
 
 # A future vendor profile needs review rather than a second attachment for the same binary.
 for isolation_vendor_profile in /etc/apparmor.d/bwrap /etc/apparmor.d/usr.bin.bwrap /etc/apparmor.d/bubblewrap; do
@@ -19,8 +25,8 @@ for isolation_vendor_profile in /etc/apparmor.d/bwrap /etc/apparmor.d/usr.bin.bw
   fi
 done
 
-sudo install -m 0644 "$isolation_setup_dir/apparmor/exacly-bwrap" /etc/apparmor.d/exacly-bwrap
-sudo apparmor_parser --replace /etc/apparmor.d/exacly-bwrap
+sudo -n timeout --signal=TERM --kill-after=15s 60s install -m 0644 "$isolation_setup_dir/apparmor/exacly-bwrap" /etc/apparmor.d/exacly-bwrap
+sudo -n timeout --signal=TERM --kill-after=15s 60s apparmor_parser --replace /etc/apparmor.d/exacly-bwrap
 
 # Neither the global restriction nor AppArmor enforcement may be relaxed by this setup.
 test "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)" = "$isolation_restriction"
