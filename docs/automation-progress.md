@@ -156,3 +156,27 @@ resource/lifecycle cases successfully; total 3,584 tests passed and one developm
 test failed because its explicit backend-module list had not added the two new mandatory runtime
 modules. The expected list is corrected without excluding anything from full verification. Fresh
 exact-head CI is required before merging; the failed run is not a successful model publication.
+
+
+## Bounded installer recovery checkpoint (2026-11-01)
+
+Open implementation PRs #95–98 have cleared independent source review but their
+full checks are stalled in the existing isolation-runtime installation step.
+The older main Spec run 41253365811 (association merge 748487f5d9c1d4078091cfa6384763acf2df742a)
+has state job124693321007 stuck in that same step since00:20UTC. Later main
+state jobs remain queued; committed state is still serial66/config5ba9e66.
+No current publication or successful open-PR full check is claimed.
+
+The installer now uses noninteractive sudo, explicit GNU timeout TERM/KILL bounds,
+finite mirror retries/HTTP timeouts and bounded package-lock waits. Exact packages,
+vendor-profile refusal, scoped AppArmor policy load and before/after enforcement
+checks remain mandatory. Timeout or package/profile failure fails setup and the job;
+a partly installed disposable host is not salvaged as a supported runtime.
+The existing main-only verification-evidence.yml bytes are unchanged.
+
+After exact-head CI passes and this focused fix merges, refresh #95–98 onto it
+without changing their independently reviewed implementation bytes, require fresh
+exact-head CI/reviews, and merge prerequisites in order. The bounded coordinator
+and retained-proof checker are staged separately and still need final integrated
+review/CI. Actual live execution additionally requires the independently approved
+run-specific packet and a real scoped App publishing credential.
