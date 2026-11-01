@@ -49,6 +49,9 @@ CAPABILITIES = {
     *ADAPTERS.values(),
 }
 READERS = {
+    "budget-exhaustion": "req039-budget-exhaustion-v1",
+    "negative-admission": "native-negative-admission-v1",
+    "authority-preflight": "req039-authority-preflight-v1",
     "producer-observe": "native-producer-observer-v1",
     "baseline-admission": "native-baseline-admission-v1",
 }

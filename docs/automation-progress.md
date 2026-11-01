@@ -268,3 +268,39 @@ in the coordinator packet and independently approved before authority.
 REQ-039 and APP-026 remain proposed. Missing credentials affect live execution only.
 
 This fixed-producer head inherits bounded runtime setup #99 through the refreshed prerequisite stack. Producer and verifier implementation bytes are unchanged; fresh exact-head CI remains required.
+
+
+## Native controller checkpoint (2026-11-01)
+
+The implemented durable controller correlates planning, native dispatch, isolated execution,
+handoff, exact remote publication, producer selection, explicit binding association and
+fresh native completion/reobservation. The first closed profile supports one required
+producer on one local coordination domain; unsupported composition, mappings and distributed
+ownership fields fail before effects. It never treats candidate output or a phase as completion.
+
+Native adapters preserve actual repository identities, active state/bindings and component
+configuration pins. Empty-ledger setup uses an explicit protected native-format ledger anchor,
+not a fabricated native UUID or hand-edited pending work. Controller intent and supervisor
+identity are durable before release. An independent Linux subreaper watchdog gates effects,
+survives controller death and bounds/reaps descendant processes; cleanup proof is required
+before a missing native entry can establish absence. Exact cancellation goes through metered
+standing authority. Native publication discovery validates the exact journal identity.
+
+Independent review cleared the earlier 89-case combined controlled/native and real-process fault suite;
+the final 99-case suite passes after adding native planner/supersession, closed preflight,
+paid negative admission and authoritative producer-cap coverage. The new reader delta is
+awaiting final independent review before merge. Coverage includes
+including the unchanged adversarial gate-cleanup repro and separate budget/deadline probes.
+These tests use controlled external responses and do not establish live GitHub acceptance.
+Exact final source and full supported CI are required before merge. REQ-034/035 and their delivered controller/authorizer records now describe the supported
+local single-producer contract as active; full exact-head CI gates their observations. Native
+planner-directed investigation/evidence/configuration escalation and already-satisfied supersession
+have native acceptance coverage. REQ-038 still requires
+its whole declared contract, and REQ-039 requires actual approved live acceptance.
+
+Current staged PR stack: #95 standing scope (3440d68), #96 concrete Git bridge
+(61f4ef3), #97 fixed fixture producer (7a7429f). Merge prerequisites in order,
+retarget each next PR to main, inspect exact-head required checks/reviews and unresolved
+threads afresh, and verify CI state publication. No automatic merge bypass is authorized.
+
+This native-controller head incorporates bounded runtime setup #99 through the refreshed prerequisite stack. All reviewed controller/runtime/store and b155 authorizer implementation bytes are unchanged; fresh exact-head CI remains mandatory.

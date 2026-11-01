@@ -25,11 +25,13 @@ Before releasing any authority, record the exact proposal, preconditions, native
 trusted decision and cost atomically with the reservation. A replay identifies a retained decision;
 it does not authorize a second request. Uncertain and terminal effects retain their reservation.
 Outcomes cannot refund capacity or change the enrolled limits. Native journals establish whether
-an effect happened, and the future controller must reconcile them before any retry.
+an effect happened, and the controller must reconcile them before any retry.
 
-This first slice has no standing-policy evaluator, revocation service, native authorization adapter
-or controller. Its tests establish local accounting semantics only. They do not establish REQ-035
-in full, independent policy approval, a worker boundary, remote publication or live completion.
+The separate `automation_authorization` evaluator selects independently approved scope, preserves
+exact native grants and meters reads, recovery and cancellation against this store. Protected
+revocation facts live in `automation_revocations`. See [standing-authorization.md](standing-authorization.md)
+for bootstrap ordering, native configuration pins and goal-wide exclusion. Accounting tests alone
+establish accounting semantics; whole-workflow and live contracts require their own coverage.
 
 The Python API exposes `initialize`, `enroll`, `reserve`, `inspect`, `mark_uncertain` and `settle`.
 `reserve(..., approved=True, reason=...)` records a trusted caller's decision; the boolean is not
@@ -116,13 +118,26 @@ operation correlation. Directory synchronization also gates historical replay af
 The 39 controlled protocol/fault tests include process loss, duplicate processes, drift and failed
 intent/sent/receipt synchronization; no remote network is used.
 
-This foundation has no concrete GitHub transport or approved CI run selector. GitHub REST ref updates
-do not expose atomic expected-old compare-and-swap, so a pre-read followed by REST PATCH is insufficient.
-Plain Git refs also cannot prove this protocol's operation identity. A concrete adapter could use
-leased Git transport plus a separately authorized atomic operation-marker ref, or a reviewed external
-service with retained correlation. The current one-destination grant does not authorize such a marker.
-Never implement the proof by echoing the requested operation ID. REQ-037 remains proposed pending
-that concrete adapter, exact approved producer selection and live transport acceptance.
+The concrete `git_remote_transport` now sends explicit atomic expected-old receive-pack commands
+and a separately approved authenticated operation marker. Its protected key, exact repository
+identity and producer selection contracts are described in [remote-publication.md](remote-publication.md).
+Real local Git server tests establish transport behavior; opt-in live acceptance remains required.
+REQ-037 remains proposed until that live coverage is retained.
+
+## Native workflow controller
+
+`automation_controller` coordinates the exact native adapters and reobserves after native completion.
+`controller_store` retains phase intent, correlations and initialized ledger anchors separately from
+component journals. `controller_runtime` supplies an independent gated deadline supervisor and
+descendant cleanup. Protected policy/configuration digests, exact stores and authoritative objective
+accounting remain prerequisites for every effect. The closed initial profile has one required
+producer on one local coordination host; unsupported aggregate mappings and distributed ownership
+are rejected. See [unattended-controller.md](unattended-controller.md).
+
+The fixed first-pilot consumer, branch, verifier, worker paths, App credential requirements, bounded
+same-runner coordinator and independent approval procedure are in
+[unattended-pilot-approval.md](unattended-pilot-approval.md). A generated packet or copied policy does
+not approve itself. Runner loss cannot be repaired by recreating this original goal's stores.
 
 ## Controlled foundation integration
 
@@ -133,6 +148,6 @@ before effects. Wrong-revision evidence keeps work pending; a distinct fresh con
 is necessary for completion. Replays preserve unrelated state and the original objective's budget.
 
 The test requires the supported Bubblewrap runtime and must fail if that boundary is unavailable.
-Its remote and producer transports are controlled test doubles. It supplies no standing-policy
-evaluator, whole-workflow controller, resource containment or live GitHub acceptance. Run it in the
+Its remote and producer transports are controlled test doubles. Its explicit fixture decisions
+do not substitute for standing-policy evaluation, whole-workflow or live GitHub acceptance. Run it in the
 existing full supported-runtime CI; local collection/setup checks alone establish no execution result.
