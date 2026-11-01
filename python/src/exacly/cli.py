@@ -32,6 +32,7 @@ exacly implementation check -m PATH... --intent FILE --policy FILE --target FILE
 exacly delivery key-init --key FILE [--json]
 exacly delivery init|show|revoke --journal FILE ... [--json]
 exacly delivery merge|publish --journal FILE --journal-id UUID --request FILE --payload FILE ... [--apply]
+exacly delivery deploy|rollback --journal FILE --journal-id UUID --request FILE --payload FILE ... [--apply]
 exacly delivery reconcile --journal FILE --journal-id UUID --operation-key DIGEST --policy FILE --config FILE ...
 exacly gate [-m PATH]... --policy FILE --target FILE [--date YYYY-MM-DD] [--json] [--junit FILE --junit-id ID]
 exacly show|trace|impact|gaps [-m PATH]... [--json] ...; exacly mcp [-m PATH]...
@@ -1126,7 +1127,17 @@ def exacly_main(argv: list[str] | None = None) -> int:
         "delivery", help="inspect or separately authorize one exact product-delivery effect"
     )
     delivery_commands = delivery_parser.add_subparsers(dest="delivery_command", required=True)
-    for delivery_command in ("key-init", "init", "show", "revoke", "merge", "publish", "reconcile"):
+    for delivery_command in (
+        "key-init",
+        "init",
+        "show",
+        "revoke",
+        "merge",
+        "publish",
+        "deploy",
+        "rollback",
+        "reconcile",
+    ):
         delivery_command_parser = delivery_commands.add_parser(
             delivery_command,
             help={
@@ -1136,6 +1147,8 @@ def exacly_main(argv: list[str] | None = None) -> int:
                 "revoke": "record scope withdrawal; cannot undo or cancel an in-flight remote request",
                 "merge": "preview or separately apply the fixed GitHub atomic merge profile",
                 "publish": "preview or separately apply the fixed private owning publisher profile",
+                "deploy": "preview or separately apply an exact artifact to the fixed static environment",
+                "rollback": "preview or separately apply explicitly bounded static rollback authority",
                 "reconcile": "discover a retained uncertain outcome without resending the effect",
             }[delivery_command],
         )
@@ -1791,11 +1804,27 @@ def exacly_main(argv: list[str] | None = None) -> int:
         try:
             delivery_answer = delivery_io.run(args)
             delivery_status = delivery_io.exit_status(delivery_answer)
+            delivery_operational = delivery_answer.get("operational_status")
+            delivery_health_point = (
+                delivery_operational.get("evaluated_at") if isinstance(delivery_operational, dict) else None
+            )
+            delivery_health_label = (
+                f"Static readiness as of {delivery_health_point}"
+                if isinstance(delivery_health_point, str)
+                else "Static readiness"
+            )
+            delivery_health_text = (
+                f"{delivery_health_label}: {delivery_operational['status']} "
+                f"({delivery_operational['freshness']}). {delivery_operational['reason']}\n"
+                if isinstance(delivery_operational, dict)
+                else ""
+            )
             delivery_rendered = (
                 json.dumps(delivery_answer, indent=2, sort_keys=True)
                 if args.json
                 else (
                     f"Delivery {args.delivery_command}: {delivery_answer['status']}\n"
+                    f"{delivery_health_text}"
                     "Receipts are exact-stage history; verification and later effects require separate authority."
                 )
             )

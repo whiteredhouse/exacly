@@ -948,6 +948,37 @@ This reference profile does not publish to PyPI or GitHub Releases. See the
 separate owner/engine trust boundaries, verification provenance, budget units
 and operational acceptance. Publication grants no deployment authority or health.
 
+## Deploy a static artifact and evaluate its runtime
+
+`exacly delivery deploy` uses a separately approved local static-artifact
+workflow. It consumes exact authenticated published bytes, checks the selected
+application/environment and active generation, retains intent and switches the
+generation conditionally. It serves opaque bytes; it executes no application
+code. The independent HTTP observer measures actual served bytes, status and
+latency in a declared fresh window under a separate key and configuration.
+
+```sh
+exacly delivery deploy --journal /private/delivery/product.sqlite \
+  --journal-id JOURNAL_UUID --config deployment-config.json --policy deployment-policy.json \
+  --request deployment-request.json --payload deployment-payload.json --json
+```
+
+Preview is local; `--apply` needs the exact independent approval and external
+pin. A new result prints the actual delivery effect and a separate current
+operational status. Unhealthy, unavailable or stale health returns exit 1 while
+preserving an authenticated applied effect. Historical replay returns retained
+history with current health unestablished; it performs no fresh observation.
+The native readiness gate establishes no runtime health.
+
+`delivery rollback` requires its own grant, exact permitted prior published
+artifact, current generation, fresh trusted failure and bounded rollback
+capacity in the original journal. It never follows implicitly from a failed
+deployment. A rollback creates a new generation and new observations. Unknown
+effects require discovery before conflicting work. See the
+[deployment and observer guide](../docs/product-delivery-deployment.md) for the
+static profile, independent observer APIs, recovery and remaining acceptance.
+This reference does not establish arbitrary application or production health.
+
 ## Dispatch approved verification work
 
 `exacly dispatch github-issues` renders a read-only proposal by default. It rechecks a saved plan action against the reviewed policies, target and actual current state, then shows the selected GitHub repository, issue contents and advisory authorization template. `--apply` requires a separately reviewed authorization, an explicitly initialized private dispatch journal and an execution-binding ledger. Policy and authorization pin the canonical journal, ledger and state paths plus the journal's unique initialization identity. The adapter verifies the repository's numeric identity and supports issue title/body only; it has no repository, workflow or test-path defaults.

@@ -134,7 +134,7 @@ records:
     owner: exacly-maintainers
     lifecycle: proposed
     evidence: []
-    last_reviewed_at: "2026-10-31"
+    last_reviewed_at: "2026-11-01"
     statement: Invoke a deployment workflow only for an independently authorized artifact, application and environment, and evaluate completion from fresh applicable operational observations of its actual result.
     acceptance_criteria:
       - Resolve separate deployment authority to the exact artifact or build, application, environment, approved workflow, rollout strategy and limits; publication, source verification and another environment's authorization cannot grant this scope.
@@ -143,7 +143,7 @@ records:
       - Require fresh trusted environment-specific deployment and operational observations for the resulting revision or build and declared evaluation window; a workflow's success, source-level checks or another environment's health cannot establish this result.
       - Rollback requires its own explicit or predelegated conditions, exact permitted prior artifact and environment scope; observe the actual partial rollout before acting, and never infer blind rollback or unbounded retries from a failure.
       - Retain partial and terminal effects, observations and recovery decisions without relabeling evidence or weakening criteria; missing or unhealthy results remain blocked or failed even when the workflow finishes, and unresolved conditions stop further progression with an actionable reason.
-    verification_method: Future environment-scope, rollout-applicability, partial-failure and authorized-rollback tests.
+    verification_method: Concrete static-artifact owning workflow and authenticated publication consumer, actual generation-CAS and activation-proof recovery, separate trusted HTTP observation and current-freshness evaluation, process-crash/concurrent-change and independently bounded rollback tests, plus shared-engine and fixed CLI coverage; controlled verification does not establish selected staging or arbitrary application health.
     observe:
       tests:
         cases:
@@ -151,6 +151,9 @@ records:
           - "python/tests/test_deployment_automation.py::test_current_rollout_needs_fresh_environment_specific_observations"
           - "python/tests/test_deployment_automation.py::test_uncertain_or_partial_rollout_is_reconciled_before_retry"
           - "python/tests/test_deployment_automation.py::test_rollback_is_bounded_and_requires_its_own_authority"
+          - "python/tests/test_deployment_automation.py::*"
+          - "python/tests/test_operational_observation.py::*"
+          - "python/tests/test_deployment_cli.py::*"
 
   - id: APP-024
     type: Application
@@ -173,7 +176,7 @@ records:
     evidence: []
     last_reviewed_at: "2026-11-01"
     responsibility: Invoke only independently approved external delivery workflows for exact permitted identities, retain conditional effects and receipts, and integrate explicitly approved deployment and runtime observation contracts without granting itself policy, verification or broader delivery authority.
-    interfaces: [exacly delivery command, exacly.delivery_engine Python API, Exact GitHub merge adapter, Local owning-publisher workflow and exact-byte consumer, Planned deployment and rollback adapter]
+    interfaces: [exacly delivery command, exacly.delivery_engine Python API, Exact GitHub merge adapter, Local owning-publisher workflow and exact-byte consumer, Local static-artifact deployment and rollback adapter, exacly.operational_observation Python API]
     implementation_ref: { locator: python/src/exacly/delivery_engine.py }
 
   - id: INFO-013
@@ -191,12 +194,12 @@ records:
   - id: INFO-014
     type: Information
     name: Delivery effects and receipts
-    description: Later separately authorized repository, release and deployment effects with exact identities and observed outcomes.
+    description: Separately authorized repository, release and deployment effects with exact identities, immutable receipts and distinct operational observations.
     owner: exacly-maintainers
     lifecycle: proposed
     evidence: []
     last_reviewed_at: "2026-11-01"
-    definition: Versioned per-stage authorization decisions, durable conditional intents, external workflow and effect identities, exact pull-request heads and bases or artifact/version/environment scope, actual resulting commits and destinations, retained receipts and applicable observation references, with uncertain-outcome, retry and separately authorized rollback history; earlier stage outcomes never imply later authority.
+    definition: Versioned per-stage authorization decisions, durable conditional intents, external workflow and effect identities, exact pull-request heads and bases or artifact/version/environment scope, actual resulting commits and destinations, retained receipts and applicable observation references, with uncertain-outcome and separately authorized bounded rollback history. Authenticated deployment and operational reports retain exact rollout and artifact scope, measurement windows and historical evaluations separately from current freshness; a known applied effect remains recorded when health is stale or unhealthy, and earlier stage outcomes never imply later authority.
     identifiers: [effect ID and stage, authorization digest, proposal revision, repository and pull-request identity, expected head and base, resulting commit, artifact digest, immutable release version, destination and environment, workflow run, observation and receipt digests]
     steward: exacly-maintainers
 

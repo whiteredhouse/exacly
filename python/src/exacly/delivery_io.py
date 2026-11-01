@@ -18,6 +18,7 @@ from exacly import delivery_automation as contracts
 
 if TYPE_CHECKING:
     from exacly.delivery_engine import EngineAdapter
+    from exacly.deployment_automation import LocalStaticDeploymentAdapter
     from exacly.github_merge import GitHubMergeAdapter
     from exacly.release_publication import ReleasePublicationAdapter
 
@@ -71,6 +72,100 @@ def publication_adapter(configuration: Doc, policy: Doc) -> ReleasePublicationAd
     return ReleasePublicationAdapter(configuration, policy)
 
 
+def deployment_adapter(
+    configuration: Doc, policy: Doc, *, approval_pin: contracts.ApprovalPin | None = None
+) -> LocalStaticDeploymentAdapter:
+    """Construct the installed static owner and observer with an independently selected pin."""
+    from exacly.deployment_automation import LocalStaticDeploymentAdapter
+
+    return LocalStaticDeploymentAdapter(configuration, policy, approval_pin=approval_pin)
+
+
+def _unestablished_operational_status(freshness: str, reason: str) -> Doc:
+    return {
+        "status": "unknown",
+        "freshness": freshness,
+        "current_readiness_established": False,
+        "reason": reason,
+        "generic_application_health": False,
+        "deployment_authority": False,
+    }
+
+
+def _operational_report(args: argparse.Namespace, report: Doc, pin: contracts.ApprovalPin | None) -> Doc:
+    """Keep exact effects separate from pure presentation of retained environment observations."""
+    receipt = report.get("receipt")
+    intent = report.get("intent")
+    packet = report.get("packet")
+    stage = args.delivery_command
+    if isinstance(receipt, dict):
+        stage = receipt.get("stage")
+    elif isinstance(intent, dict):
+        stage = intent["request"]["stage"]
+    elif isinstance(packet, dict):
+        stage = packet["request"]["stage"]
+    if stage not in {"deploy", "rollback"}:
+        return report
+    if report.get("historical") is True:
+        # Historical routes must not construct an adapter or load current proof, keys or clocks.
+        operational = _unestablished_operational_status(
+            "historical", "Historical receipt only; current static readiness was not observed."
+        )
+    elif report.get("status") != "applied":
+        operational = _unestablished_operational_status(
+            "not_sampled", "No newly confirmed applied effect has current static readiness evidence."
+        )
+    else:
+        try:
+            from exacly import delivery_store
+
+            options = {} if args.lock_timeout is None else {"lock_timeout": args.lock_timeout}
+            saved = delivery_store.show(
+                args.journal, args.journal_id, operation_key=report["operation_key"], **options
+            )["operation"]
+            if saved is None or saved["receipt"] != receipt or saved["intent"] != intent:
+                raise ValueError("current operational evidence differs from the exact retained effect")
+            call = saved["calls"][-1]
+            result = call["result"]
+            if (
+                call["method"] not in {"invoke", "reconcile"}
+                or result["outcome"] != "applied"
+                or contracts.digest(result["provenance"]) != receipt["provenance_digest"]
+            ):
+                raise ValueError("current operational evidence lacks the exact applied native proof")
+            adapter = deployment_adapter(read_document(args.config), read_document(args.policy), approval_pin=pin)
+            operational = adapter.retained_operational_status(
+                saved["intent"]["request"], saved["payload"], result["provenance"]
+            )
+            if (
+                not isinstance(operational, dict)
+                or operational.get("status") not in {"healthy", "unhealthy", "unknown"}
+                or operational.get("freshness") not in {"current", "stale", "missing", "superseded", "unavailable"}
+                or not isinstance(operational.get("reason"), str)
+                or type(operational.get("current_readiness_established")) is not bool
+                or operational.get("current_readiness_established")
+                != (operational.get("status") == "healthy" and operational.get("freshness") == "current")
+                or (
+                    operational.get("status") == "healthy"
+                    and (
+                        operational.get("scope") != "as-of-recorded-environment-observation"
+                        or not isinstance(operational.get("evaluated_at"), str)
+                    )
+                )
+                or operational.get("generic_application_health") is not False
+                or operational.get("deployment_authority") is not False
+            ):
+                raise ValueError("current static readiness returned an invalid evaluation")
+        except Exception:
+            # A health-only failure cannot erase or downgrade a definite retained effect. Do not
+            # expose arbitrary proof/configuration exceptions, which may contain sensitive input.
+            operational = _unestablished_operational_status(
+                "unavailable",
+                "Current trusted static readiness could not be established; the applied effect is retained.",
+            )
+    return {**report, "operational_status": operational}
+
+
 def _pin(args: argparse.Namespace) -> tuple[Doc | None, contracts.ApprovalPin | None]:
     values = (args.approval, args.approved_approval_digest, args.issuer, args.approval_id)
     if any(value is not None for value in values) and not all(value is not None for value in values):
@@ -116,7 +211,7 @@ def run(args: argparse.Namespace) -> Doc:
     approval, pin = _pin(args)
     request: Doc | None = None
     payload: Doc | None = None
-    if args.delivery_command in {"merge", "publish"}:
+    if args.delivery_command in {"merge", "publish", "deploy", "rollback"}:
         request = contracts.validate_request(read_document(args.request))
         if request["stage"] != args.delivery_command:
             raise ValueError(
@@ -145,17 +240,19 @@ def run(args: argparse.Namespace) -> Doc:
             return merge_adapter(read_document(args.config), read_document(args.policy))
         if stage == "publish":
             return publication_adapter(read_document(args.config), read_document(args.policy))
+        if stage in {"deploy", "rollback"}:
+            return deployment_adapter(read_document(args.config), read_document(args.policy), approval_pin=pin)
         raise ValueError("retained operation has no supported installed delivery adapter")
 
     engine = DeliveryEngine(args.journal, journal_id=args.journal_id, adapter_factory=adapter_factory, **options)
     if args.delivery_command == "reconcile":
         assert approval is not None and pin is not None
-        return engine.reconcile(args.operation_key, approval=approval, pin=pin)
+        return _operational_report(args, engine.reconcile(args.operation_key, approval=approval, pin=pin), pin)
     assert request is not None and payload is not None
     if args.apply:
         assert approval is not None and pin is not None
-        return engine.apply(request, payload, approval=approval, pin=pin)
-    return engine.preview(request, payload, approval=approval, pin=pin)
+        return _operational_report(args, engine.apply(request, payload, approval=approval, pin=pin), pin)
+    return _operational_report(args, engine.preview(request, payload, approval=approval, pin=pin), pin)
 
 
 def exit_status(report: Doc) -> int:
@@ -163,6 +260,22 @@ def exit_status(report: Doc) -> int:
     status = report.get("status")
     if not isinstance(status, str):
         raise ValueError("delivery returned an invalid native report status")
+    receipt = report.get("receipt")
+    if (
+        status == "applied"
+        and report.get("historical") is not True
+        and isinstance(receipt, dict)
+        and receipt.get("stage") in {"deploy", "rollback"}
+    ):
+        operational = report.get("operational_status")
+        return (
+            0
+            if isinstance(operational, dict)
+            and operational.get("status") == "healthy"
+            and operational.get("freshness") == "current"
+            and operational.get("current_readiness_established") is True
+            else 1
+        )
     if status in SUCCESS:
         return 0
     if status in BLOCKED:
