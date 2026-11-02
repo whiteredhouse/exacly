@@ -25,6 +25,67 @@ unknown bypass semantics, forks, squash/rebase, linear-history requirements and
 required merge queues block this profile. The adapter cannot alter protections,
 dismiss a review or fall back to a head-only merge request.
 
+### Aggregate state and required-condition evidence
+
+GitHub's aggregate merge state is separate from the results selected by the
+branch policy. The existing `CLEAN` preflight and its retained fact shape remain
+supported. A fresh `UNSTABLE` preflight is eligible only with additional direct
+evidence of the supported requirements; the aggregate value or a merge-box
+message grants no authority. Other aggregate states remain blocked.
+
+For that `UNSTABLE` allowance, the adapter requires all of the following in
+addition to its existing identity, actor, policy, review and reference checks:
+
+- The independently selected App grant uses schema `0.2.0` and explicitly grants
+  Commit statuses read alongside the five existing merge permissions. Legacy
+  actors and the five-permission grant remain `CLEAN`-only. The adapter checks
+  this capability before making the additional requests; it cannot fall back
+  to anonymous reads or silently expand a token's permissions.
+- Every actual server-required CheckRun and every approved-policy CheckRun has
+  exactly one matching application/name result, completed with literal `success`
+  on exact `M`. Checking only the approved subset cannot establish additional
+  requirements imposed by the server.
+- Complete bounded legacy commit-status inventories are read for both `H` and
+  `M`, with their returned revisions and counts checked. A legacy status whose
+  context matches any required CheckRun name is unsupported, even when that
+  status says `success`: GitHub can require both a check and a commit status
+  sharing a name. A CheckRun cannot establish the other result's meaning.
+- A separate fixed GraphQL observation binds the repository, protected base ref
+  and current PR tuple. Its branch rule must be known, have no required
+  deployments or restricted-push policy, and agree with the pinned
+  conversation-resolution setting.
+  Where conversation resolution is required, a complete bounded thread
+  inventory must show every thread resolved. An approving review alone does
+  not establish resolved conversations.
+- An exact `B...H` comparison establishes that the selected base is an ancestor
+  of the head and that the head is not behind it. The generated merge commit's
+  parents alone do not substitute for that explicit up-to-date observation.
+
+Missing, truncated, duplicate, contradictory or unsupported observations block
+the allowance. Each additional status/thread inventory and ancestry comparison
+must be complete with fewer than 100 entries; larger scopes are unsupported.
+An empty legacy-status inventory is absence of a legacy context;
+its combined `pending` value does not itself establish a failed status. Neither
+optional results nor copied success metadata can replace an actual required
+result. All application identities, current reviews, exact `B/H/M` and tree,
+protected source, no-bypass constraints and atomic reference leases still apply.
+
+The additional observations are retained as `legacy_statuses` and
+`required_conditions` for the fresh `UNSTABLE` path. Old `CLEAN` records are not
+rewritten or reinterpreted. The conditional protocol uses 18 reads for inspection
+and 40 for invocation; the existing `CLEAN` protocol retains its 16-read configured
+inspection minimum and 32-read invocation. An invocation whose initial preflight
+uses the new path must have enough independently approved capacity before marker
+preparation. A later condition change after preparation can still leave an
+uncertain result. No cap is increased automatically, and an exhausted or
+uncertain invocation cannot obtain another effect allowance by changing its
+state or output path.
+
+Changed implementation bytes change the installed runtime and operation
+fingerprints. New effects therefore need newly selected approvals; this
+compatibility allowance does not migrate an old runtime or authorize replay as
+a fresh effect. Existing terminal history remains historical.
+
 The conditional effect uses one GraphQL `updateRefs` transaction for the exact
 `B → M` base update, an `H → H` head lease and creation of the signed operation
 marker from an absent ref. Preparing the immutable tag object is a separately
@@ -133,7 +194,11 @@ The legacy actor remains the exact four-field descriptor: `app_id`,
 `installation_id`, `token_digest` and `identity_approval_digest`. It keeps its
 existing repository-role checks. The explicit App-grant actor adds
 `credential_kind: github-app-installation-grant-v1` and the closed `grant`
-object below. Both actor shapes reject unknown fields.
+object below. Both actor shapes reject unknown fields. Grant schema `0.1.0`
+retains exactly the original five permissions and the existing `CLEAN` path.
+Grant schema `0.2.0` adds only `statuses: read` and permits the separately
+evidenced `UNSTABLE` path. These are capability-descriptor schema versions;
+the credential kind is unchanged.
 
 GitHub App grants and repository role flags are separate evidence. In the
 [nonproduction diagnostic](https://github.com/whiteredhouse/exacly-delivery-acceptance/actions/runs/41422406506),
@@ -171,12 +236,21 @@ window with the actual reviewed values:
 }
 ```
 
-The repository list must contain only the configured repository. The permission
-map must equal the five entries shown; missing, additional or broader grants
-are refused. The independently selected configuration and identity attestation
+The repository list must contain only the configured repository. For grant
+schema `0.1.0`, the permission map must equal the five entries shown. Schema
+`0.2.0` requires those same entries plus exactly `"statuses": "read"`;
+missing, additional or broader grants are refused for either schema. The
+independently selected configuration and identity attestation
 bind the whole grant to the exact token, App, installation and repository.
 A supplied permission object or matching provenance digest does not establish
 that the issuer evidence was authenticated or independently reviewed.
+
+The App owner must explicitly enable Commit statuses read and the trusted mint
+must request it before selecting the six-permission grant. A successful earlier
+five-permission preflight does not establish that access. Grant schema and
+permissions remain in the stable operation fingerprint: moving from five to six
+permissions needs a new operation decision, not a read-only credential rotation.
+No App setting or existing token is changed automatically.
 
 Retain the actual mint response or an explicitly trusted mint-run attestation
 for that review. A trusted run attestation identifies its run and attempt,

@@ -31,6 +31,11 @@ API = "https://api.github.com"
 READ_QUERY = """query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){
 id databaseId pullRequest(number:$number){reviewDecision mergeStateStatus mergeable isMergeQueueEnabled
 isInMergeQueue isCrossRepository headRefOid baseRefOid potentialMergeCommit{oid}}}}"""
+UNSTABLE_QUERY = """query($owner:String!,$name:String!,$number:Int!,$base:String!){repository(owner:$owner,name:$name){
+id databaseId nameWithOwner ref(qualifiedName:$base){prefix name target{oid} branchProtectionRule{
+id pattern requiresDeployments requiredDeploymentEnvironments requiresConversationResolution restrictsPushes}}
+pullRequest(number:$number){number headRefOid baseRefOid potentialMergeCommit{oid}
+reviewThreads(first:100){totalCount pageInfo{hasNextPage} nodes{id isResolved}}}}}"""
 UPDATE_QUERY = "mutation($input:UpdateRefsInput!){updateRefs(input:$input){clientMutationId}}"
 
 
@@ -265,6 +270,125 @@ class GitHubMergeAdapter:
             "installation_repository_ids": [_object(entry).get("id") for entry in cast(list[Any], repositories)],
         }
 
+    def _unstable_conditions(self, session: _Session, request: Doc, payload: Doc) -> Doc:
+        merge._validate_unstable_capability(session.configuration)
+        subject = request["subject"]
+        legacy: Doc = {}
+        for scope, revision in (("head", subject["head_revision"]), ("merge", payload["merge_revision"])):
+            value = _object(session.request("GET", self._prefix + "/commits/" + revision + "/status?per_page=100"))
+            statuses = value.get("statuses")
+            merge.require(
+                value.get("sha") == revision
+                and isinstance(statuses, list)
+                and type(value.get("total_count")) is int
+                and value["total_count"] == len(statuses) < 100,
+                "legacy status inventory is incomplete or for another commit",
+            )
+            legacy[scope] = {
+                "sha": value["sha"],
+                "total_count": value["total_count"],
+                "statuses": [
+                    {"context": _object(item).get("context"), "state": _object(item).get("state")}
+                    for item in cast(list[Any], statuses)
+                ],
+            }
+        merge._legacy_statuses_shape(legacy)
+        owner, name = self.configuration["repository"]["full_name"].split("/")
+        graph = _object(
+            session.request(
+                "POST",
+                "/graphql-read",
+                {
+                    "query": UNSTABLE_QUERY,
+                    "variables": {
+                        "owner": owner,
+                        "name": name,
+                        "number": subject["pull_request"],
+                        "base": subject["base_ref"],
+                    },
+                },
+            )
+        )
+        merge.require(not graph.get("errors"), "additional required branch conditions are unavailable")
+        repo = _object(_object(graph.get("data")).get("repository"))
+        base = _object(repo.get("ref"))
+        prefix, base_name = base.get("prefix"), base.get("name")
+        merge.require(isinstance(prefix, str) and isinstance(base_name, str), "protected base reference is unavailable")
+        policy = _object(base.get("branchProtectionRule"))
+        pr = _object(repo.get("pullRequest"))
+        threads = _object(pr.get("reviewThreads"))
+        nodes = threads.get("nodes")
+        merge.require(isinstance(nodes, list), "review thread inventory is unavailable")
+        comparison = _object(
+            session.request(
+                "GET",
+                self._prefix
+                + "/compare/"
+                + subject["base_revision"]
+                + "..."
+                + subject["head_revision"]
+                + "?per_page=100",
+            )
+        )
+        commits = comparison.get("commits")
+        merge.require(
+            isinstance(commits, list)
+            and type(comparison.get("total_commits")) is int
+            and type(comparison.get("ahead_by")) is int
+            and 0 < comparison["total_commits"] == comparison["ahead_by"] == len(commits) < 100,
+            "head ancestry comparison is incomplete",
+        )
+        revisions = [_object(item).get("sha") for item in cast(list[Any], commits)]
+        merge.require(
+            all(isinstance(revision, str) and re.fullmatch(r"[0-9a-f]{40}", revision) for revision in revisions)
+            and len(set(revisions)) == len(revisions)
+            and revisions[-1] == subject["head_revision"],
+            "head ancestry comparison identities changed",
+        )
+        conditions = {
+            "repository": {
+                "id": repo.get("databaseId"),
+                "full_name": repo.get("nameWithOwner"),
+                "node_id": repo.get("id"),
+            },
+            "base_ref": {
+                "name": cast(str, prefix) + cast(str, base_name),
+                "revision": _object(base.get("target")).get("oid"),
+            },
+            "pull_request": {
+                "number": pr.get("number"),
+                "head_revision": pr.get("headRefOid"),
+                "base_revision": pr.get("baseRefOid"),
+                "merge_revision": _object(pr.get("potentialMergeCommit")).get("oid"),
+            },
+            "branch_policy": {
+                "id": policy.get("id"),
+                "pattern": policy.get("pattern"),
+                "requires_deployments": policy.get("requiresDeployments"),
+                "required_deployment_environments": policy.get("requiredDeploymentEnvironments"),
+                "requires_conversation_resolution": policy.get("requiresConversationResolution"),
+                "restricts_pushes": policy.get("restrictsPushes"),
+            },
+            "review_threads": {
+                "total_count": threads.get("totalCount"),
+                "has_next_page": _object(threads.get("pageInfo")).get("hasNextPage"),
+                "threads": [
+                    {"id": _object(item).get("id"), "is_resolved": _object(item).get("isResolved")}
+                    for item in cast(list[Any], nodes)
+                ],
+            },
+            "ancestry": {
+                "base_revision": _object(comparison.get("base_commit")).get("sha"),
+                "head_revision": revisions[-1],
+                "merge_base_revision": _object(comparison.get("merge_base_commit")).get("sha"),
+                "status": comparison.get("status"),
+                "ahead_by": comparison.get("ahead_by"),
+                "behind_by": comparison.get("behind_by"),
+            },
+        }
+        merge._required_conditions_shape(conditions)
+        return {"legacy_statuses": legacy, "required_conditions": conditions}
+
     def _facts(self, session: _Session, request: Doc, payload: Doc) -> Doc:
         actor = self._actor(session)
         base_name = quote(request["subject"]["base_ref"].removeprefix("refs/heads/"), safe="")
@@ -299,6 +423,7 @@ class GitHubMergeAdapter:
         review = _object(graph_repo.get("pullRequest"))
         review = {key: review.get(key) for key in merge.REVIEW_FIELDS}
         review["potentialMergeCommit"] = {"oid": _object(review["potentialMergeCommit"]).get("oid")}
+        extra = self._unstable_conditions(session, request, payload) if review["mergeStateStatus"] == "UNSTABLE" else {}
         checks = _object(
             session.request(
                 "GET", self._prefix + "/commits/" + payload["merge_revision"] + "/check-runs?filter=latest&per_page=100"
@@ -326,6 +451,7 @@ class GitHubMergeAdapter:
             )
         return {
             **actor,
+            **extra,
             "protection": protection,
             "rules": rules,
             "pull_request": pr,
@@ -447,6 +573,14 @@ class GitHubMergeAdapter:
             "provenance": proof,
         }
 
+    @staticmethod
+    def _invoke_capacity(session: _Session, facts: Doc) -> None:
+        if facts["review"]["mergeStateStatus"] == "UNSTABLE":
+            merge.require(
+                session.limits["read_calls"] >= 40,
+                "approved read ceiling cannot cover the complete UNSTABLE merge protocol",
+            )
+
     def invoke(self, intent: Doc, payload: Doc, authorization: Doc, *, deadline: store.Deadline) -> Doc:
         delivery.validate_intent(intent, approval=authorization)
         request = delivery.validate_request(intent["request"])
@@ -463,6 +597,7 @@ class GitHubMergeAdapter:
             session = self._session("invoke", deadline)
             facts = self._facts(session, request, payload)
             merge.validate_ready_facts(request, payload, self.configuration, self.policy, facts)
+            self._invoke_capacity(session, facts)
             signed = merge.marker(request, payload, self.configuration, self.policy, lock_timeout=deadline.remaining())
             # A single logical stage has one bounded object-preparation request and one atomic
             # reference request. The engine retained may_have_started before releasing this call.
@@ -490,6 +625,7 @@ class GitHubMergeAdapter:
             merge.require(tag.get("sha") == signed["object"], "prepared marker object differs from approved content")
             facts = self._facts(session, request, payload)
             merge.validate_ready_facts(request, payload, self.configuration, self.policy, facts)
+            self._invoke_capacity(session, facts)
             delivery_key.validate_key(
                 Path(self.configuration["key"]["path"]),
                 self.configuration["key"]["id"],

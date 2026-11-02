@@ -28,6 +28,7 @@ DIGEST = delivery.DIGEST
 POSITIVE = delivery.POSITIVE
 INSTALLATION_GRANT_KIND = "github-app-installation-grant-v1"
 INSTALLATION_GRANT_VERSION = "0.1.0"
+INSTALLATION_STATUS_GRANT_VERSION = "0.2.0"
 MAX_INSTALLATION_GRANT_SECONDS = 3600
 INSTALLATION_PERMISSIONS = {
     "contents": "write",
@@ -36,6 +37,7 @@ INSTALLATION_PERMISSIONS = {
     "metadata": "read",
     "pull_requests": "read",
 }
+INSTALLATION_STATUS_PERMISSIONS = {**INSTALLATION_PERMISSIONS, "statuses": "read"}
 ACTOR_IDENTITY = {
     "app_id": POSITIVE,
     "installation_id": POSITIVE,
@@ -47,16 +49,24 @@ INSTALLATION_ACTOR_SCHEMA = FIELDS(
     {
         **ACTOR_IDENTITY,
         "credential_kind": {"const": INSTALLATION_GRANT_KIND},
-        "grant": FIELDS(
-            {
-                "schema_version": {"const": INSTALLATION_GRANT_VERSION},
-                "repository_ids": {"type": "array", "minItems": 1, "maxItems": 1, "items": POSITIVE},
-                "permissions": FIELDS({name: {"const": value} for name, value in INSTALLATION_PERMISSIONS.items()}),
-                "not_before": TEXT,
-                "not_after": TEXT,
-                "mint_provenance_digest": DIGEST,
-            }
-        ),
+        "grant": {
+            "oneOf": [
+                FIELDS(
+                    {
+                        "schema_version": {"const": version},
+                        "repository_ids": {"type": "array", "minItems": 1, "maxItems": 1, "items": POSITIVE},
+                        "permissions": FIELDS({name: {"const": value} for name, value in permissions.items()}),
+                        "not_before": TEXT,
+                        "not_after": TEXT,
+                        "mint_provenance_digest": DIGEST,
+                    }
+                )
+                for version, permissions in (
+                    (INSTALLATION_GRANT_VERSION, INSTALLATION_PERMISSIONS),
+                    (INSTALLATION_STATUS_GRANT_VERSION, INSTALLATION_STATUS_PERMISSIONS),
+                )
+            ]
+        },
     }
 )
 INSTALLATION_CANDIDATE_SCHEMA = FIELDS(
@@ -176,6 +186,15 @@ def validate_credential_time(configuration: Doc, *, now: dt.datetime) -> None:
         return
     require(actor.get("credential_kind") == INSTALLATION_GRANT_KIND, "unsupported merge credential kind")
     _validate_grant_time(actor["grant"], now)
+
+
+def _validate_unstable_capability(configuration: Doc) -> None:
+    actor = delivery._schema(configuration["actor"], INSTALLATION_ACTOR_SCHEMA)
+    require(
+        actor["grant"]["schema_version"] == INSTALLATION_STATUS_GRANT_VERSION
+        and actor["grant"]["permissions"] == INSTALLATION_STATUS_PERMISSIONS,
+        "UNSTABLE requires an independently approved status-read installation grant",
+    )
 
 
 def validate_configuration(value: Any) -> Doc:
@@ -471,24 +490,144 @@ REVIEW_FIELDS = {
 }
 
 
-def _ready_shape(facts: Any) -> None:
+def _legacy_statuses_shape(value: Any) -> None:
+    require(isinstance(value, dict) and set(value) == {"head", "merge"}, "unallowlisted legacy status scopes")
+    for inventory in value.values():
+        require(
+            isinstance(inventory, dict)
+            and set(inventory) == {"sha", "total_count", "statuses"}
+            and isinstance(inventory["sha"], str)
+            and re.fullmatch(r"[0-9a-f]{40}", inventory["sha"])
+            and type(inventory["total_count"]) is int
+            and isinstance(inventory["statuses"], list)
+            and inventory["total_count"] == len(inventory["statuses"]) < 100,
+            "legacy status inventory is incomplete",
+        )
+        statuses = inventory["statuses"]
+        require(
+            all(
+                isinstance(item, dict)
+                and set(item) == {"context", "state"}
+                and isinstance(item["context"], str)
+                and item["context"].strip()
+                and item["state"] in ("pending", "success", "failure", "error")
+                for item in statuses
+            ),
+            "unallowlisted legacy status fields",
+        )
+        require(
+            len({item["context"].casefold() for item in statuses}) == len(statuses),
+            "legacy status contexts are ambiguous",
+        )
+
+
+def _required_conditions_shape(value: Any) -> None:
     require(
-        isinstance(facts, dict)
-        and set(facts)
+        isinstance(value, dict)
+        and set(value) == {"repository", "base_ref", "pull_request", "branch_policy", "review_threads", "ancestry"},
+        "unallowlisted additional required conditions",
+    )
+    repository, base, pr = value["repository"], value["base_ref"], value["pull_request"]
+    require(
+        isinstance(repository, dict)
+        and set(repository) == {"id", "full_name", "node_id"}
+        and type(repository["id"]) is int
+        and repository["id"] > 0
+        and all(isinstance(repository[key], str) and repository[key].strip() for key in ("full_name", "node_id"))
+        and isinstance(base, dict)
+        and set(base) == {"name", "revision"}
+        and isinstance(base["name"], str)
+        and isinstance(pr, dict)
+        and set(pr) == {"number", "head_revision", "base_revision", "merge_revision"}
+        and type(pr["number"]) is int
+        and pr["number"] > 0,
+        "additional required-condition identities are malformed",
+    )
+    require(
+        all(
+            isinstance(revision, str) and re.fullmatch(r"[0-9a-f]{40}", revision)
+            for revision in (base["revision"], pr["head_revision"], pr["base_revision"], pr["merge_revision"])
+        ),
+        "additional required-condition revisions are malformed",
+    )
+    policy = value["branch_policy"]
+    require(
+        isinstance(policy, dict)
+        and set(policy)
         == {
-            "repository",
-            "installation_repository_ids",
-            "protection",
-            "rules",
-            "pull_request",
-            "review",
-            "merge_commit",
-            "check_runs",
-            "contract_files",
-            "refs",
-        },
+            "id",
+            "pattern",
+            "requires_deployments",
+            "required_deployment_environments",
+            "requires_conversation_resolution",
+            "restricts_pushes",
+        }
+        and all(isinstance(policy[key], str) and policy[key].strip() for key in ("id", "pattern"))
+        and all(
+            type(policy[key]) is bool
+            for key in ("requires_deployments", "requires_conversation_resolution", "restricts_pushes")
+        )
+        and isinstance(policy["required_deployment_environments"], list)
+        and all(isinstance(item, str) and item.strip() for item in policy["required_deployment_environments"]),
+        "additional branch policy is unavailable or malformed",
+    )
+    threads = value["review_threads"]
+    require(
+        isinstance(threads, dict)
+        and set(threads) == {"total_count", "has_next_page", "threads"}
+        and type(threads["total_count"]) is int
+        and threads["has_next_page"] is False
+        and isinstance(threads["threads"], list)
+        and threads["total_count"] == len(threads["threads"]) < 100
+        and all(
+            isinstance(item, dict)
+            and set(item) == {"id", "is_resolved"}
+            and isinstance(item["id"], str)
+            and item["id"].strip()
+            and type(item["is_resolved"]) is bool
+            for item in threads["threads"]
+        ),
+        "review thread inventory is incomplete or malformed",
+    )
+    require(
+        len({item["id"] for item in threads["threads"]}) == len(threads["threads"]),
+        "review thread identities are ambiguous",
+    )
+    ancestry = value["ancestry"]
+    require(
+        isinstance(ancestry, dict)
+        and set(ancestry)
+        == {"base_revision", "head_revision", "merge_base_revision", "status", "ahead_by", "behind_by"}
+        and all(
+            isinstance(ancestry[key], str) and re.fullmatch(r"[0-9a-f]{40}", ancestry[key])
+            for key in ("base_revision", "head_revision", "merge_base_revision")
+        )
+        and isinstance(ancestry["status"], str)
+        and all(type(ancestry[key]) is int and ancestry[key] >= 0 for key in ("ahead_by", "behind_by")),
+        "head ancestry facts are malformed",
+    )
+
+
+def _ready_shape(facts: Any) -> None:
+    fields = {
+        "repository",
+        "installation_repository_ids",
+        "protection",
+        "rules",
+        "pull_request",
+        "review",
+        "merge_commit",
+        "check_runs",
+        "contract_files",
+        "refs",
+    }
+    require(
+        isinstance(facts, dict) and set(facts) in (fields, fields | {"legacy_statuses", "required_conditions"}),
         "unexpected retained provider preflight fields",
     )
+    if "legacy_statuses" in facts:
+        _legacy_statuses_shape(facts["legacy_statuses"])
+        _required_conditions_shape(facts["required_conditions"])
     require(
         isinstance(facts["repository"], dict)
         and set(facts["repository"]) == {"id", "full_name", "node_id", "admin", "maintain", "push"},
@@ -536,6 +675,72 @@ def _ready_shape(facts: Any) -> None:
         "unallowlisted retained check fields",
     )
     require(facts["rules"] == [], "unsupported retained effective rules")
+
+
+def _unstable_required_checks(
+    facts: Doc, subject: Doc, payload: Doc, configuration: Doc, policy: Doc, protection: Doc
+) -> list[Doc]:
+    """Replace the aggregate shortcut only with complete, independently bound conditions."""
+    _validate_unstable_capability(configuration)
+    require(
+        "legacy_statuses" in facts and "required_conditions" in facts,
+        "UNSTABLE requires explicit current required-condition evidence",
+    )
+    legacy, conditions = facts["legacy_statuses"], facts["required_conditions"]
+    require(
+        legacy["head"]["sha"] == subject["head_revision"]
+        and legacy["merge"]["sha"] == payload["merge_revision"]
+        and conditions["repository"] == configuration["repository"]
+        and conditions["base_ref"] == {"name": subject["base_ref"], "revision": subject["base_revision"]}
+        and conditions["pull_request"]
+        == {
+            "number": subject["pull_request"],
+            "head_revision": subject["head_revision"],
+            "base_revision": subject["base_revision"],
+            "merge_revision": payload["merge_revision"],
+        },
+        "required-condition facts belong to different repository or revisions",
+    )
+    branch_policy = conditions["branch_policy"]
+    require(
+        branch_policy["requires_deployments"] is False
+        and branch_policy["required_deployment_environments"] == []
+        and branch_policy["restricts_pushes"] is False
+        and branch_policy["requires_conversation_resolution"] == protection["required_conversation_resolution"],
+        "unsupported or changed additional branch policy",
+    )
+    require(
+        not branch_policy["requires_conversation_resolution"]
+        or all(thread["is_resolved"] for thread in conditions["review_threads"]["threads"]),
+        "required conversations remain unresolved",
+    )
+    ancestry = conditions["ancestry"]
+    require(
+        ancestry["base_revision"] == ancestry["merge_base_revision"] == subject["base_revision"]
+        and ancestry["head_revision"] == subject["head_revision"]
+        and ancestry["status"] == "ahead"
+        and ancestry["ahead_by"] > 0
+        and ancestry["behind_by"] == 0,
+        "head is not strictly up to date with the approved base",
+    )
+    checks = [{"name": item["context"], "app_id": item["app_id"]} for item in protection["checks"]]
+    require(
+        len({item["name"].casefold() for item in checks}) == len(checks),
+        "server required check contexts are ambiguous",
+    )
+    # Legacy contexts are case-insensitive; retain provider spelling in the evidence.
+    required_names = {item["name"].casefold() for item in checks} | {
+        item["name"].casefold() for item in policy["required_checks"]
+    }
+    require(
+        all(
+            status["context"].casefold() not in required_names
+            for inventory in legacy.values()
+            for status in inventory["statuses"]
+        ),
+        "required check names also have unsupported legacy commit statuses",
+    )
+    return checks
 
 
 def _validate_installation_scope(facts: Doc, repository_id: int) -> None:
@@ -657,7 +862,7 @@ def validate_ready_facts(request: Doc, payload: Doc, configuration: Doc, policy:
     )
     require(
         graph.get("reviewDecision") == "APPROVED"
-        and graph.get("mergeStateStatus") == "CLEAN"
+        and graph.get("mergeStateStatus") in ("CLEAN", "UNSTABLE")
         and graph.get("mergeable") == "MERGEABLE"
         and graph.get("isMergeQueueEnabled") is False
         and graph.get("isInMergeQueue") is False
@@ -686,7 +891,10 @@ def validate_ready_facts(request: Doc, payload: Doc, configuration: Doc, policy:
         isinstance(runs, list) and all(isinstance(entry, dict) and type(entry.get("app_id")) is int for entry in runs),
         "required check runs are unavailable",
     )
-    for expected in policy["required_checks"]:
+    required_checks = policy["required_checks"]
+    if graph["mergeStateStatus"] == "UNSTABLE":
+        required_checks = _unstable_required_checks(facts, subject, payload, configuration, policy, protection)
+    for expected in required_checks:
         selected = [
             entry
             for entry in runs
