@@ -86,6 +86,36 @@ fingerprints. New effects therefore need newly selected approvals; this
 compatibility allowance does not migrate an old runtime or authorize replay as
 a fresh effect. Existing terminal history remains historical.
 
+### Readiness failure diagnostics
+
+A blocked native inspection retains a fixed diagnostic in its existing `reason`
+field. For example:
+
+```text
+GitHub merge readiness blocked: stage=protection; code=http_error; http_status=403.
+```
+
+The stage identifies the local key or credential check, repository/installation
+scope, protection/signatures/rules, PR/review, legacy head/merge status,
+branch conditions/ancestry, checks, merge commit, protected contract trees,
+references, or final `ready_facts` validation. The additional aggregate stages
+`unstable_capability`, `legacy_status_facts` and `required_condition_facts`
+identify local validation of those groups; `unknown` is a defensive fallback
+for invalid internal diagnostic context. Codes distinguish `http_error`,
+`transport_error`, `invalid_response`, `deadline_or_storage`, `local_io_error`,
+`malformed_facts` and `validation_failed`. HTTP status is included only for that
+failed request and only as an integer from 100 through 599. Expected absence of
+an optional operation-marker ref remains a successful read.
+
+These diagnostics contain no exception text, provider response body, headers,
+URL, token or private path. A stage describes where the check stopped; it does
+not identify an individual rejected predicate within final fact validation or
+establish that earlier observations still hold. The native result and blocked
+proof shapes remain unchanged, and older generic blocked reasons remain valid
+history. A not-ready inspection leaves a merge request using `--apply` `prepared`
+before the native merge invocation. Diagnostics grant no retry, merge or
+read-recovery authority, and changed runtime bytes require fresh approvals.
+
 The conditional effect uses one GraphQL `updateRefs` transaction for the exact
 `B → M` base update, an `H → H` head lease and creation of the signed operation
 marker from an absent ref. Preparing the immutable tag object is a separately
