@@ -20,7 +20,7 @@ from exacly import automatic_merge as merge
 from exacly import delivery_automation as delivery
 from exacly import delivery_key
 from exacly import execution_store as store
-from exacly.github_merge import READ_QUERY, UPDATE_QUERY, GitHubMergeAdapter
+from exacly.github_merge import READ_QUERY, UNSTABLE_QUERY, UPDATE_QUERY, GitHubMergeAdapter
 from test_delivery_contracts import approval as common_approval
 from test_delivery_contracts import identify
 from test_delivery_contracts import intent as common_intent
@@ -116,6 +116,28 @@ class ScriptedGitHub:
                 "conclusion": "success",
             }
         ]
+        self.legacy_statuses: dict[str, Doc] = {
+            revision: {"sha": revision, "state": "pending", "total_count": 0, "statuses": []}
+            for revision in (HEAD, MERGE)
+        }
+        self.branch_policy: Doc = {
+            "id": "BPR_controlled_main",
+            "pattern": "main",
+            "requiresDeployments": False,
+            "requiredDeploymentEnvironments": [],
+            "requiresConversationResolution": True,
+            "restrictsPushes": False,
+        }
+        self.review_threads: Doc = {"totalCount": 0, "pageInfo": {"hasNextPage": False}, "nodes": []}
+        self.comparison: Doc = {
+            "base_commit": {"sha": BASE},
+            "merge_base_commit": {"sha": BASE},
+            "status": "ahead",
+            "ahead_by": 1,
+            "behind_by": 0,
+            "total_commits": 1,
+            "commits": [{"sha": HEAD}],
+        }
         entries = [
             {"path": category + ".yaml", "sha": "e" * 40, "type": "blob", "mode": "100644"}
             for category in merge.CATEGORIES
@@ -130,7 +152,8 @@ class ScriptedGitHub:
         return [
             call
             for call in self.calls
-            if call["method"] == "POST" and not (call["path"] == "/graphql" and call["body"]["query"] == READ_QUERY)
+            if call["method"] == "POST"
+            and not (call["path"] == "/graphql" and call["body"]["query"] in (READ_QUERY, UNSTABLE_QUERY))
         ]
 
     def _absent(self, path: str) -> None:
@@ -144,13 +167,44 @@ class ScriptedGitHub:
         changes = supplied["refUpdates"]
         assert len(changes) == 3 and len({change["name"] for change in changes}) == 3
         assert all(change["force"] is False for change in changes)
+        # This controlled server enforces its configured requirements, not the
+        # client's aggregate-state shortcut. An optional failed check is not a
+        # required policy rule; a same-name legacy status remains independent.
+        required = self.protection["required_status_checks"]["checks"]
+        checks_pass = all(
+            len(
+                selected := [
+                    run
+                    for run in self.check_runs
+                    if run["name"].casefold() == check["context"].casefold() and run["app"]["id"] == check["app_id"]
+                ]
+            )
+            == 1
+            and selected[0]["head_sha"] == MERGE
+            and selected[0]["status"] == "completed"
+            and selected[0]["conclusion"] in ("success", "neutral", "skipped")
+            for check in required
+        )
+        statuses_pass = all(
+            status["state"] == "success"
+            for inventory in self.legacy_statuses.values()
+            for status in inventory["statuses"]
+            if status["context"].casefold() in {check["context"].casefold() for check in required}
+        )
+        conversations_pass = not self.protection["required_conversation_resolution"]["enabled"] or all(
+            thread["isResolved"] is True for thread in self.review_threads["nodes"]
+        )
+        current_base = not self.protection["required_status_checks"]["strict"] or (
+            self.comparison["merge_base_commit"]["sha"] == BASE and self.comparison["behind_by"] == 0
+        )
         allowed = (
             self.graph["reviewDecision"] == "APPROVED"
-            and self.graph["mergeStateStatus"] == "CLEAN"
-            and all(
-                run["status"] == "completed" and run["conclusion"] in ("success", "neutral", "skipped")
-                for run in self.check_runs
-            )
+            and self.graph["mergeable"] == "MERGEABLE"
+            and checks_pass
+            and statuses_pass
+            and conversations_pass
+            and current_base
+            and self.branch_policy["requiresDeployments"] is False
         )
         matches = all(self.refs.get(change["name"], merge.ZERO) == change["beforeOid"] for change in changes)
         if not allowed or not matches:
@@ -191,6 +245,13 @@ class ScriptedGitHub:
             return copy.deepcopy(self.commit)
         if method == "GET" and path == PREFIX + "/commits/" + MERGE + "/check-runs?filter=latest&per_page=100":
             return {"total_count": len(self.check_runs), "check_runs": copy.deepcopy(self.check_runs)}
+        if method == "GET" and path in {
+            PREFIX + "/commits/" + revision + "/status?per_page=100" for revision in (HEAD, MERGE)
+        }:
+            revision = path.removeprefix(PREFIX + "/commits/").split("/", 1)[0]
+            return copy.deepcopy(self.legacy_statuses[revision])
+        if method == "GET" and path == PREFIX + "/compare/" + BASE + "..." + HEAD + "?per_page=100":
+            return copy.deepcopy(self.comparison)
         if method == "GET" and path.startswith(PREFIX + "/git/trees/"):
             revision = path.removeprefix(PREFIX + "/git/trees/").split("?", 1)[0]
             if revision not in self.trees:
@@ -225,9 +286,33 @@ class ScriptedGitHub:
             self.tags[oid] = tag
             return copy.deepcopy(tag)
         if method == "POST" and path == "/graphql":
-            assert body["query"] in (READ_QUERY, UPDATE_QUERY)
+            assert body["query"] in (READ_QUERY, UNSTABLE_QUERY, UPDATE_QUERY)
             if body["query"] == UPDATE_QUERY:
                 return self._atomic(body)
+            if body["query"] == UNSTABLE_QUERY:
+                assert body["variables"] == {"owner": "owner", "name": "product", "number": 42, "base": BASE_REF}
+                return {
+                    "data": {
+                        "repository": {
+                            "id": NODE_ID,
+                            "databaseId": REPOSITORY["id"],
+                            "nameWithOwner": REPOSITORY["full_name"],
+                            "ref": {
+                                "prefix": "refs/heads/",
+                                "name": "main",
+                                "target": {"oid": BASE},
+                                "branchProtectionRule": copy.deepcopy(self.branch_policy),
+                            },
+                            "pullRequest": {
+                                "number": self.pull_request["number"],
+                                "headRefOid": self.graph["headRefOid"],
+                                "baseRefOid": self.graph["baseRefOid"],
+                                "potentialMergeCommit": copy.deepcopy(self.graph["potentialMergeCommit"]),
+                                "reviewThreads": copy.deepcopy(self.review_threads),
+                            },
+                        }
+                    }
+                }
             assert body["variables"] == {"owner": "owner", "name": "product", "number": 42}
             return {
                 "data": {"repository": {"id": NODE_ID, "databaseId": 123, "pullRequest": copy.deepcopy(self.graph)}}

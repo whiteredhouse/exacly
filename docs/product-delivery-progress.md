@@ -16,13 +16,15 @@ separately. Neither target inherits the other's operational authority.
 
 The named source PRs retain their exact checked heads, reviews and merge
 identities. Their historical verification counts do not include the App-grant
-compatibility change below. Do not reapply merged work or infer operational
-approval from this checkpoint. Authentic acceptance remains separate.
+and required-condition compatibility changes below. Do not reapply merged work
+or infer operational approval from this checkpoint. Authentic acceptance remains
+separate.
 
-CAP-005/PROC-005, REQ-041–043 and APP-025/INFO-014 remain proposed. This
-changeset adds explicit token-bound App-grant evidence and local credential-use
-criteria to REQ-041. Source tests, workflow success and native readiness gates
-establish no runtime health.
+CAP-005/PROC-005, REQ-041–043 and APP-025/INFO-014 remain proposed. The merged
+App-grant change added explicit token-bound capability evidence and local
+credential-use criteria to REQ-041. This changeset adds direct required-condition
+evidence for the supported `UNSTABLE` readiness path. Source tests, workflow
+success and native readiness gates establish no runtime health.
 The fixed snapshot-inventory worker hashes fixture inputs; it is not a coding
 agent. No general coding-agent integration is claimed.
 
@@ -37,7 +39,7 @@ authenticated the selected merger installation, observed exactly one repository
 and the expected canary main revision, and retained `admin: false`,
 `maintain: false`, `push: false`. The pinned token action successfully requested
 Contents write, but the old helper rejected the repository's `push` role flag
-after three reads. The same assumption exists in the native core adapter.
+after three reads. The old native core adapter shared that assumption.
 The token was revoked. Protection, signatures and effective-rule reads were
 not reached; no required check or merge effect was performed by this diagnostic.
 
@@ -50,13 +52,59 @@ retains raw role flags, original history and every scope, protection, review
 and no-bypass check. It does not treat requested action inputs as observed
 provider response metadata or infer GitHub's token expiry.
 
-The new regressions cover this authentic response shape through controlled
-provider cases, invalid grant evidence, live lease checks and historical replay.
-The changeset's PR checks report their actual results. These tests do not prove
-protected `updateRefs`, full policy access or authentic merge acceptance. The
-canary's original business/check-producer source can remain the selected
-baseline while corrected native preflight is evaluated under freshly reviewed
-configuration and authority.
+Merged [PR #117](https://github.com/whiteredhouse/exacly/pull/117) covers this
+authentic response shape through controlled provider cases, invalid grant
+evidence, live lease checks and historical replay. The later owner-approved
+[read-only preflight 41469016096](https://github.com/whiteredhouse/exacly-delivery-acceptance/actions/runs/41469016096)
+used the reviewed native implementation, accepted the actual role flags,
+verified the one-repository scope and configured protection, and completed six
+reads with zero writes. Its token was revoked. This establishes that selected
+read-only compatibility result, not protected `updateRefs` or authentic merge
+acceptance.
+
+## GitHub aggregate readiness compatibility
+
+The canary's [PR #5](https://github.com/whiteredhouse/exacly-delivery-acceptance/pull/5)
+has a genuine human approval on its exact head. The separately trusted verifier
+[run 41477611855](https://github.com/whiteredhouse/exacly-delivery-acceptance/actions/runs/41477611855)
+ran seven business cases and published a successful required App-owned check on
+the exact generated merge commit. The ordinary head CI
+[run 41477202018](https://github.com/whiteredhouse/exacly-delivery-acceptance/actions/runs/41477202018)
+initially awaited workflow approval, then passed 56 tests in its approval-enabled
+second attempt. PR content review and workflow execution approval are separate.
+
+The owner reported an eligible merge box with both checks passing, while the
+API continued to report `APPROVED / UNSTABLE / MERGEABLE`. Both head and merge
+commit rollups reported success. The previous literal `CLEAN` gate therefore
+blocked this candidate. Empty queued App suites alone did not establish the
+cause: source PR #4 was `CLEAN` with the same Apps' empty suites. No successful
+native merge or provider-enforcement guarantee is inferred from those displays.
+
+The [merge profile](product-delivery-merge.md#aggregate-state-and-required-condition-evidence)
+now permits that documented aggregate state only with complete direct evidence:
+an explicitly reviewed six-permission App grant includes Commit statuses read;
+all actual server-required and approved-policy App-bound CheckRuns succeed on
+exact `M`; complete `H/M` legacy-status inventories contain no required-name
+collision; explicit branch-policy and resolved-conversation evidence excludes
+unsupported deployments or restricted-push requirements; and the exact comparison establishes current
+head/base ancestry. Every existing authority, protection, identity, review and
+reference condition remains required. Unknown or unsupported conditions block.
+
+The original five-permission grant remains supported for `CLEAN`; it cannot
+authorize the additional status reads. The six-permission grant uses schema
+`0.2.0`, retaining the same credential kind and adding only `statuses: read`.
+The App owner and trusted mint must explicitly grant that access. Changing the
+schema or permission map changes stable operation authority and cannot be
+performed as read-only token rotation. No App setting has been changed by this
+source change, and the earlier five-permission diagnostic remains its original
+limited evidence.
+
+The conditional fresh path uses 18 inspection reads and 40 invocation reads.
+An initial `UNSTABLE` preflight must fit the selected invocation capacity before
+marker preparation; the adapter never raises approved caps. The existing `CLEAN`
+protocol, retained record shapes and terminal replay remain unchanged. Newly
+installed code still needs newly selected operation authority. The changeset's checks report actual
+test results; source implementation does not establish operational acceptance.
 
 ## Merged dependencies and supported CI
 
@@ -186,10 +234,15 @@ snapshots in this document. Post-merge state jobs rerun verification with separa
 write authority. Never hand-edit observed state or copy controlled results into
 live acceptance.
 
-The App-grant compatibility change starts from main commit
+The earlier App-grant compatibility change started from main commit
 `8257a98e8433826fbee35ef531e1f18e0002b38f`, with CI-owned state serial 70 and
 config revision `e315018aee684b260dcc6e0c30332d319b867d33`. REQ-041 remains
 inconclusive because its required authentic acceptance case is unconfigured.
+
+The required-condition readiness change starts from main commit
+`b868263fd76e222800ab72b5c817034684de5c31`, with CI-owned state serial 71 and
+config revision `7e17a72d13cd4fcc5caeab37e3601cdb104ee01f`. That state is preserved;
+REQ-041 remains proposed and its required authentic acceptance is still pending.
 
 The earlier publication dependency snapshot was serial 69, state commit
 `a8479dcc0ccea8ed40e8473dfeb9fa6a012fb596`, config revision
