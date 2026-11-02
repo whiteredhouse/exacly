@@ -102,9 +102,14 @@ An expired installation token cannot be replaced silently. A separate
 `delivery-read-recovery` approval pins the original intent, request, payload,
 journal, goal and capacity, the old and new configuration, and the unchanged
 operation profile. Only the token descriptor and its independently reviewed
-identity attestation may rotate. The read grant permits discovery with zero
-writes, including after withdrawal; it cannot authorize apply, refill capacity,
-change code/policy/key/caps or create another intent. The original delivery
+identity attestation may rotate. For the App-grant actor described below, the
+local validity window and mint-provenance digest may rotate with that token;
+credential kind, App/installation identity, grant schema, repository selection
+and exact permissions stay in the operation profile. Switching from the legacy
+actor to the App-grant actor requires a new operation decision. The read grant
+permits discovery with zero writes, including after withdrawal; it cannot
+authorize apply, refill capacity, change code/policy/key/caps or create another
+intent. The original delivery
 receipt retains its original authority and configuration.
 
 The first profile does not implement runtime migration. Recover with the exact
@@ -121,6 +126,93 @@ review of that minting descriptor is a trusted bootstrap attestation; the
 adapter does not claim it independently proves the token's issuer through an
 unavailable identity API. The marker key is a separate delivery key; an existing
 verification/publication key is not accepted as one.
+
+### GitHub App capability evidence
+
+The legacy actor remains the exact four-field descriptor: `app_id`,
+`installation_id`, `token_digest` and `identity_approval_digest`. It keeps its
+existing repository-role checks. The explicit App-grant actor adds
+`credential_kind: github-app-installation-grant-v1` and the closed `grant`
+object below. Both actor shapes reject unknown fields.
+
+GitHub App grants and repository role flags are separate evidence. In the
+[nonproduction diagnostic](https://github.com/whiteredhouse/exacly-delivery-acceptance/actions/runs/41422406506),
+the pinned token action successfully requested Contents write for the selected
+installation, while the repository response reported `push: false`. The legacy
+check rejected that flag before reading branch protection. The App-grant actor
+retains the actual role observations, including `false` or unavailable flags;
+it does not manufacture `push: true`. A response that positively reports an
+administrator or maintainer role remains unsupported.
+
+Illustrative actor shape; replace the identities, digests and local validity
+window with the actual reviewed values:
+
+```json
+{
+  "credential_kind": "github-app-installation-grant-v1",
+  "app_id": 5572362,
+  "installation_id": 177653055,
+  "token_digest": "sha256:<selected-token-digest>",
+  "identity_approval_digest": "sha256:<selected-identity-attestation-digest>",
+  "grant": {
+    "schema_version": "0.1.0",
+    "repository_ids": [1442278205],
+    "permissions": {
+      "contents": "write",
+      "administration": "read",
+      "checks": "read",
+      "metadata": "read",
+      "pull_requests": "read"
+    },
+    "not_before": "2026-11-02T10:00:00Z",
+    "not_after": "2026-11-02T10:10:00Z",
+    "mint_provenance_digest": "sha256:<reviewed-mint-evidence-digest>"
+  }
+}
+```
+
+The repository list must contain only the configured repository. The permission
+map must equal the five entries shown; missing, additional or broader grants
+are refused. The independently selected configuration and identity attestation
+bind the whole grant to the exact token, App, installation and repository.
+A supplied permission object or matching provenance digest does not establish
+that the issuer evidence was authenticated or independently reviewed.
+
+Retain the actual mint response or an explicitly trusted mint-run attestation
+for that review. A trusted run attestation identifies its run and attempt,
+pinned workflow, source and token-action implementation, exact requested
+permissions, actual selected installation output and token digest. The
+[pinned token action](https://github.com/actions/create-github-app-token/blob/64ab729a6294000f5aa4a4bc0b73d1f32bc45510/README.md#create-a-token-with-specific-permissions)
+refuses requested permissions absent from the installation. Its ordinary
+outputs do not expose the provider's granted-permission response or token
+expiry; a following step must not label requested inputs as an independently
+observed response or derive a purported provider expiry from the current time.
+
+`not_before` and `not_after` are an independently approved **local use window**,
+with UTC timestamps and a positive duration of at most one hour. They do not
+claim GitHub's token issue time or expiry. The adapter checks actual UTC before
+creating a fresh session and before every provider request, including reads and
+reconciliation. GitHub may refuse an earlier-expired or revoked token. A local
+window or successful mint does not establish that a protected mutation will
+succeed, and neither permits another write after an uncertain outcome.
+
+Static configuration validation and retained-fact validation check the local
+window's shape and ordering without consulting the current clock. Historical
+terminal replay therefore does not expire with a credential. The live adapter
+still checks actual single-repository installation scope, protection, required
+checks and independent reviews under the selected policy. The App descriptor
+does not grant a protection bypass or relax any of those checks.
+
+`exacly.automatic_merge.validate_installation_grant_candidate(repository,
+actor, live_facts)` is a pure advisory validator for collecting review inputs.
+Its closed candidate actor deliberately omits `identity_approval_digest`; the
+installed configuration schema rejects that candidate. It checks supplied
+facts without performing provider I/O or authenticating their provenance.
+The caller separately uses `validate_installation_grant_time` with actual UTC
+before fresh provider activity. A workflow result such as
+`candidate_checks_passed` with `independent_mint_approval: false` establishes
+neither an approved installation nor native merge readiness. Independent mint
+review and the complete merge approval remain separate steps.
 
 Create local storage before reviewing the resulting journal/key identities:
 
@@ -159,6 +251,9 @@ Before a live effect, retain a reviewable packet containing:
 - Current protection configuration, required check/application identities,
   independent reviews, actor minting attestation, installed configuration and
   protected model/criteria/bindings/observer Git-blob inventory.
+- For an App-grant actor, the exact token-bound grant, its reviewed mint
+  evidence and local validity window; retain requested and observed mint facts
+  with their actual provenance rather than replacing repository role flags.
 - Original objective/goal, canonical journal path/UUID, key identity, operation
   key, marker ref, finite aggregate/native budgets and actual expiry.
 - Exact request, payload, selected approval document and separately supplied
@@ -168,8 +263,9 @@ Before a live effect, retain a reviewable packet containing:
   commands. Confirm the selected provider's guarantees rather than inferring
   them from a controlled fake provider.
 
-No destination or runtime grant is currently approved. This packet becomes an
-operational approval request only after those concrete identities are selected.
+Selecting a repository or running credential diagnostics grants no runtime
+merge authority. This packet becomes an operational approval request only after
+those concrete identities and limits are selected for independent review.
 A merge receipt records a repository effect. The resulting commit needs new
 applicable observations before readiness, and separate grants for publication
 and deployment. It establishes no runtime health.

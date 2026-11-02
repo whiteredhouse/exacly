@@ -7,6 +7,7 @@ Protected-contract fingerprints are computed from reviewed before/after Git blob
 
 from __future__ import annotations
 
+import datetime as dt
 import hashlib
 import re
 from pathlib import Path, PurePosixPath
@@ -25,6 +26,46 @@ TEXT = delivery.TEXT
 SHA = delivery.SHA
 DIGEST = delivery.DIGEST
 POSITIVE = delivery.POSITIVE
+INSTALLATION_GRANT_KIND = "github-app-installation-grant-v1"
+INSTALLATION_GRANT_VERSION = "0.1.0"
+MAX_INSTALLATION_GRANT_SECONDS = 3600
+INSTALLATION_PERMISSIONS = {
+    "contents": "write",
+    "administration": "read",
+    "checks": "read",
+    "metadata": "read",
+    "pull_requests": "read",
+}
+ACTOR_IDENTITY = {
+    "app_id": POSITIVE,
+    "installation_id": POSITIVE,
+    "token_digest": DIGEST,
+    "identity_approval_digest": DIGEST,
+}
+REPOSITORY_SCHEMA = FIELDS({"id": POSITIVE, "full_name": TEXT, "node_id": TEXT})
+INSTALLATION_ACTOR_SCHEMA = FIELDS(
+    {
+        **ACTOR_IDENTITY,
+        "credential_kind": {"const": INSTALLATION_GRANT_KIND},
+        "grant": FIELDS(
+            {
+                "schema_version": {"const": INSTALLATION_GRANT_VERSION},
+                "repository_ids": {"type": "array", "minItems": 1, "maxItems": 1, "items": POSITIVE},
+                "permissions": FIELDS({name: {"const": value} for name, value in INSTALLATION_PERMISSIONS.items()}),
+                "not_before": TEXT,
+                "not_after": TEXT,
+                "mint_provenance_digest": DIGEST,
+            }
+        ),
+    }
+)
+INSTALLATION_CANDIDATE_SCHEMA = FIELDS(
+    {
+        name: schema
+        for name, schema in INSTALLATION_ACTOR_SCHEMA["properties"].items()
+        if name != "identity_approval_digest"
+    }
+)
 LIMIT = FIELDS(
     {
         "wall_time_ms": {"type": "integer", "minimum": 1, "maximum": 120000},
@@ -36,16 +77,9 @@ CONFIG_SCHEMA = FIELDS(
     {
         "schema_version": {"const": VERSION},
         "profile": {"const": PROFILE},
-        "repository": FIELDS({"id": POSITIVE, "full_name": TEXT, "node_id": TEXT}),
+        "repository": REPOSITORY_SCHEMA,
         "token_environment": TEXT,
-        "actor": FIELDS(
-            {
-                "app_id": POSITIVE,
-                "installation_id": POSITIVE,
-                "token_digest": DIGEST,
-                "identity_approval_digest": DIGEST,
-            }
-        ),
+        "actor": {"oneOf": [FIELDS(ACTOR_IDENTITY), INSTALLATION_ACTOR_SCHEMA]},
         "key": FIELDS({"path": TEXT, "id": DIGEST}),
         "call_limits": FIELDS({name: LIMIT for name in ("inspect", "invoke", "reconcile")}),
     }
@@ -95,11 +129,62 @@ def branch(value: str) -> None:
     )
 
 
+def _grant_window(grant: Doc) -> tuple[dt.datetime, dt.datetime]:
+    """A reviewed local use lease, not a claim about the provider token's expiry."""
+    try:
+        start, end = (
+            dt.datetime.fromisoformat(grant[name].replace("Z", "+00:00")) for name in ("not_before", "not_after")
+        )
+        require(
+            all(value.utcoffset() == dt.timedelta(0) for value in (start, end)),
+            "installation grant lifetime requires UTC timestamps",
+        )
+        require(
+            0 < (end - start).total_seconds() <= MAX_INSTALLATION_GRANT_SECONDS,
+            "installation grant local lifetime must be positive and at most one hour",
+        )
+        return start, end
+    except (TypeError, OverflowError, AttributeError) as error:
+        raise ValueError("invalid installation grant local lifetime") from error
+    except ValueError as error:
+        raise ValueError("invalid installation grant local lifetime") from error
+
+
+def _validate_installation_grant(actor: Doc, repository_id: int) -> None:
+    """Apply shared semantic checks after selecting a closed actor schema."""
+    grant = actor["grant"]
+    require(grant["repository_ids"] == [repository_id], "installation grant must select the configured repository only")
+    _grant_window(grant)
+
+
+def _validate_grant_time(grant: Doc, now: dt.datetime) -> None:
+    start, end = _grant_window(grant)
+    require(type(now) is dt.datetime and now.utcoffset() is not None, "credential lease checks require actual UTC")
+    require(start <= now.astimezone(dt.UTC) < end, "installation grant local use lease is not current")
+
+
+def validate_installation_grant_time(actor: Any, *, now: dt.datetime) -> None:
+    """Bound a closed mint candidate or installed actor before fresh provider activity."""
+    selected = delivery._schema(actor, {"oneOf": [INSTALLATION_CANDIDATE_SCHEMA, INSTALLATION_ACTOR_SCHEMA]})
+    _validate_grant_time(selected["grant"], now)
+
+
+def validate_credential_time(configuration: Doc, *, now: dt.datetime) -> None:
+    """Bound fresh provider activity; retained configuration and facts never expire here."""
+    actor = configuration["actor"]
+    if "credential_kind" not in actor:
+        return
+    require(actor.get("credential_kind") == INSTALLATION_GRANT_KIND, "unsupported merge credential kind")
+    _validate_grant_time(actor["grant"], now)
+
+
 def validate_configuration(value: Any) -> Doc:
     config = delivery._schema(value, CONFIG_SCHEMA)
     delivery._repository(config["repository"])
     selector = config["token_environment"]
     require(selector == "EXACLY_DELIVERY_MERGE_TOKEN", "merge credentials require the fixed delivery-merge selector")
+    if config["actor"].get("credential_kind") == INSTALLATION_GRANT_KIND:
+        _validate_installation_grant(config["actor"], config["repository"]["id"])
     path = Path(config["key"]["path"])
     require(
         path.is_absolute() and str(path) == config["key"]["path"] and ".." not in path.parts,
@@ -142,6 +227,12 @@ def _profile(configuration: Any, policy: Any, *, operation: bool) -> Doc:
             for key, value in config["actor"].items()
             if key not in ("token_digest", "identity_approval_digest")
         }
+        if config["actor"].get("credential_kind") == INSTALLATION_GRANT_KIND:
+            config["actor"]["grant"] = {
+                key: value
+                for key, value in config["actor"]["grant"].items()
+                if key not in ("not_before", "not_after", "mint_provenance_digest")
+            }
     return {"configuration": config, "policy": approved, **delivery_profile.implementation(required=required)}
 
 
@@ -447,36 +538,74 @@ def _ready_shape(facts: Any) -> None:
     require(facts["rules"] == [], "unsupported retained effective rules")
 
 
-def validate_actor_facts(configuration: Doc, facts: Any) -> None:
-    """Require the actual current token's narrow repository role and installation scope."""
-    require(isinstance(facts, dict), "merge actor facts are missing")
-    config = configuration
-    repo = facts.get("repository", {})
-    require(
-        isinstance(repo, dict)
-        and type(repo.get("id")) is int
-        and all(type(repo.get(key)) is bool for key in ("admin", "maintain", "push")),
-        "invalid provider repository identity or permissions",
-    )
-    require(
-        repo
-        == {
-            "id": config["repository"]["id"],
-            "full_name": config["repository"]["full_name"],
-            "node_id": config["repository"]["node_id"],
-            "admin": False,
-            "maintain": False,
-            "push": True,
-        },
-        "unknown, broad or bypass-capable merge actor",
-    )
+def _validate_installation_scope(facts: Doc, repository_id: int) -> None:
     installation_ids = facts.get("installation_repository_ids")
     require(
         isinstance(installation_ids, list)
         and all(type(item) is int for item in installation_ids)
-        and installation_ids == [repo["id"]],
+        and installation_ids == [repository_id],
         "merge token is not single-repository scoped",
     )
+
+
+def _validate_installation_actor_facts(repository: Doc, facts: Any) -> None:
+    require(isinstance(facts, dict), "merge actor facts are missing")
+    repo = facts.get("repository", {})
+    require(
+        isinstance(repo, dict)
+        and set(repo) == {"id", "full_name", "node_id", "admin", "maintain", "push"}
+        and type(repo.get("id")) is int
+        and all(repo.get(name) is None or type(repo[name]) is bool for name in ("admin", "maintain", "push")),
+        "invalid provider repository identity or role observations",
+    )
+    require(
+        {name: repo[name] for name in ("id", "full_name", "node_id")} == repository
+        and repo["admin"] is not True
+        and repo["maintain"] is not True,
+        "unknown, broad or bypass-capable merge actor",
+    )
+    _validate_installation_scope(facts, repo["id"])
+
+
+def validate_installation_grant_candidate(repository: Any, actor: Any, live_facts: Any) -> Doc:
+    """Return advisory mint metadata; it cannot contain or establish an independent approval."""
+    selected_repository = delivery._schema(repository, REPOSITORY_SCHEMA)
+    delivery._repository(selected_repository)
+    candidate = delivery._schema(actor, INSTALLATION_CANDIDATE_SCHEMA)
+    _validate_installation_grant(candidate, selected_repository["id"])
+    _validate_installation_actor_facts(selected_repository, live_facts)
+    return candidate
+
+
+def validate_actor_facts(configuration: Doc, facts: Any) -> None:
+    """Keep raw role observations distinct from independently approved App mint grants."""
+    require(isinstance(facts, dict), "merge actor facts are missing")
+    config = configuration
+    repo = facts.get("repository", {})
+    if config["actor"].get("credential_kind") == INSTALLATION_GRANT_KIND:
+        actor = delivery._schema(config["actor"], INSTALLATION_ACTOR_SCHEMA)
+        _validate_installation_grant(actor, config["repository"]["id"])
+        _validate_installation_actor_facts(config["repository"], facts)
+    else:
+        require(
+            isinstance(repo, dict)
+            and type(repo.get("id")) is int
+            and all(type(repo.get(key)) is bool for key in ("admin", "maintain", "push")),
+            "invalid provider repository identity or permissions",
+        )
+        require(
+            repo
+            == {
+                "id": config["repository"]["id"],
+                "full_name": config["repository"]["full_name"],
+                "node_id": config["repository"]["node_id"],
+                "admin": False,
+                "maintain": False,
+                "push": True,
+            },
+            "unknown, broad or bypass-capable merge actor",
+        )
+        _validate_installation_scope(facts, repo["id"])
 
 
 def validate_ready_facts(request: Doc, payload: Doc, configuration: Doc, policy: Doc, facts: Any) -> None:

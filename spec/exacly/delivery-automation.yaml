@@ -72,15 +72,16 @@ records:
     owner: exacly-maintainers
     lifecycle: proposed
     evidence: []
-    last_reviewed_at: "2026-11-01"
+    last_reviewed_at: "2026-11-02"
     statement: Merge only a pull request covered by separate approved merge authority, after resolving its exact head and base and satisfying the repository's required checks and reviews without bypass.
     acceptance_criteria:
       - Resolve independently granted merge scope to the repository, pull request, exact head and base, allowed method and applicable approval decision immediately before the effect; verification, execution and handoff authority alone cannot authorize merging.
+      - An App-grant credential uses independently reviewed mint evidence bound to the exact token, application, installation, repository and permitted capabilities; enforce its finite local use window before every fresh provider request, without rewriting observed role flags or treating document validation as authority.
       - Require current checks and reviews applicable to that exact head and base under the approved branch policy; changed heads or bases invalidate stale decisions, and automation cannot bypass protection, dismiss required review or weaken required checks.
       - Preserve the approved criteria and observation bindings; generated tests or a successful executor cannot approve their own meaning or substitute for independently required review.
       - Persist the conditional merge intent and stable effect identity before invoking the approved external merge workflow; retain the actual resulting commit and remote receipt, and reconcile an uncertain outcome before another request.
       - A merged pull request establishes only the recorded repository effect; the resulting merged commit needs fresh applicable observations before later readiness or delivery claims, and merging grants no publication or deployment authority.
-    verification_method: Exact GitHub merge identity, protected criteria and bindings, current checks and reviews, durable delivery-journal budgets, real watchdog and recovery, fixed CLI and uncertain-effect tests; authentic GitHub acceptance remains separately selected and cannot be established by controlled provider fixtures.
+    verification_method: Exact GitHub merge identity, token-bound App grants and per-request local credential validity, legacy and historical replay compatibility, protected criteria and bindings, current checks and reviews, durable delivery-journal budgets, real watchdog and recovery, fixed CLI and uncertain-effect tests; authentic GitHub acceptance remains separately selected and cannot be established by controlled provider fixtures.
     observe:
       tests:
         cases:
@@ -90,6 +91,7 @@ records:
           - "python/tests/test_automatic_merge.py::test_merged_commit_requires_fresh_observations"
           - "python/tests/test_automatic_merge.py::*"
           - "python/tests/test_github_merge.py::*"
+          - "python/tests/test_github_app_grants.py::*"
           - "python/tests/test_automatic_merge_faults.py::*"
           - "python/tests/test_automatic_merge_live_observer.py::*"
           - "python/tests/test_automatic_merge_live.py::*"
@@ -174,9 +176,9 @@ records:
     owner: exacly-maintainers
     lifecycle: proposed
     evidence: []
-    last_reviewed_at: "2026-11-01"
-    responsibility: Invoke only independently approved external delivery workflows for exact permitted identities, retain conditional effects and receipts, and integrate explicitly approved deployment and runtime observation contracts without granting itself policy, verification or broader delivery authority.
-    interfaces: [exacly delivery command, exacly.delivery_engine Python API, Exact GitHub merge adapter, Local owning-publisher workflow and exact-byte consumer, Local static-artifact deployment and rollback adapter, exacly.operational_observation Python API]
+    last_reviewed_at: "2026-11-02"
+    responsibility: Invoke only independently approved external delivery workflows for exact permitted identities, validate advisory merge credential candidates and independently approved capabilities, retain conditional effects and receipts, and integrate explicitly approved deployment and runtime observation contracts without granting itself policy, verification or broader delivery authority.
+    interfaces: [exacly delivery command, exacly.delivery_engine Python API, exacly.automatic_merge candidate validation Python API, Exact GitHub merge adapter, Local owning-publisher workflow and exact-byte consumer, Local static-artifact deployment and rollback adapter, exacly.operational_observation Python API]
     implementation_ref: { locator: python/src/exacly/delivery_engine.py }
 
   - id: INFO-013
@@ -198,9 +200,9 @@ records:
     owner: exacly-maintainers
     lifecycle: proposed
     evidence: []
-    last_reviewed_at: "2026-11-01"
-    definition: Versioned per-stage authorization decisions, durable conditional intents, external workflow and effect identities, exact pull-request heads and bases or artifact/version/environment scope, actual resulting commits and destinations, retained receipts and applicable observation references, with uncertain-outcome and separately authorized bounded rollback history. Authenticated deployment and operational reports retain exact rollout and artifact scope, measurement windows and historical evaluations separately from current freshness; a known applied effect remains recorded when health is stale or unhealthy, and earlier stage outcomes never imply later authority.
-    identifiers: [effect ID and stage, authorization digest, proposal revision, repository and pull-request identity, expected head and base, resulting commit, artifact digest, immutable release version, destination and environment, workflow run, observation and receipt digests]
+    last_reviewed_at: "2026-11-02"
+    definition: Versioned per-stage authorization decisions, durable conditional intents, external workflow and effect identities, exact pull-request heads and bases or artifact/version/environment scope, actual resulting commits and destinations, retained receipts and applicable observation references, with uncertain-outcome and separately authorized bounded rollback history. Selected App-grant merge credentials retain token digests, application, installation, repository and permission bindings, independently reviewed mint provenance and a finite local use window; advisory candidates omit independent approval, and historical receipts preserve their original authority after that window expires. Authenticated deployment and operational reports retain exact rollout and artifact scope, measurement windows and historical evaluations separately from current freshness; a known applied effect remains recorded when health is stale or unhealthy, and earlier stage outcomes never imply later authority.
+    identifiers: [effect ID and stage, authorization digest, proposal revision, repository and pull-request identity, expected head and base, resulting commit, artifact digest, immutable release version, destination and environment, workflow run, credential token digest, application and installation identity, mint provenance digest, local credential use window, observation and receipt digests]
     steward: exacly-maintainers
 
 relationships:
