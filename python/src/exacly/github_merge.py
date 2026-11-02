@@ -38,12 +38,17 @@ class ProviderUnavailable(ValueError):
     """A provider result cannot establish the requested fact; diagnostics exclude remote bodies."""
 
 
+def _credential_now() -> dt.datetime:
+    """Fresh credentials use the real clock, never a timestamp selected by input JSON."""
+    return dt.datetime.now(dt.UTC)
+
+
 class _Session:
     def __init__(self, configuration: Doc, method: str, deadline: store.Deadline, opener: Any) -> None:
-        self.configuration, self.deadline, self.opener = configuration, deadline, opener
-        self.limits = configuration["call_limits"][method]
+        self.configuration, self.deadline, self.opener = merge.validate_configuration(configuration), deadline, opener
+        self.limits = self.configuration["call_limits"][method]
         self.reads = self.writes = 0
-        token = os.environ.get(configuration["token_environment"], "")
+        token = os.environ.get(self.configuration["token_environment"], "")
         merge.require(
             token
             and token.isascii()
@@ -51,13 +56,15 @@ class _Session:
             "selected delivery merge credential is unavailable",
         )
         merge.require(
-            "sha256:" + hashlib.sha256(token.encode()).hexdigest() == configuration["actor"]["token_digest"],
+            "sha256:" + hashlib.sha256(token.encode()).hexdigest() == self.configuration["actor"]["token_digest"],
             "delivery credential differs from independently approved mint identity",
         )
+        merge.validate_credential_time(self.configuration, now=_credential_now())
         self.token = token
 
     def request(self, method: str, path: str, body: Doc | None = None, *, optional: bool = False) -> Any:
         self.deadline.check()
+        merge.validate_credential_time(self.configuration, now=_credential_now())
         mutation = method == "POST" and path != "/graphql-read"
         if mutation:
             self.writes += 1
@@ -234,7 +241,11 @@ class GitHubMergeAdapter:
 
     def _actor(self, session: _Session) -> Doc:
         repo = _object(session.request("GET", self._prefix))
-        permissions = _object(repo.get("permissions"))
+        raw_permissions = repo.get("permissions")
+        if session.configuration["actor"].get("credential_kind") == merge.INSTALLATION_GRANT_KIND:
+            permissions = {} if raw_permissions is None else _object(raw_permissions)
+        else:
+            permissions = _object(raw_permissions)
         scope = _object(session.request("GET", "/installation/repositories?per_page=100"))
         repositories = scope.get("repositories")
         merge.require(

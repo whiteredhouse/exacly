@@ -1,6 +1,6 @@
 # Product delivery implementation checkpoint
 
-Checkpoint: 2026-11-01. This is the **second target**, REQ-040–043 under
+Checkpoint: 2026-11-02. This is the **second target**, REQ-040–043 under
 CAP-005/PROC-005 from [roadmap #87](https://github.com/whiteredhouse/exacly/pull/87).
 The [verification checkpoint](automation-progress.md) covers REQ-034–039
 separately. Neither target inherits the other's operational authority.
@@ -12,19 +12,51 @@ separately. Neither target inherits the other's operational authority.
 | REQ-040 | Merged [PR #113](https://github.com/whiteredhouse/exacly/pull/113): advisory planner and immutable proposal CLI | 149 bound cases; full supported CI and 146 installed checks passed | Advisory planning only; no coding-agent execution or delivery authority implied |
 | REQ-041 | Merged [PR #114](https://github.com/whiteredhouse/exacly/pull/114): durable journal, bounded calls and exact GitHub merge adapter | 233 controlled cases; supported full CI, independent review and 99 installed checks passed | Required genuine positive observer is unconfigured; authentic negative lease/protection cases and runtime delegation remain pending |
 | REQ-042 | Merged [PR #115](https://github.com/whiteredhouse/exacly/pull/115): exact prebuilt bytes through the separately owned local publisher | 93 bound cases, independent review, 100 fresh installed checks and supported full CI passed | No operating publisher destination or public-release authority approved |
-| REQ-043 | Implemented in this deployment changeset: static owner, independent HTTP observer/evaluator and separately bounded rollback | 100 native/observer cases and 15 CLI cases verified; independent review and 25 installed checks passed. Final-head full CI is recorded on the linked delivery PR | No selected deployment environment, observer or rollback grant approved |
+| REQ-043 | Merged [PR #116](https://github.com/whiteredhouse/exacly/pull/116): static owner, independent HTTP observer/evaluator and separately bounded rollback | 100 native/observer cases and 15 CLI cases verified; independent review and 25 installed checks passed. Final-head full CI is recorded on the linked delivery PR | No selected deployment environment, observer or rollback grant approved |
 
-The [deployment PR](https://github.com/whiteredhouse/exacly/pulls?q=is%3Apr+head%3Acodex%2Fproduct-delivery-deployment)
-is authoritative for this changeset's exact head, required checks, reviews and
-merge identity. Check its current status before resuming; do not reapply merged
-work or infer approval from this checkpoint. All source implementation is
-present. Authentic acceptance remains separate.
+The named source PRs retain their exact checked heads, reviews and merge
+identities. Their historical verification counts do not include the App-grant
+compatibility change below. Do not reapply merged work or infer operational
+approval from this checkpoint. Authentic acceptance remains separate.
 
-CAP-005/PROC-005, REQ-041–043 and APP-025/INFO-014 remain proposed. Approved
-requirement statements and acceptance criteria are unchanged. Source tests,
-workflow success and native readiness gates establish no runtime health.
+CAP-005/PROC-005, REQ-041–043 and APP-025/INFO-014 remain proposed. This
+changeset adds explicit token-bound App-grant evidence and local credential-use
+criteria to REQ-041. Source tests, workflow success and native readiness gates
+establish no runtime health.
 The fixed snapshot-inventory worker hashes fixture inputs; it is not a coding
 agent. No general coding-agent integration is claimed.
+
+## GitHub App actor compatibility
+
+The dedicated public repository
+[`whiteredhouse/exacly-delivery-acceptance`](https://github.com/whiteredhouse/exacly-delivery-acceptance)
+now provides a nonproduction canary with separately selected verifier and merger
+Apps. The owner-approved
+[diagnostic run 41422406506](https://github.com/whiteredhouse/exacly-delivery-acceptance/actions/runs/41422406506)
+authenticated the selected merger installation, observed exactly one repository
+and the expected canary main revision, and retained `admin: false`,
+`maintain: false`, `push: false`. The pinned token action successfully requested
+Contents write, but the old helper rejected the repository's `push` role flag
+after three reads. The same assumption exists in the native core adapter.
+The token was revoked. Protection, signatures and effective-rule reads were
+not reached; no required check or merge effect was performed by this diagnostic.
+
+The [merge profile](product-delivery-merge.md#github-app-capability-evidence)
+now adds an explicit App-grant actor alongside the unchanged legacy actor
+shape. Its independently reviewed mint evidence is bound to the exact token,
+App, installation, selected repository and exact limited permissions. A finite
+local use window is checked before each fresh provider request. The profile
+retains raw role flags, original history and every scope, protection, review
+and no-bypass check. It does not treat requested action inputs as observed
+provider response metadata or infer GitHub's token expiry.
+
+The new regressions cover this authentic response shape through controlled
+provider cases, invalid grant evidence, live lease checks and historical replay.
+The changeset's PR checks report their actual results. These tests do not prove
+protected `updateRefs`, full policy access or authentic merge acceptance. The
+canary's original business/check-producer source can remain the selected
+baseline while corrected native preflight is evaluated under freshly reviewed
+configuration and authority.
 
 ## Merged dependencies and supported CI
 
@@ -54,9 +86,10 @@ passed 4,589 tests, 16 explicit unconfigured live skips and all 37 active gates,
 passed. Each source merge used normal expected-head merging after required
 checks/reviews, without rule changes or bypass.
 
-## Deployment source and evidence
+## Deployment implementation snapshot (2026-11-01)
 
-Worktree: `/workspace/work/exacly-product-delivery/deployment`.
+This section retains the deployment changeset's original source and verification
+snapshot. Its worktree was `/workspace/work/exacly-product-delivery/deployment`.
 Branch: `codex/product-delivery-deployment`. The publication dependency is
 `0d1e44d785b80a8fbc75db600f32e6a88abe715b`; refresh current main and inspect
 the delivery PR before performing any recovery. Preserve unrelated worktrees.
@@ -153,7 +186,12 @@ snapshots in this document. Post-merge state jobs rerun verification with separa
 write authority. Never hand-edit observed state or copy controlled results into
 live acceptance.
 
-The last independently reread dependency snapshot was serial 69, state commit
+The App-grant compatibility change starts from main commit
+`8257a98e8433826fbee35ef531e1f18e0002b38f`, with CI-owned state serial 70 and
+config revision `e315018aee684b260dcc6e0c30332d319b867d33`. REQ-041 remains
+inconclusive because its required authentic acceptance case is unconfigured.
+
+The earlier publication dependency snapshot was serial 69, state commit
 `a8479dcc0ccea8ed40e8473dfeb9fa6a012fb596`, config revision
 `43bd44add2814032c3560cacd976c612481e2c36`, written
 `2026-11-01T13:33:53Z`.
@@ -172,15 +210,17 @@ new invocation. Historical proofs are not transferable authority.
 ## Operational handoff and recovery
 
 The [nonproduction acceptance plan](product-delivery-acceptance.md) specifies
-positive/negative cases and the exact packet inputs. No compatible operating
-repository/environment, trusted observer or runtime delegation has been supplied.
-The managed environment has no configured runtime credentials/outbound identities.
-Implementation authorization covers source PRs/checks/normal merges, not public
-releases, production deployment, destructive effects, paid infrastructure or
-repository-rule changes. None of those effects is approved by this document.
+positive/negative cases and the exact packet inputs. The selected canary and
+authenticated diagnostic establish the compatibility finding above; a complete
+merge packet, genuine positive observer and runtime delegation remain pending.
+The local managed environment has no configured runtime credentials/outbound
+identities. App key access is controlled by the selected GitHub environments
+and their reviewed workflows. This document grants no merge, public-release,
+production-deployment or repository-administration authority.
 
-Next work is selection of existing compatible nonproduction infrastructure and
-independent approval of concrete exact stage packets from the final installation.
+Next work is review of the App-grant configuration and mint evidence, corrected
+native preflight, and independent approval of concrete exact stage packets from
+the final installation.
 A first-target dependency with unverified live prerequisites stays blocked.
 Do not manufacture a grant from fixture issuers, matching hashes or templates.
 
@@ -189,4 +229,6 @@ CI-owned state and any operator reply. Verify each post-merge observation refres
 preserve all original goals/counters and reconcile uncertainty without resending.
 External recovery evidence is under `/workspace/work/exacly-product-delivery/`:
 `state.json`, source guards, review logs, QA reports and
-`watchdog-investigation/REPORT.md`. No further source behavior change is planned.
+`watchdog-investigation/REPORT.md`. The selected diagnostic evidence is retained
+under `merge-acceptance-bootstrap/`; it is distinct from runtime merge authority
+and from the controlled implementation evidence.
