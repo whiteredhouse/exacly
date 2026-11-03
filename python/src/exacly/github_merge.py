@@ -13,6 +13,8 @@ import hashlib
 import json
 import os
 import re
+from dataclasses import dataclass
+from enum import StrEnum
 from http.client import HTTPException
 from pathlib import Path
 from typing import Any, cast
@@ -39,8 +41,68 @@ reviewThreads(first:100){totalCount pageInfo{hasNextPage} nodes{id isResolved}}}
 UPDATE_QUERY = "mutation($input:UpdateRefsInput!){updateRefs(input:$input){clientMutationId}}"
 
 
+class _InspectionStage(StrEnum):
+    UNKNOWN = "unknown"
+    KEY = "key"
+    CREDENTIAL = "credential"
+    REPOSITORY = "repository"
+    INSTALLATION_SCOPE = "installation_scope"
+    PROTECTION = "protection"
+    SIGNATURES = "signatures"
+    RULES = "rules"
+    PULL_REQUEST = "pull_request"
+    REVIEW = "review"
+    UNSTABLE_CAPABILITY = "unstable_capability"
+    LEGACY_HEAD_STATUS = "legacy_head_status"
+    LEGACY_MERGE_STATUS = "legacy_merge_status"
+    LEGACY_STATUS_FACTS = "legacy_status_facts"
+    BRANCH_CONDITIONS = "branch_conditions"
+    ANCESTRY = "ancestry"
+    REQUIRED_CONDITION_FACTS = "required_condition_facts"
+    CHECKS = "checks"
+    MERGE_COMMIT = "merge_commit"
+    CONTRACT_TREES = "contract_trees"
+    REFERENCES = "references"
+    READY_FACTS = "ready_facts"
+
+
+class _ProviderFailure(StrEnum):
+    HTTP = "http_error"
+    TRANSPORT = "transport_error"
+    RESPONSE = "invalid_response"
+
+
 class ProviderUnavailable(ValueError):
     """A provider result cannot establish the requested fact; diagnostics exclude remote bodies."""
+
+    def __init__(self, code: _ProviderFailure, *, http_status: int | None = None) -> None:
+        super().__init__("GitHub delivery request is unavailable")
+        self.code, self.http_status = code, http_status
+
+
+@dataclass
+class _InspectionProgress:
+    """Per-call diagnostic context; it never holds provider content or authorizes an effect."""
+
+    stage: _InspectionStage = _InspectionStage.KEY
+
+    def blocked_reason(self, error: Exception) -> str:
+        status = None
+        if isinstance(error, ProviderUnavailable) and isinstance(error.code, _ProviderFailure):
+            code = error.code.value
+            if type(error.http_status) is int and 100 <= error.http_status <= 599:
+                status = error.http_status
+        elif isinstance(error, store.StoreError):
+            code = "deadline_or_storage"
+        elif isinstance(error, OSError):
+            code = "local_io_error"
+        elif isinstance(error, (KeyError, TypeError, AttributeError)):
+            code = "malformed_facts"
+        else:
+            code = "validation_failed"
+        suffix = "" if status is None else f"; http_status={status}"
+        stage = self.stage if isinstance(self.stage, _InspectionStage) else _InspectionStage.UNKNOWN
+        return f"GitHub merge readiness blocked: stage={stage.value}; code={code}{suffix}."
 
 
 def _credential_now() -> dt.datetime:
@@ -49,7 +111,16 @@ def _credential_now() -> dt.datetime:
 
 
 class _Session:
-    def __init__(self, configuration: Doc, method: str, deadline: store.Deadline, opener: Any) -> None:
+    def __init__(
+        self,
+        configuration: Doc,
+        method: str,
+        deadline: store.Deadline,
+        opener: Any,
+        *,
+        progress: _InspectionProgress | None = None,
+    ) -> None:
+        self.progress = progress if progress is not None else _InspectionProgress()
         self.configuration, self.deadline, self.opener = merge.validate_configuration(configuration), deadline, opener
         self.limits = self.configuration["call_limits"][method]
         self.reads = self.writes = 0
@@ -112,9 +183,13 @@ class _Session:
         except HTTPError as error:
             if optional and error.code == 404:
                 return None
-            raise ProviderUnavailable("GitHub delivery request was not confirmed") from None
-        except (URLError, HTTPException, OSError, ValueError):
-            raise ProviderUnavailable("GitHub delivery response is unavailable or malformed") from None
+            raise ProviderUnavailable(_ProviderFailure.HTTP, http_status=error.code) from None
+        except store.StoreError:
+            raise
+        except (URLError, HTTPException, OSError):
+            raise ProviderUnavailable(_ProviderFailure.TRANSPORT) from None
+        except ValueError:
+            raise ProviderUnavailable(_ProviderFailure.RESPONSE) from None
 
 
 def _object(value: Any) -> Doc:
@@ -163,17 +238,22 @@ class GitHubMergeAdapter:
             method, request, payload, result, configuration=self.configuration, policy=self.policy
         )
 
-    def _session(self, method: str, deadline: store.Deadline) -> _Session:
+    def _session(
+        self, method: str, deadline: store.Deadline, *, progress: _InspectionProgress | None = None
+    ) -> _Session:
         deadline.check()
         key = self.configuration["key"]
         delivery_key.validate_key(Path(key["path"]), key["id"], lock_timeout=deadline.remaining())
-        return _Session(self.configuration, method, deadline, self._opener)
+        if progress is not None:
+            progress.stage = _InspectionStage.CREDENTIAL
+        return _Session(self.configuration, method, deadline, self._opener, progress=progress)
 
     @property
     def _prefix(self) -> str:
         return "/repos/" + str(self.configuration["repository"]["full_name"])
 
     def _ref(self, session: _Session, name: str) -> str | None:
+        session.progress.stage = _InspectionStage.REFERENCES
         value = session.request(
             "GET", self._prefix + "/git/ref/" + quote(name.removeprefix("refs/"), safe="/"), optional=True
         )
@@ -202,6 +282,7 @@ class GitHubMergeAdapter:
         }
 
     def _commit(self, session: _Session, revision: str) -> Doc:
+        session.progress.stage = _InspectionStage.MERGE_COMMIT
         value = _object(session.request("GET", self._prefix + "/git/commits/" + revision))
         parents = value.get("parents")
         merge.require(isinstance(parents, list), "GitHub commit parents are unavailable")
@@ -212,6 +293,7 @@ class GitHubMergeAdapter:
         }
 
     def _contracts(self, session: _Session, request: Doc, payload: Doc) -> Doc:
+        session.progress.stage = _InspectionStage.CONTRACT_TREES
         trees = {}
         for phase, key in (("before", "base_revision"), ("after", "head_revision")):
             value = _object(
@@ -245,12 +327,14 @@ class GitHubMergeAdapter:
         return result
 
     def _actor(self, session: _Session) -> Doc:
+        session.progress.stage = _InspectionStage.REPOSITORY
         repo = _object(session.request("GET", self._prefix))
         raw_permissions = repo.get("permissions")
         if session.configuration["actor"].get("credential_kind") == merge.INSTALLATION_GRANT_KIND:
             permissions = {} if raw_permissions is None else _object(raw_permissions)
         else:
             permissions = _object(raw_permissions)
+        session.progress.stage = _InspectionStage.INSTALLATION_SCOPE
         scope = _object(session.request("GET", "/installation/repositories?per_page=100"))
         repositories = scope.get("repositories")
         merge.require(
@@ -271,10 +355,14 @@ class GitHubMergeAdapter:
         }
 
     def _unstable_conditions(self, session: _Session, request: Doc, payload: Doc) -> Doc:
+        session.progress.stage = _InspectionStage.UNSTABLE_CAPABILITY
         merge._validate_unstable_capability(session.configuration)
         subject = request["subject"]
         legacy: Doc = {}
         for scope, revision in (("head", subject["head_revision"]), ("merge", payload["merge_revision"])):
+            session.progress.stage = (
+                _InspectionStage.LEGACY_HEAD_STATUS if scope == "head" else _InspectionStage.LEGACY_MERGE_STATUS
+            )
             value = _object(session.request("GET", self._prefix + "/commits/" + revision + "/status?per_page=100"))
             statuses = value.get("statuses")
             merge.require(
@@ -292,8 +380,10 @@ class GitHubMergeAdapter:
                     for item in cast(list[Any], statuses)
                 ],
             }
+        session.progress.stage = _InspectionStage.LEGACY_STATUS_FACTS
         merge._legacy_statuses_shape(legacy)
         owner, name = self.configuration["repository"]["full_name"].split("/")
+        session.progress.stage = _InspectionStage.BRANCH_CONDITIONS
         graph = _object(
             session.request(
                 "POST",
@@ -319,6 +409,7 @@ class GitHubMergeAdapter:
         threads = _object(pr.get("reviewThreads"))
         nodes = threads.get("nodes")
         merge.require(isinstance(nodes, list), "review thread inventory is unavailable")
+        session.progress.stage = _InspectionStage.ANCESTRY
         comparison = _object(
             session.request(
                 "GET",
@@ -386,22 +477,29 @@ class GitHubMergeAdapter:
                 "behind_by": comparison.get("behind_by"),
             },
         }
+        session.progress.stage = _InspectionStage.REQUIRED_CONDITION_FACTS
         merge._required_conditions_shape(conditions)
         return {"legacy_statuses": legacy, "required_conditions": conditions}
 
     def _facts(self, session: _Session, request: Doc, payload: Doc) -> Doc:
         actor = self._actor(session)
         base_name = quote(request["subject"]["base_ref"].removeprefix("refs/heads/"), safe="")
+        session.progress.stage = _InspectionStage.PROTECTION
         protection = session.request("GET", self._prefix + "/branches/" + base_name + "/protection")
         protection = _object(protection)
+        session.progress.stage = _InspectionStage.SIGNATURES
         protection["required_signatures"] = session.request(
             "GET", self._prefix + "/branches/" + base_name + "/protection/required_signatures"
         )
+        session.progress.stage = _InspectionStage.PROTECTION
         protection = merge.protection_facts(protection)
+        session.progress.stage = _InspectionStage.RULES
         rules = session.request("GET", self._prefix + "/rules/branches/" + base_name)
         merge.require(rules == [], "unsupported effective repository ruleset")
+        session.progress.stage = _InspectionStage.PULL_REQUEST
         pr = self._pr(session.request("GET", self._prefix + "/pulls/" + str(request["subject"]["pull_request"])))
         owner, name = self.configuration["repository"]["full_name"].split("/")
+        session.progress.stage = _InspectionStage.REVIEW
         graph = _object(
             session.request(
                 "POST",
@@ -424,6 +522,7 @@ class GitHubMergeAdapter:
         review = {key: review.get(key) for key in merge.REVIEW_FIELDS}
         review["potentialMergeCommit"] = {"oid": _object(review["potentialMergeCommit"]).get("oid")}
         extra = self._unstable_conditions(session, request, payload) if review["mergeStateStatus"] == "UNSTABLE" else {}
+        session.progress.stage = _InspectionStage.CHECKS
         checks = _object(
             session.request(
                 "GET", self._prefix + "/commits/" + payload["merge_revision"] + "/check-runs?filter=latest&per_page=100"
@@ -482,18 +581,20 @@ class GitHubMergeAdapter:
 
     def inspect(self, request: Doc, payload: Doc, *, deadline: store.Deadline) -> Doc:
         payload = self.validate_payload(request, payload)
+        progress = _InspectionProgress()
         try:
-            facts = self._facts(self._session("inspect", deadline), request, payload)
+            facts = self._facts(self._session("inspect", deadline, progress=progress), request, payload)
+            progress.stage = _InspectionStage.READY_FACTS
             merge.validate_ready_facts(request, payload, self.configuration, self.policy, facts)
             return {
                 "ready": True,
                 "reason": "Exact protected GitHub merge is currently ready; reads are not atomic.",
                 "provenance": self._proof("inspect", request, payload, facts, started=False),
             }
-        except (ValueError, store.StoreError, OSError, KeyError, TypeError, AttributeError):
+        except (ValueError, store.StoreError, OSError, KeyError, TypeError, AttributeError) as error:
             return {
                 "ready": False,
-                "reason": "Delivery credentials, key or current exact protected merge conditions block.",
+                "reason": progress.blocked_reason(error),
                 "provenance": self._proof("inspect", request, payload, {"blocked": True}, started=False),
             }
 
