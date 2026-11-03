@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import re
+from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -129,6 +130,96 @@ PAYLOAD_SCHEMA = FIELDS(
 def require(value: Any, reason: str) -> None:
     if not value:
         raise ValueError(reason)
+
+
+class ReadinessCheck(StrEnum):
+    """Closed identifiers for rejected native readiness predicates; never authority."""
+
+    ACTOR_ADMIN = "actor_admin"
+    ACTOR_FACTS = "actor_facts"
+    ACTOR_FIELDS = "actor_fields"
+    ACTOR_IDENTITY = "actor_identity"
+    ACTOR_MAINTAIN = "actor_maintain"
+    ANCESTRY_FIELDS = "ancestry_fields"
+    APPROVAL_THRESHOLD = "approval_threshold"
+    BASE_REFERENCE = "base_reference"
+    BRANCH_CONVERSATION_POLICY = "branch_conversation_policy"
+    BRANCH_DEPLOYMENTS = "branch_deployments"
+    BRANCH_ENVIRONMENTS = "branch_environments"
+    BRANCH_POLICY_FIELDS = "branch_policy_fields"
+    BRANCH_PUSH_POLICY = "branch_push_policy"
+    CHECK_FIELDS = "check_fields"
+    CONDITION_EVIDENCE = "condition_evidence"
+    CONDITION_FIELDS = "condition_fields"
+    CONDITION_IDENTITIES = "condition_identities"
+    CONDITION_REVISIONS = "condition_revisions"
+    CONDITION_SCOPE = "condition_scope"
+    CONTRACT_FIELDS = "contract_fields"
+    CONTRACT_INVENTORY = "contract_inventory"
+    EFFECTIVE_RULES = "effective_rules"
+    FACTS_PRESENT = "facts_present"
+    FACT_FIELDS = "fact_fields"
+    GIT_FIELDS = "git_fields"
+    HEAD_ANCESTRY = "head_ancestry"
+    HEAD_REFERENCE = "head_reference"
+    INSTALLATION_SCOPE = "installation_scope"
+    LEGACY_CHECK_OVERLAP = "legacy_check_overlap"
+    LEGACY_CONTEXTS = "legacy_contexts"
+    LEGACY_FIELDS = "legacy_fields"
+    LEGACY_INVENTORY = "legacy_inventory"
+    LEGACY_SCOPES = "legacy_scopes"
+    MARKER_REFERENCE = "marker_reference"
+    MERGEABILITY = "mergeability"
+    MERGEABILITY_FIELDS = "mergeability_fields"
+    MERGE_COMMIT = "merge_commit"
+    MERGE_QUEUE_SETTING = "merge_queue_setting"
+    MERGE_STATE = "merge_state"
+    PROTECTION_CURRENT = "protection_current"
+    PROTECTION_FIELDS = "protection_fields"
+    PR_BASE_REF = "pr_base_ref"
+    PR_BASE_REVISION = "pr_base_revision"
+    PR_DRAFT = "pr_draft"
+    PR_HEAD_REF = "pr_head_ref"
+    PR_HEAD_REPOSITORY = "pr_head_repository"
+    PR_HEAD_REVISION = "pr_head_revision"
+    PR_MERGED = "pr_merged"
+    PR_MERGE_REVISION = "pr_merge_revision"
+    PR_NUMBER = "pr_number"
+    PR_REPOSITORY = "pr_repository"
+    PR_STATE = "pr_state"
+    PULL_REQUEST_FIELDS = "pull_request_fields"
+    PULL_REQUEST_IDENTITY = "pull_request_identity"
+    QUEUE_MEMBERSHIP = "queue_membership"
+    REPOSITORY_FIELDS = "repository_fields"
+    REPOSITORY_RELATIONSHIP = "repository_relationship"
+    REQUIRED_CHECK_COMPLETION = "required_check_completion"
+    REQUIRED_CHECK_CONCLUSION = "required_check_conclusion"
+    REQUIRED_CHECK_IDENTITY = "required_check_identity"
+    REQUIRED_CHECK_IDS = "required_check_ids"
+    REQUIRED_CHECK_INVENTORY = "required_check_inventory"
+    REQUIRED_CHECK_POLICY = "required_check_policy"
+    REQUIRED_CHECK_REVISION = "required_check_revision"
+    REVIEW_BASE = "review_base"
+    REVIEW_CONVERSATIONS = "review_conversations"
+    REVIEW_DECISION = "review_decision"
+    REVIEW_FIELDS = "review_fields"
+    REVIEW_HEAD = "review_head"
+    REVIEW_MERGE = "review_merge"
+    REVIEW_THREAD_FIELDS = "review_thread_fields"
+    REVIEW_THREAD_IDS = "review_thread_ids"
+
+
+class ReadinessFailure(ValueError):
+    """Keep the original validation message and a separately typed, safe check ID."""
+
+    def __init__(self, reason: str, *, check: ReadinessCheck | None = None) -> None:
+        super().__init__(reason)
+        self.check = check
+
+
+def _require_ready(value: Any, reason: str, *, check: ReadinessCheck) -> None:
+    if not value:
+        raise ReadinessFailure(reason, check=check)
 
 
 def branch(value: str) -> None:
@@ -491,9 +582,13 @@ REVIEW_FIELDS = {
 
 
 def _legacy_statuses_shape(value: Any) -> None:
-    require(isinstance(value, dict) and set(value) == {"head", "merge"}, "unallowlisted legacy status scopes")
+    _require_ready(
+        isinstance(value, dict) and set(value) == {"head", "merge"},
+        "unallowlisted legacy status scopes",
+        check=ReadinessCheck.LEGACY_SCOPES,
+    )
     for inventory in value.values():
-        require(
+        _require_ready(
             isinstance(inventory, dict)
             and set(inventory) == {"sha", "total_count", "statuses"}
             and isinstance(inventory["sha"], str)
@@ -502,9 +597,10 @@ def _legacy_statuses_shape(value: Any) -> None:
             and isinstance(inventory["statuses"], list)
             and inventory["total_count"] == len(inventory["statuses"]) < 100,
             "legacy status inventory is incomplete",
+            check=ReadinessCheck.LEGACY_INVENTORY,
         )
         statuses = inventory["statuses"]
-        require(
+        _require_ready(
             all(
                 isinstance(item, dict)
                 and set(item) == {"context", "state"}
@@ -514,21 +610,24 @@ def _legacy_statuses_shape(value: Any) -> None:
                 for item in statuses
             ),
             "unallowlisted legacy status fields",
+            check=ReadinessCheck.LEGACY_FIELDS,
         )
-        require(
+        _require_ready(
             len({item["context"].casefold() for item in statuses}) == len(statuses),
             "legacy status contexts are ambiguous",
+            check=ReadinessCheck.LEGACY_CONTEXTS,
         )
 
 
 def _required_conditions_shape(value: Any) -> None:
-    require(
+    _require_ready(
         isinstance(value, dict)
         and set(value) == {"repository", "base_ref", "pull_request", "branch_policy", "review_threads", "ancestry"},
         "unallowlisted additional required conditions",
+        check=ReadinessCheck.CONDITION_FIELDS,
     )
     repository, base, pr = value["repository"], value["base_ref"], value["pull_request"]
-    require(
+    _require_ready(
         isinstance(repository, dict)
         and set(repository) == {"id", "full_name", "node_id"}
         and type(repository["id"]) is int
@@ -542,16 +641,18 @@ def _required_conditions_shape(value: Any) -> None:
         and type(pr["number"]) is int
         and pr["number"] > 0,
         "additional required-condition identities are malformed",
+        check=ReadinessCheck.CONDITION_IDENTITIES,
     )
-    require(
+    _require_ready(
         all(
             isinstance(revision, str) and re.fullmatch(r"[0-9a-f]{40}", revision)
             for revision in (base["revision"], pr["head_revision"], pr["base_revision"], pr["merge_revision"])
         ),
         "additional required-condition revisions are malformed",
+        check=ReadinessCheck.CONDITION_REVISIONS,
     )
     policy = value["branch_policy"]
-    require(
+    _require_ready(
         isinstance(policy, dict)
         and set(policy)
         == {
@@ -570,9 +671,10 @@ def _required_conditions_shape(value: Any) -> None:
         and isinstance(policy["required_deployment_environments"], list)
         and all(isinstance(item, str) and item.strip() for item in policy["required_deployment_environments"]),
         "additional branch policy is unavailable or malformed",
+        check=ReadinessCheck.BRANCH_POLICY_FIELDS,
     )
     threads = value["review_threads"]
-    require(
+    _require_ready(
         isinstance(threads, dict)
         and set(threads) == {"total_count", "has_next_page", "threads"}
         and type(threads["total_count"]) is int
@@ -588,13 +690,15 @@ def _required_conditions_shape(value: Any) -> None:
             for item in threads["threads"]
         ),
         "review thread inventory is incomplete or malformed",
+        check=ReadinessCheck.REVIEW_THREAD_FIELDS,
     )
-    require(
+    _require_ready(
         len({item["id"] for item in threads["threads"]}) == len(threads["threads"]),
         "review thread identities are ambiguous",
+        check=ReadinessCheck.REVIEW_THREAD_IDS,
     )
     ancestry = value["ancestry"]
-    require(
+    _require_ready(
         isinstance(ancestry, dict)
         and set(ancestry)
         == {"base_revision", "head_revision", "merge_base_revision", "status", "ahead_by", "behind_by"}
@@ -605,6 +709,7 @@ def _required_conditions_shape(value: Any) -> None:
         and isinstance(ancestry["status"], str)
         and all(type(ancestry[key]) is int and ancestry[key] >= 0 for key in ("ahead_by", "behind_by")),
         "head ancestry facts are malformed",
+        check=ReadinessCheck.ANCESTRY_FIELDS,
     )
 
 
@@ -621,27 +726,30 @@ def _ready_shape(facts: Any) -> None:
         "contract_files",
         "refs",
     }
-    require(
+    _require_ready(
         isinstance(facts, dict) and set(facts) in (fields, fields | {"legacy_statuses", "required_conditions"}),
         "unexpected retained provider preflight fields",
+        check=ReadinessCheck.FACT_FIELDS,
     )
     if "legacy_statuses" in facts:
         _legacy_statuses_shape(facts["legacy_statuses"])
         _required_conditions_shape(facts["required_conditions"])
-    require(
+    _require_ready(
         isinstance(facts["repository"], dict)
         and set(facts["repository"]) == {"id", "full_name", "node_id", "admin", "maintain", "push"},
         "unallowlisted retained repository fields",
+        check=ReadinessCheck.REPOSITORY_FIELDS,
     )
-    require(
+    _require_ready(
         isinstance(facts["merge_commit"], dict)
         and set(facts["merge_commit"]) == {"sha", "tree", "parents"}
         and isinstance(facts["refs"], dict)
         and set(facts["refs"]) == {"base", "head", "marker"},
         "unallowlisted retained Git fields",
+        check=ReadinessCheck.GIT_FIELDS,
     )
     inventory = facts["contract_files"]
-    require(
+    _require_ready(
         isinstance(inventory, dict)
         and set(inventory) == set(CATEGORIES)
         and all(
@@ -650,31 +758,37 @@ def _ready_shape(facts: Any) -> None:
             for entries in inventory.values()
         ),
         "unallowlisted retained protected source fields",
+        check=ReadinessCheck.CONTRACT_FIELDS,
     )
-    require(
-        facts["protection"] == protection_facts(facts["protection"]), "unallowlisted retained server protection fields"
+    _require_ready(
+        facts["protection"] == protection_facts(facts["protection"]),
+        "unallowlisted retained server protection fields",
+        check=ReadinessCheck.PROTECTION_FIELDS,
     )
     review = facts["review"]
-    require(
+    _require_ready(
         isinstance(review, dict)
         and set(review) == REVIEW_FIELDS
         and isinstance(review["potentialMergeCommit"], dict)
         and set(review["potentialMergeCommit"]) == {"oid"},
         "unallowlisted retained review fields",
+        check=ReadinessCheck.REVIEW_FIELDS,
     )
-    require(
+    _require_ready(
         isinstance(facts["pull_request"], dict) and set(facts["pull_request"]) == PR_FIELDS,
         "unallowlisted retained PR fields",
+        check=ReadinessCheck.PULL_REQUEST_FIELDS,
     )
-    require(
+    _require_ready(
         isinstance(facts["check_runs"], list)
         and all(
             isinstance(item, dict) and set(item) == {"name", "app_id", "head_sha", "status", "conclusion"}
             for item in facts["check_runs"]
         ),
         "unallowlisted retained check fields",
+        check=ReadinessCheck.CHECK_FIELDS,
     )
-    require(facts["rules"] == [], "unsupported retained effective rules")
+    _require_ready(facts["rules"] == [], "unsupported retained effective rules", check=ReadinessCheck.EFFECTIVE_RULES)
 
 
 def _unstable_required_checks(
@@ -682,12 +796,13 @@ def _unstable_required_checks(
 ) -> list[Doc]:
     """Replace the aggregate shortcut only with complete, independently bound conditions."""
     _validate_unstable_capability(configuration)
-    require(
+    _require_ready(
         "legacy_statuses" in facts and "required_conditions" in facts,
         "UNSTABLE requires explicit current required-condition evidence",
+        check=ReadinessCheck.CONDITION_EVIDENCE,
     )
     legacy, conditions = facts["legacy_statuses"], facts["required_conditions"]
-    require(
+    _require_ready(
         legacy["head"]["sha"] == subject["head_revision"]
         and legacy["merge"]["sha"] == payload["merge_revision"]
         and conditions["repository"] == configuration["repository"]
@@ -700,74 +815,101 @@ def _unstable_required_checks(
             "merge_revision": payload["merge_revision"],
         },
         "required-condition facts belong to different repository or revisions",
+        check=ReadinessCheck.CONDITION_SCOPE,
     )
     branch_policy = conditions["branch_policy"]
-    require(
-        branch_policy["requires_deployments"] is False
-        and branch_policy["required_deployment_environments"] == []
-        and branch_policy["restricts_pushes"] is False
-        and branch_policy["requires_conversation_resolution"] == protection["required_conversation_resolution"],
+    _require_ready(
+        branch_policy["requires_deployments"] is False,
         "unsupported or changed additional branch policy",
+        check=ReadinessCheck.BRANCH_DEPLOYMENTS,
     )
-    require(
+    _require_ready(
+        branch_policy["required_deployment_environments"] == [],
+        "unsupported or changed additional branch policy",
+        check=ReadinessCheck.BRANCH_ENVIRONMENTS,
+    )
+    _require_ready(
+        branch_policy["restricts_pushes"] is False,
+        "unsupported or changed additional branch policy",
+        check=ReadinessCheck.BRANCH_PUSH_POLICY,
+    )
+    _require_ready(
+        branch_policy["requires_conversation_resolution"] == protection["required_conversation_resolution"],
+        "unsupported or changed additional branch policy",
+        check=ReadinessCheck.BRANCH_CONVERSATION_POLICY,
+    )
+    _require_ready(
         not branch_policy["requires_conversation_resolution"]
         or all(thread["is_resolved"] for thread in conditions["review_threads"]["threads"]),
         "required conversations remain unresolved",
+        check=ReadinessCheck.REVIEW_CONVERSATIONS,
     )
     ancestry = conditions["ancestry"]
-    require(
+    _require_ready(
         ancestry["base_revision"] == ancestry["merge_base_revision"] == subject["base_revision"]
         and ancestry["head_revision"] == subject["head_revision"]
         and ancestry["status"] == "ahead"
         and ancestry["ahead_by"] > 0
         and ancestry["behind_by"] == 0,
         "head is not strictly up to date with the approved base",
+        check=ReadinessCheck.HEAD_ANCESTRY,
     )
     checks = [{"name": item["context"], "app_id": item["app_id"]} for item in protection["checks"]]
-    require(
+    _require_ready(
         len({item["name"].casefold() for item in checks}) == len(checks),
         "server required check contexts are ambiguous",
+        check=ReadinessCheck.REQUIRED_CHECK_IDS,
     )
     # Legacy contexts are case-insensitive; retain provider spelling in the evidence.
     required_names = {item["name"].casefold() for item in checks} | {
         item["name"].casefold() for item in policy["required_checks"]
     }
-    require(
+    _require_ready(
         all(
             status["context"].casefold() not in required_names
             for inventory in legacy.values()
             for status in inventory["statuses"]
         ),
         "required check names also have unsupported legacy commit statuses",
+        check=ReadinessCheck.LEGACY_CHECK_OVERLAP,
     )
     return checks
 
 
 def _validate_installation_scope(facts: Doc, repository_id: int) -> None:
     installation_ids = facts.get("installation_repository_ids")
-    require(
+    _require_ready(
         isinstance(installation_ids, list)
         and all(type(item) is int for item in installation_ids)
         and installation_ids == [repository_id],
         "merge token is not single-repository scoped",
+        check=ReadinessCheck.INSTALLATION_SCOPE,
     )
 
 
 def _validate_installation_actor_facts(repository: Doc, facts: Any) -> None:
-    require(isinstance(facts, dict), "merge actor facts are missing")
+    _require_ready(isinstance(facts, dict), "merge actor facts are missing", check=ReadinessCheck.ACTOR_FACTS)
     repo = facts.get("repository", {})
-    require(
+    _require_ready(
         isinstance(repo, dict)
         and set(repo) == {"id", "full_name", "node_id", "admin", "maintain", "push"}
         and type(repo.get("id")) is int
         and all(repo.get(name) is None or type(repo[name]) is bool for name in ("admin", "maintain", "push")),
         "invalid provider repository identity or role observations",
+        check=ReadinessCheck.ACTOR_FIELDS,
     )
-    require(
-        {name: repo[name] for name in ("id", "full_name", "node_id")} == repository
-        and repo["admin"] is not True
-        and repo["maintain"] is not True,
+    _require_ready(
+        {name: repo[name] for name in ("id", "full_name", "node_id")} == repository,
         "unknown, broad or bypass-capable merge actor",
+        check=ReadinessCheck.ACTOR_IDENTITY,
+    )
+    _require_ready(
+        repo["admin"] is not True, "unknown, broad or bypass-capable merge actor", check=ReadinessCheck.ACTOR_ADMIN
+    )
+    _require_ready(
+        repo["maintain"] is not True,
+        "unknown, broad or bypass-capable merge actor",
+        check=ReadinessCheck.ACTOR_MAINTAIN,
     )
     _validate_installation_scope(facts, repo["id"])
 
@@ -784,7 +926,7 @@ def validate_installation_grant_candidate(repository: Any, actor: Any, live_fact
 
 def validate_actor_facts(configuration: Doc, facts: Any) -> None:
     """Keep raw role observations distinct from independently approved App mint grants."""
-    require(isinstance(facts, dict), "merge actor facts are missing")
+    _require_ready(isinstance(facts, dict), "merge actor facts are missing", check=ReadinessCheck.ACTOR_FACTS)
     config = configuration
     repo = facts.get("repository", {})
     if config["actor"].get("credential_kind") == INSTALLATION_GRANT_KIND:
@@ -792,13 +934,14 @@ def validate_actor_facts(configuration: Doc, facts: Any) -> None:
         _validate_installation_grant(actor, config["repository"]["id"])
         _validate_installation_actor_facts(config["repository"], facts)
     else:
-        require(
+        _require_ready(
             isinstance(repo, dict)
             and type(repo.get("id")) is int
             and all(type(repo.get(key)) is bool for key in ("admin", "maintain", "push")),
             "invalid provider repository identity or permissions",
+            check=ReadinessCheck.ACTOR_FIELDS,
         )
-        require(
+        _require_ready(
             repo
             == {
                 "id": config["repository"]["id"],
@@ -809,71 +952,146 @@ def validate_actor_facts(configuration: Doc, facts: Any) -> None:
                 "push": True,
             },
             "unknown, broad or bypass-capable merge actor",
+            check=ReadinessCheck.ACTOR_IDENTITY,
         )
         _validate_installation_scope(facts, repo["id"])
 
 
 def validate_ready_facts(request: Doc, payload: Doc, configuration: Doc, policy: Doc, facts: Any) -> None:
     """Check bounded provider facts; this does not make their reads an atomic snapshot."""
-    require(isinstance(facts, dict), "merge provider facts are missing")
+    _require_ready(isinstance(facts, dict), "merge provider facts are missing", check=ReadinessCheck.FACTS_PRESENT)
     _ready_shape(facts)
     validate_actor_facts(configuration, facts)
     subject, repo = request["subject"], facts["repository"]
     protection = protection_snapshot(facts.get("protection"))
-    require(delivery.digest(protection) == policy["protection_digest"], "server protection changed")
-    require(facts.get("rules") == [], "unsupported effective repository ruleset")
-    require(
+    _require_ready(
+        delivery.digest(protection) == policy["protection_digest"],
+        "server protection changed",
+        check=ReadinessCheck.PROTECTION_CURRENT,
+    )
+    _require_ready(
+        facts.get("rules") == [], "unsupported effective repository ruleset", check=ReadinessCheck.EFFECTIVE_RULES
+    )
+    _require_ready(
         type(protection["approvals"]) is int and protection["approvals"] >= policy["minimum_approvals"],
         "server requires fewer approvals than approved delivery policy",
+        check=ReadinessCheck.APPROVAL_THRESHOLD,
     )
     protected_checks = protection["checks"]
-    require(
+    _require_ready(
         isinstance(protected_checks, list)
         and all(
             check in protected_checks
             for check in [{"context": entry["name"], "app_id": entry["app_id"]} for entry in policy["required_checks"]]
         ),
         "server check policy is weaker than the selected delivery policy",
+        check=ReadinessCheck.REQUIRED_CHECK_POLICY,
     )
     pr = facts.get("pull_request", {})
-    require(
+    _require_ready(
         isinstance(pr, dict)
         and all(type(pr.get(key)) is int for key in ("number", "repository_id", "head_repository_id")),
         "invalid provider PR identity",
+        check=ReadinessCheck.PULL_REQUEST_IDENTITY,
     )
-    require(
-        pr.get("number") == subject["pull_request"]
-        and pr.get("repository_id") == repo["id"]
-        and pr.get("head_repository_id") == repo["id"]
-        and pr.get("head_ref") == payload["head_ref"]
-        and pr.get("base_ref") == subject["base_ref"]
-        and pr.get("head_revision") == subject["head_revision"]
-        and pr.get("base_revision") == subject["base_revision"]
-        and pr.get("merge_revision") == payload["merge_revision"]
-        and pr.get("state") == "open"
-        and pr.get("draft") is False
-        and pr.get("merged") is False,
+    _require_ready(
+        pr.get("number") == subject["pull_request"],
         "PR identity, head, base or state changed",
+        check=ReadinessCheck.PR_NUMBER,
+    )
+    _require_ready(
+        pr.get("repository_id") == repo["id"],
+        "PR identity, head, base or state changed",
+        check=ReadinessCheck.PR_REPOSITORY,
+    )
+    _require_ready(
+        pr.get("head_repository_id") == repo["id"],
+        "PR identity, head, base or state changed",
+        check=ReadinessCheck.PR_HEAD_REPOSITORY,
+    )
+    _require_ready(
+        pr.get("head_ref") == payload["head_ref"],
+        "PR identity, head, base or state changed",
+        check=ReadinessCheck.PR_HEAD_REF,
+    )
+    _require_ready(
+        pr.get("base_ref") == subject["base_ref"],
+        "PR identity, head, base or state changed",
+        check=ReadinessCheck.PR_BASE_REF,
+    )
+    _require_ready(
+        pr.get("head_revision") == subject["head_revision"],
+        "PR identity, head, base or state changed",
+        check=ReadinessCheck.PR_HEAD_REVISION,
+    )
+    _require_ready(
+        pr.get("base_revision") == subject["base_revision"],
+        "PR identity, head, base or state changed",
+        check=ReadinessCheck.PR_BASE_REVISION,
+    )
+    _require_ready(
+        pr.get("merge_revision") == payload["merge_revision"],
+        "PR identity, head, base or state changed",
+        check=ReadinessCheck.PR_MERGE_REVISION,
+    )
+    _require_ready(pr.get("state") == "open", "PR identity, head, base or state changed", check=ReadinessCheck.PR_STATE)
+    _require_ready(pr.get("draft") is False, "PR identity, head, base or state changed", check=ReadinessCheck.PR_DRAFT)
+    _require_ready(
+        pr.get("merged") is False, "PR identity, head, base or state changed", check=ReadinessCheck.PR_MERGED
     )
     graph = facts.get("review", {})
-    require(
+    _require_ready(
         isinstance(graph, dict) and isinstance(graph.get("potentialMergeCommit"), dict),
         "current GitHub mergeability facts are malformed",
+        check=ReadinessCheck.MERGEABILITY_FIELDS,
     )
-    require(
-        graph.get("reviewDecision") == "APPROVED"
-        and graph.get("mergeStateStatus") in ("CLEAN", "UNSTABLE")
-        and graph.get("mergeable") == "MERGEABLE"
-        and graph.get("isMergeQueueEnabled") is False
-        and graph.get("isInMergeQueue") is False
-        and graph.get("isCrossRepository") is False
-        and graph.get("headRefOid") == subject["head_revision"]
-        and graph.get("baseRefOid") == subject["base_revision"]
-        and graph.get("potentialMergeCommit", {}).get("oid") == payload["merge_revision"],
+    _require_ready(
+        graph.get("reviewDecision") == "APPROVED",
         "current independent reviews, checks or supported merge path are missing",
+        check=ReadinessCheck.REVIEW_DECISION,
+    )
+    _require_ready(
+        graph.get("mergeStateStatus") in ("CLEAN", "UNSTABLE"),
+        "current independent reviews, checks or supported merge path are missing",
+        check=ReadinessCheck.MERGE_STATE,
+    )
+    _require_ready(
+        graph.get("mergeable") == "MERGEABLE",
+        "current independent reviews, checks or supported merge path are missing",
+        check=ReadinessCheck.MERGEABILITY,
+    )
+    _require_ready(
+        graph.get("isMergeQueueEnabled") is False,
+        "current independent reviews, checks or supported merge path are missing",
+        check=ReadinessCheck.MERGE_QUEUE_SETTING,
+    )
+    _require_ready(
+        graph.get("isInMergeQueue") is False,
+        "current independent reviews, checks or supported merge path are missing",
+        check=ReadinessCheck.QUEUE_MEMBERSHIP,
+    )
+    _require_ready(
+        graph.get("isCrossRepository") is False,
+        "current independent reviews, checks or supported merge path are missing",
+        check=ReadinessCheck.REPOSITORY_RELATIONSHIP,
+    )
+    _require_ready(
+        graph.get("headRefOid") == subject["head_revision"],
+        "current independent reviews, checks or supported merge path are missing",
+        check=ReadinessCheck.REVIEW_HEAD,
+    )
+    _require_ready(
+        graph.get("baseRefOid") == subject["base_revision"],
+        "current independent reviews, checks or supported merge path are missing",
+        check=ReadinessCheck.REVIEW_BASE,
+    )
+    _require_ready(
+        graph.get("potentialMergeCommit", {}).get("oid") == payload["merge_revision"],
+        "current independent reviews, checks or supported merge path are missing",
+        check=ReadinessCheck.REVIEW_MERGE,
     )
     commit = facts.get("merge_commit", {})
-    require(
+    _require_ready(
         commit
         == {
             "sha": payload["merge_revision"],
@@ -881,15 +1099,26 @@ def validate_ready_facts(request: Doc, payload: Doc, configuration: Doc, policy:
             "parents": [subject["base_revision"], subject["head_revision"]],
         },
         "provider-generated merge parents or tree changed",
+        check=ReadinessCheck.MERGE_COMMIT,
     )
-    require(
-        facts.get("refs") == {"base": subject["base_revision"], "head": subject["head_revision"], "marker": None},
+    _require_ready(
+        facts["refs"]["base"] == subject["base_revision"],
         "merge refs or operation marker changed",
+        check=ReadinessCheck.BASE_REFERENCE,
+    )
+    _require_ready(
+        facts["refs"]["head"] == subject["head_revision"],
+        "merge refs or operation marker changed",
+        check=ReadinessCheck.HEAD_REFERENCE,
+    )
+    _require_ready(
+        facts["refs"]["marker"] is None, "merge refs or operation marker changed", check=ReadinessCheck.MARKER_REFERENCE
     )
     runs = facts.get("check_runs")
-    require(
+    _require_ready(
         isinstance(runs, list) and all(isinstance(entry, dict) and type(entry.get("app_id")) is int for entry in runs),
         "required check runs are unavailable",
+        check=ReadinessCheck.REQUIRED_CHECK_INVENTORY,
     )
     required_checks = policy["required_checks"]
     if graph["mergeStateStatus"] == "UNSTABLE":
@@ -900,16 +1129,30 @@ def validate_ready_facts(request: Doc, payload: Doc, configuration: Doc, policy:
             for entry in runs
             if entry.get("name") == expected["name"] and entry.get("app_id") == expected["app_id"]
         ]
-        require(
-            len(selected) == 1
-            and selected[0].get("head_sha") == payload["merge_revision"]
-            and selected[0].get("status") == "completed"
-            and selected[0].get("conclusion") == "success",
+        _require_ready(
+            len(selected) == 1,
             "required current merge check is missing, ambiguous or unsuccessful",
+            check=ReadinessCheck.REQUIRED_CHECK_IDENTITY,
         )
-    require(
+        _require_ready(
+            selected[0].get("head_sha") == payload["merge_revision"],
+            "required current merge check is missing, ambiguous or unsuccessful",
+            check=ReadinessCheck.REQUIRED_CHECK_REVISION,
+        )
+        _require_ready(
+            selected[0].get("status") == "completed",
+            "required current merge check is missing, ambiguous or unsuccessful",
+            check=ReadinessCheck.REQUIRED_CHECK_COMPLETION,
+        )
+        _require_ready(
+            selected[0].get("conclusion") == "success",
+            "required current merge check is missing, ambiguous or unsuccessful",
+            check=ReadinessCheck.REQUIRED_CHECK_CONCLUSION,
+        )
+    _require_ready(
         facts.get("contract_files") == payload["contract_files"],
         "protected criteria/bindings/observer Git facts changed",
+        check=ReadinessCheck.CONTRACT_INVENTORY,
     )
 
 

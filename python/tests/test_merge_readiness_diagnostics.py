@@ -14,6 +14,7 @@ from urllib.request import Request
 import pytest
 from automatic_merge_fixtures import BASE, BASE_REF, HEAD, MERGE, PREFIX, TOKEN, TOKEN_ENVIRONMENT, MergeCase, Response
 from automatic_merge_fixtures import merge_case as merge_case
+from exacly import automatic_merge as merge
 from exacly import delivery_automation as delivery
 from exacly import delivery_store
 from exacly import execution_store as store
@@ -144,17 +145,17 @@ def test_unstable_status_permission_failure_identifies_the_selected_read(
 
 
 @pytest.mark.parametrize(
-    ("damage", "stage"),
+    ("damage", "stage", "code"),
     [
-        ("review", "ready_facts"),
-        ("check", "ready_facts"),
-        ("protection", "protection"),
-        ("contract", "ready_facts"),
-        ("base-ref", "ready_facts"),
+        ("review", "ready_facts", "review_decision"),
+        ("check", "ready_facts", "required_check_conclusion"),
+        ("protection", "protection", "validation_failed"),
+        ("contract", "ready_facts", "contract_inventory"),
+        ("base-ref", "ready_facts", "base_reference"),
     ],
 )
 def test_fixed_diagnostics_preserve_every_current_readiness_guard(
-    merge_case: MergeCase, damage: str, stage: str
+    merge_case: MergeCase, damage: str, stage: str, code: str
 ) -> None:
     case = merge_case
     if damage == "review":
@@ -171,10 +172,109 @@ def test_fixed_diagnostics_preserve_every_current_readiness_guard(
     result = case.inspect()
     # This case intentionally starts with a drifted base; inspection must leave it alone.
     assert result["ready"] is False
-    assert result["reason"] == f"GitHub merge readiness blocked: stage={stage}; code=validation_failed."
+    assert result["reason"] == f"GitHub merge readiness blocked: stage={stage}; code={code}."
     assert case.adapter.validate_result("inspect", case.request, case.payload, result) == result
     assert case.opener.refs == refs and case.opener.writes == []
     assert case.invoke()["outcome"] == "rejected" and case.opener.writes == []
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "code"),
+    [
+        ("reviewDecision", "REVIEW_REQUIRED", "review_decision"),
+        ("mergeStateStatus", "UNKNOWN", "merge_state"),
+        ("mergeable", "UNKNOWN", "mergeability"),
+        ("isMergeQueueEnabled", True, "merge_queue_setting"),
+        ("isMergeQueueEnabled", 0, "merge_queue_setting"),
+        ("isInMergeQueue", True, "queue_membership"),
+        ("isInMergeQueue", 0, "queue_membership"),
+        ("isCrossRepository", True, "repository_relationship"),
+        ("isCrossRepository", 0, "repository_relationship"),
+        ("headRefOid", "f" * 40, "review_head"),
+        ("baseRefOid", "f" * 40, "review_base"),
+    ],
+)
+def test_each_rejected_review_condition_has_its_own_fixed_identifier(
+    merge_case: MergeCase, field: str, value: Any, code: str
+) -> None:
+    merge_case.opener.graph[field] = value
+    blocked(merge_case, merge_case.inspect(), "ready_facts", code)
+    assert merge_case.invoke()["outcome"] == "rejected" and merge_case.opener.writes == []
+
+
+@pytest.mark.parametrize(("field", "code"), [("draft", "pr_draft"), ("merged", "pr_merged")])
+def test_numeric_false_cannot_satisfy_a_required_boolean_pr_fact(merge_case: MergeCase, field: str, code: str) -> None:
+    merge_case.opener.pull_request[field] = 0
+    blocked(merge_case, merge_case.inspect(), "ready_facts", code)
+
+
+def test_fixed_identifiers_preserve_first_failure_order_and_do_not_grant_an_invoke(merge_case: MergeCase) -> None:
+    case = merge_case
+    case.opener.pull_request["number"] = 43
+    case.opener.graph.update(reviewDecision="REVIEW_REQUIRED", mergeable="UNKNOWN")
+    blocked(case, case.inspect(), "ready_facts", "pr_number")
+    case.opener.pull_request["number"] = 42
+    blocked(case, case.inspect(), "ready_facts", "review_decision")
+    case.opener.graph["reviewDecision"] = "APPROVED"
+    blocked(case, case.inspect(), "ready_facts", "mergeability")
+    case.opener.graph["mergeable"] = "MERGEABLE"
+    assert case.inspect()["ready"] is True
+    assert case.opener.writes == [] and case.opener.refs[BASE_REF] == BASE
+
+
+def test_typed_rule_failure_keeps_the_existing_value_error_message_offline(
+    merge_case: MergeCase, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    case = merge_case
+    facts = copy.deepcopy(case.inspect()["provenance"]["facts"])
+    facts["review"]["reviewDecision"] = "REVIEW_REQUIRED"
+    before = copy.deepcopy(case.opener.calls)
+    monkeypatch.delenv(TOKEN_ENVIRONMENT)
+    Path(case.configuration["key"]["path"]).unlink()
+    with pytest.raises(
+        ValueError, match="current independent reviews, checks or supported merge path are missing"
+    ) as error:
+        merge.validate_ready_facts(case.request, case.payload, case.configuration, case.policy, facts)
+    assert type(error.value) is merge.ReadinessFailure
+    assert error.value.check is merge.ReadinessCheck.REVIEW_DECISION
+    assert error.value.args == ("current independent reviews, checks or supported merge path are missing",)
+    assert case.opener.calls == before and case.opener.writes == []
+
+
+@pytest.mark.parametrize("kind", ["foreign", "exact", "subclass", "corrupted", "missing-tag"])
+def test_only_the_exact_installed_failure_and_enum_can_select_a_rule_code(kind: str) -> None:
+    class ForeignFailure(ValueError):
+        def __str__(self) -> str:
+            raise AssertionError("diagnostic formatter inspected exception text")
+
+    class SubclassedFailure(merge.ReadinessFailure):
+        def __str__(self) -> str:
+            raise AssertionError("diagnostic formatter inspected subclass exception text")
+
+    selected = merge.ReadinessCheck.REVIEW_DECISION
+    error: ValueError
+    if kind == "foreign":
+        error = ForeignFailure(PRIVATE_TEXT)
+    elif kind == "subclass":
+        error = SubclassedFailure(PRIVATE_TEXT, check=selected)
+    elif kind == "missing-tag":
+        error = merge.ReadinessFailure(PRIVATE_TEXT)
+    else:
+        error = merge.ReadinessFailure(PRIVATE_TEXT, check=selected)
+        if kind == "corrupted":
+            object.__setattr__(error, "check", PRIVATE_TEXT)
+    expected = selected.value if kind == "exact" else "validation_failed"
+    progress = github._InspectionProgress(stage=github._InspectionStage.READY_FACTS)
+    reason = progress.blocked_reason(error)
+    assert reason == f"GitHub merge readiness blocked: stage=ready_facts; code={expected}."
+    assert TOKEN not in reason and PRIVATE_TEXT not in reason and "Bearer" not in reason
+
+
+def test_transport_exceptions_cannot_masquerade_as_trusted_rule_failures(merge_case: MergeCase) -> None:
+    merge_case.opener.overrides[("GET", PREFIX)] = merge.ReadinessFailure(
+        PRIVATE_TEXT, check=merge.ReadinessCheck.REVIEW_DECISION
+    )
+    blocked(merge_case, merge_case.inspect(), "repository", "invalid_response")
 
 
 def test_expected_absent_operation_marker_is_not_a_readiness_failure(merge_case: MergeCase) -> None:
@@ -216,8 +316,9 @@ def test_old_generic_blocked_proof_validates_offline_without_new_credentials(
     assert case.opener.calls == calls and case.opener.writes == []
 
 
+@pytest.mark.parametrize("failure", ["http", "rule"])
 def test_actual_engine_retains_the_safe_failure_and_never_reserves_an_invoke(
-    merge_case: MergeCase, tmp_path: Path
+    merge_case: MergeCase, tmp_path: Path, failure: str
 ) -> None:
     case = merge_case
     private = tmp_path / "retained-blocked-inspection"
@@ -234,13 +335,18 @@ def test_actual_engine_retains_the_safe_failure_and_never_reserves_an_invoke(
     pin = delivery.ApprovalPin(
         case.authorization["issuer"], case.authorization["approval_id"], delivery.digest(case.authorization)
     )
-    case.opener.overrides[("GET", PROTECTION)] = HTTPError(
-        github.API + PROTECTION, 403, PRIVATE_TEXT, Message(), io.BytesIO(PRIVATE_TEXT.encode())
-    )
+    if failure == "http":
+        case.opener.overrides[("GET", PROTECTION)] = HTTPError(
+            github.API + PROTECTION, 403, PRIVATE_TEXT, Message(), io.BytesIO(PRIVATE_TEXT.encode())
+        )
+        expected_reason = "GitHub merge readiness blocked: stage=protection; code=http_error; http_status=403."
+    else:
+        case.opener.graph["reviewDecision"] = "REVIEW_REQUIRED"
+        expected_reason = "GitHub merge readiness blocked: stage=ready_facts; code=review_decision."
     engine = DeliveryEngine(path, journal_id=metadata["id"], adapter_factory=lambda: case.adapter)
     report = engine.apply(case.request, case.payload, approval=case.authorization, pin=pin)
     assert report["status"] == "prepared" and report["live_checked"] is True
-    assert report["reason"] == "GitHub merge readiness blocked: stage=protection; code=http_error; http_status=403."
+    assert report["reason"] == expected_reason
     assert report["receipt"] is None
     saved = delivery_store.show(path, metadata["id"], case.request["operation_key"])["operation"]
     assert saved["phase"] == "prepared" and saved["receipt"] is None

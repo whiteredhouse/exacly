@@ -25,6 +25,30 @@ unknown bypass semantics, forks, squash/rebase, linear-history requirements and
 required merge queues block this profile. The adapter cannot alter protections,
 dismiss a review or fall back to a head-only merge request.
 
+### Commit identity with the current GitHub API
+
+GitHub's [REST API breaking changes](https://docs.github.com/en/rest/about-the-rest-api/breaking-changes)
+remove `merge_commit_sha` from pull-request responses in API `2026-03-10`.
+The adapter keeps that API version and binds commit identity through the
+[GraphQL pull-request fields](https://docs.github.com/en/graphql/reference/pulls#pullrequest).
+
+Before an effect, the exact repository, PR, head and base are observed through
+REST and the fixed GraphQL query. GraphQL's `potentialMergeCommit.oid` identifies
+the generated test merge. The normalized PR fact uses that observed identity
+when the legacy REST field is absent or null; a non-null conflicting REST value
+blocks the call. The approved commit, ordered parents, tree, references,
+protected contract and current review/check/protection requirements must still
+match exactly. Missing or conflicting GraphQL identity cannot establish readiness.
+
+After a possible effect, a separate fixed GraphQL read observes the PR's actual
+`mergeCommit.oid`, merged state and repository/head/base identities. It replaces
+the former REST PR read, so the existing read ceilings remain unchanged. The
+generated test commit cannot establish a completed merge. An applied result
+still needs the exact actual merge commit, authenticated operation marker and
+Git commit proof; unavailable or contradictory observations leave the outcome
+uncertain and authorize no resend. Historical proof shapes and old records are
+unchanged; new runtime fingerprints require fresh authority for new effects.
+
 ### Aggregate state and required-condition evidence
 
 GitHub's aggregate merge state is separate from the results selected by the
@@ -107,10 +131,22 @@ for invalid internal diagnostic context. Codes distinguish `http_error`,
 failed request and only as an integer from 100 through 599. Expected absence of
 an optional operation-marker ref remains a successful read.
 
+Final fact checks also have fixed identifiers for their own rejected conditions,
+including PR identity, review and mergeability fields, commit/ref identities,
+required conditions and checks, actor scope and protected contracts. Only the
+installed validator's exact typed failure and fixed identifier can supply these
+codes. Unknown exceptions, unclassified schema failures, subclasses and invalid
+tags retain a fixed fallback; their messages and values are never copied.
+
+For example, a rejected current review decision produces:
+
+```text
+GitHub merge readiness blocked: stage=ready_facts; code=review_decision.
+```
+
 These diagnostics contain no exception text, provider response body, headers,
 URL, token or private path. A stage describes where the check stopped; it does
-not identify an individual rejected predicate within final fact validation or
-establish that earlier observations still hold. The native result and blocked
+not establish that earlier observations still hold. The native result and blocked
 proof shapes remain unchanged, and older generic blocked reasons remain valid
 history. A not-ready inspection leaves a merge request using `--apply` `prepared`
 before the native merge invocation. Diagnostics grant no retry, merge or
