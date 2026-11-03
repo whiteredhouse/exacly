@@ -20,7 +20,7 @@ from exacly import automatic_merge as merge
 from exacly import delivery_automation as delivery
 from exacly import delivery_key
 from exacly import execution_store as store
-from exacly.github_merge import READ_QUERY, UNSTABLE_QUERY, UPDATE_QUERY, GitHubMergeAdapter
+from exacly.github_merge import MERGE_RECEIPT_QUERY, READ_QUERY, UNSTABLE_QUERY, UPDATE_QUERY, GitHubMergeAdapter
 from test_delivery_contracts import approval as common_approval
 from test_delivery_contracts import identify
 from test_delivery_contracts import intent as common_intent
@@ -78,6 +78,10 @@ class ScriptedGitHub:
         self.before_update: Callable[[ScriptedGitHub, Doc], None] | None = None
         self.after_update: Callable[[ScriptedGitHub], None] | None = None
         self.before_request: Callable[[ScriptedGitHub, str, str, Any], None] | None = None
+        # The installed REST API version removed merge_commit_sha. Keep the
+        # internal outcome for controlling GraphQL observations, not as an
+        # obsolete REST response that could hide a real provider incompatibility.
+        self.include_legacy_merge_commit_sha = False
         self.repository: Doc = {
             **REPOSITORY,
             "node_id": NODE_ID,
@@ -153,7 +157,10 @@ class ScriptedGitHub:
             call
             for call in self.calls
             if call["method"] == "POST"
-            and not (call["path"] == "/graphql" and call["body"]["query"] in (READ_QUERY, UNSTABLE_QUERY))
+            and not (
+                call["path"] == "/graphql"
+                and call["body"]["query"] in (READ_QUERY, UNSTABLE_QUERY, MERGE_RECEIPT_QUERY)
+            )
         ]
 
     def _absent(self, path: str) -> None:
@@ -240,7 +247,10 @@ class ScriptedGitHub:
         if method == "GET" and path == PREFIX + "/rules/branches/main":
             return copy.deepcopy(self.rules)
         if method == "GET" and path == PREFIX + "/pulls/42":
-            return copy.deepcopy(self.pull_request)
+            result = copy.deepcopy(self.pull_request)
+            if not self.include_legacy_merge_commit_sha:
+                result.pop("merge_commit_sha", None)
+            return result
         if method == "GET" and path == PREFIX + "/git/commits/" + MERGE:
             return copy.deepcopy(self.commit)
         if method == "GET" and path == PREFIX + "/commits/" + MERGE + "/check-runs?filter=latest&per_page=100":
@@ -286,9 +296,34 @@ class ScriptedGitHub:
             self.tags[oid] = tag
             return copy.deepcopy(tag)
         if method == "POST" and path == "/graphql":
-            assert body["query"] in (READ_QUERY, UNSTABLE_QUERY, UPDATE_QUERY)
+            assert body["query"] in (READ_QUERY, UNSTABLE_QUERY, MERGE_RECEIPT_QUERY, UPDATE_QUERY)
             if body["query"] == UPDATE_QUERY:
                 return self._atomic(body)
+            if body["query"] == MERGE_RECEIPT_QUERY:
+                assert body["variables"] == {"owner": "owner", "name": "product", "number": 42}
+                pr = self.pull_request
+                state = "MERGED" if pr["merged"] else ("OPEN" if pr["state"] == "open" else "CLOSED")
+                actual_commit = pr.get("merge_commit_sha") if pr["merged"] else None
+                return {
+                    "data": {
+                        "repository": {
+                            "id": self.repository["node_id"],
+                            "databaseId": self.repository["id"],
+                            "pullRequest": {
+                                "number": pr["number"],
+                                "state": state,
+                                "isDraft": pr["draft"],
+                                "merged": pr["merged"],
+                                "headRefName": pr["head"]["ref"],
+                                "baseRefName": pr["base"]["ref"],
+                                "headRefOid": pr["head"]["sha"],
+                                "baseRefOid": self.refs.get(BASE_REF, pr["base"]["sha"]),
+                                "headRepository": {"databaseId": pr["head"]["repo"]["id"]},
+                                "mergeCommit": {"oid": actual_commit} if actual_commit is not None else None,
+                            },
+                        }
+                    }
+                }
             if body["query"] == UNSTABLE_QUERY:
                 assert body["variables"] == {"owner": "owner", "name": "product", "number": 42, "base": BASE_REF}
                 return {

@@ -21,7 +21,7 @@ from automatic_merge_fixtures import BASE_REF, HEAD, HEAD_REF, MERGE, TOKEN_ENVI
 from exacly import delivery_automation as contracts
 from exacly import delivery_io, delivery_store
 from exacly.cli import exacly_main
-from exacly.github_merge import GitHubMergeAdapter
+from exacly.github_merge import MERGE_RECEIPT_QUERY, GitHubMergeAdapter
 
 Doc = dict[str, Any]
 
@@ -611,7 +611,19 @@ def test_rotated_credential_recovery_cannot_apply_and_can_discover_after_scope_w
     assert recovered["receipt"]["authority_digest"] == intent["authority_digest"]
     assert recovered["receipt"]["adapter"] == intent["adapter"]
     assert operational.merge.opener.writes == writes and len(operational.merge.opener.mutations) == 1
-    assert all(call["method"] == "GET" for call in list(operational.merge.opener.calls)[before_reads:])
+    recovery_reads = list(operational.merge.opener.calls)[before_reads:]
+    subject = intent["request"]["subject"]
+    owner, name = subject["repository"]["full_name"].split("/")
+    receipt_query = {
+        "query": MERGE_RECEIPT_QUERY,
+        "variables": {"owner": owner, "name": name, "number": subject["pull_request"]},
+    }
+    assert all(
+        call["method"] == "GET"
+        or (call["method"] == "POST" and call["path"] == "/graphql" and call["body"] == receipt_query)
+        for call in recovery_reads
+    )
+    assert sum(call["body"] == receipt_query for call in recovery_reads) == 1
     history = delivery_store.show(operational.journal, operational.journal_id, intent["request"]["operation_key"])
     assert history["revoked"] is True
     assert history["operation"]["calls"][-1]["method"] == "reconcile"

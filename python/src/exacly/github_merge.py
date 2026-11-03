@@ -38,6 +38,9 @@ id databaseId nameWithOwner ref(qualifiedName:$base){prefix name target{oid} bra
 id pattern requiresDeployments requiredDeploymentEnvironments requiresConversationResolution restrictsPushes}}
 pullRequest(number:$number){number headRefOid baseRefOid potentialMergeCommit{oid}
 reviewThreads(first:100){totalCount pageInfo{hasNextPage} nodes{id isResolved}}}}}"""
+MERGE_RECEIPT_QUERY = """query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){
+id databaseId pullRequest(number:$number){number state isDraft merged headRefName baseRefName
+headRefOid baseRefOid headRepository{databaseId} mergeCommit{oid}}}}"""
 UPDATE_QUERY = "mutation($input:UpdateRefsInput!){updateRefs(input:$input){clientMutationId}}"
 
 
@@ -88,7 +91,9 @@ class _InspectionProgress:
 
     def blocked_reason(self, error: Exception) -> str:
         status = None
-        if isinstance(error, ProviderUnavailable) and isinstance(error.code, _ProviderFailure):
+        if type(error) is merge.ReadinessFailure and type(error.check) is merge.ReadinessCheck:
+            code = error.check.value
+        elif isinstance(error, ProviderUnavailable) and isinstance(error.code, _ProviderFailure):
             code = error.code.value
             if type(error.http_status) is int and 100 <= error.http_status <= 599:
                 status = error.http_status
@@ -279,6 +284,59 @@ class GitHubMergeAdapter:
             "state": pr.get("state"),
             "draft": pr.get("draft"),
             "merged": pr.get("merged"),
+        }
+
+    def _merge_receipt(self, session: _Session, request: Doc) -> Doc:
+        """Observe the actual merged commit; a potential merge is never a receipt."""
+        session.progress.stage = _InspectionStage.PULL_REQUEST
+        owner, name = self.configuration["repository"]["full_name"].split("/")
+        graph = _object(
+            session.request(
+                "POST",
+                "/graphql-read",
+                {
+                    "query": MERGE_RECEIPT_QUERY,
+                    "variables": {"owner": owner, "name": name, "number": request["subject"]["pull_request"]},
+                },
+            )
+        )
+        merge.require(not graph.get("errors"), "GitHub actual merge receipt is unavailable")
+        repository = _object(_object(graph.get("data")).get("repository"))
+        merge.require(
+            type(repository.get("databaseId")) is int
+            and repository.get("databaseId") == self.configuration["repository"]["id"]
+            and repository.get("id") == self.configuration["repository"]["node_id"],
+            "GraphQL repository identity changed",
+        )
+        pr = _object(repository.get("pullRequest"))
+        merge.require(
+            type(pr.get("number")) is int and pr.get("number") == request["subject"]["pull_request"],
+            "GraphQL pull-request identity changed",
+        )
+        state, merged, draft = pr.get("state"), pr.get("merged"), pr.get("isDraft")
+        merge.require(
+            state in ("OPEN", "CLOSED", "MERGED") and type(merged) is bool and type(draft) is bool,
+            "GitHub actual merge receipt state is malformed",
+        )
+        merge.require((state == "MERGED") == merged, "GitHub actual merge receipt state is contradictory")
+        merge.require(
+            all(isinstance(pr.get(key), str) and pr[key] for key in ("headRefName", "baseRefName")),
+            "GitHub actual merge receipt reference names are unavailable",
+        )
+        head_repository = _object(pr.get("headRepository"))
+        commit = pr.get("mergeCommit")
+        return {
+            "number": pr["number"],
+            "repository_id": repository["databaseId"],
+            "head_repository_id": head_repository.get("databaseId"),
+            "head_ref": "refs/heads/" + pr["headRefName"],
+            "base_ref": "refs/heads/" + pr["baseRefName"],
+            "head_revision": pr.get("headRefOid"),
+            "base_revision": pr.get("baseRefOid"),
+            "merge_revision": None if commit is None else _object(commit).get("oid"),
+            "state": "open" if state == "OPEN" else "closed",
+            "draft": draft,
+            "merged": merged,
         }
 
     def _commit(self, session: _Session, revision: str) -> Doc:
@@ -521,6 +579,15 @@ class GitHubMergeAdapter:
         review = _object(graph_repo.get("pullRequest"))
         review = {key: review.get(key) for key in merge.REVIEW_FIELDS}
         review["potentialMergeCommit"] = {"oid": _object(review["potentialMergeCommit"]).get("oid")}
+        # API 2026-03-10 omits REST merge_commit_sha. The fixed GraphQL read
+        # observes the candidate; a non-null legacy observation may not disagree.
+        candidate = review["potentialMergeCommit"]["oid"]
+        merge.require(
+            pr["merge_revision"] is None
+            or (isinstance(pr["merge_revision"], str) and pr["merge_revision"] == candidate),
+            "REST and GraphQL merge candidate observations differ",
+        )
+        pr["merge_revision"] = candidate
         extra = self._unstable_conditions(session, request, payload) if review["mergeStateStatus"] == "UNSTABLE" else {}
         session.progress.stage = _InspectionStage.CHECKS
         checks = _object(
@@ -611,7 +678,7 @@ class GitHubMergeAdapter:
         preflight: Doc | None = None,
     ) -> Doc:
         request, subject = intent["request"], intent["request"]["subject"]
-        pr = self._pr(session.request("GET", self._prefix + "/pulls/" + str(subject["pull_request"])))
+        pr = self._merge_receipt(session, request)
         marker_ref = self._ref(session, signed["ref"])
         remote_tag = session.request("GET", self._prefix + "/git/tags/" + signed["object"], optional=True)
         commit = self._commit(session, payload["merge_revision"])
