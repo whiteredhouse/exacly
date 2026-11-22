@@ -217,6 +217,149 @@ class ReadinessFailure(ValueError):
         self.check = check
 
 
+class DiagnosticStage(StrEnum):
+    """Installed-code checkpoints; these observations never authorize an effect."""
+
+    INITIALIZATION = "initialization"
+    PREFLIGHT = "preflight"
+    MARKER = "marker"
+    AUTHORITY = "authority"
+    TAG_PREPARATION = "tag_preparation"
+    REVALIDATION = "revalidation"
+    ATOMIC_UPDATE = "atomic_update"
+    OBSERVE_PULL_REQUEST = "observe_pull_request"
+    OBSERVE_MARKER_REFERENCE = "observe_marker_reference"
+    OBSERVE_MARKER_OBJECT = "observe_marker_object"
+    OBSERVE_MERGE_COMMIT = "observe_merge_commit"
+    APPLIED_PREDICATES = "applied_predicates"
+
+
+class DiagnosticCode(StrEnum):
+    NONE = "none"
+    HTTP = "http_error"
+    TRANSPORT = "transport_error"
+    RESPONSE = "invalid_response"
+    DEADLINE_OR_STORAGE = "deadline_or_storage"
+    LOCAL_IO = "local_io_error"
+    MALFORMED_FACTS = "malformed_facts"
+    VALIDATION = "validation_failed"
+    READINESS = "readiness_failed"
+    GRAPHQL = "graphql_errors"
+    ATOMIC_UNACKNOWLEDGED = "atomic_unacknowledged"
+    APPLIED_UNCONFIRMED = "applied_unconfirmed"
+
+
+class GraphQLErrorCategory(StrEnum):
+    FORBIDDEN = "forbidden"
+    NOT_FOUND = "not_found"
+    UNPROCESSABLE = "unprocessable"
+    RATE_LIMITED = "rate_limited"
+    RESOURCE_LIMIT = "resource_limit"
+    INTERNAL = "internal"
+    UNKNOWN = "unknown"
+
+
+APPLIED_PREDICATES = (
+    "pull_request_identity_types",
+    "marker_reference",
+    "marker_object_type",
+    "marker_object_identity",
+    "marker_tag",
+    "marker_message",
+    "marker_target_type",
+    "marker_target",
+    "pull_request_merged",
+    "merge_revision",
+    "pull_request_number",
+    "repository",
+    "head_repository",
+    "head_revision",
+    "head_ref",
+    "base_ref",
+    "merge_commit",
+)
+DIAGNOSTIC_PROFILE = "github-atomic-merge-diagnostics-v1"
+
+
+def validate_diagnostic(value: Any) -> Doc:
+    """Validate a bounded, closed observation vocabulary without provider or local-file I/O."""
+    selected = delivery._document(value)
+    require(
+        set(selected)
+        == {
+            "schema_version",
+            "stage",
+            "code",
+            "readiness_check",
+            "http_status",
+            "graphql_errors",
+            "write_may_have_started",
+            "preparation_response_observed",
+            "preparation_confirmed",
+            "preparation_object",
+            "atomic_update_acknowledged",
+            "applied_predicates",
+        }
+        and selected["schema_version"] == VERSION,
+        "invalid native merge diagnostic fields",
+    )
+    for field, vocabulary in (("stage", DiagnosticStage), ("code", DiagnosticCode)):
+        require(type(selected[field]) is str and selected[field] in vocabulary, "invalid native merge diagnostic code")
+    check = selected["readiness_check"]
+    require(check is None or (type(check) is str and check in ReadinessCheck), "invalid diagnostic readiness check")
+    status = selected["http_status"]
+    require(status is None or (type(status) is int and 100 <= status <= 599), "invalid diagnostic HTTP status")
+    errors = selected["graphql_errors"]
+    require(
+        errors is None
+        or (
+            isinstance(errors, list)
+            and len(errors) <= len(GraphQLErrorCategory)
+            and all(type(item) is str and item in GraphQLErrorCategory for item in errors)
+            and errors == sorted(set(errors))
+        ),
+        "invalid diagnostic GraphQL categories",
+    )
+    require(type(selected["write_may_have_started"]) is bool, "invalid diagnostic write observation")
+    for field in ("preparation_response_observed", "preparation_confirmed", "atomic_update_acknowledged"):
+        require(selected[field] is None or type(selected[field]) is bool, "invalid diagnostic acknowledgement")
+    sha = selected["preparation_object"]
+    require(sha is None or (type(sha) is str and re.fullmatch(r"[0-9a-f]{40}", sha)), "invalid diagnostic object")
+    predicates = selected["applied_predicates"]
+    require(
+        isinstance(predicates, dict)
+        and set(predicates) == set(APPLIED_PREDICATES)
+        and all(item is None or type(item) is bool for item in predicates.values()),
+        "invalid diagnostic applied predicates",
+    )
+    return selected
+
+
+def _diagnostic_for_provenance(proof: Doc) -> Doc | None:
+    if "diagnostic" not in proof:
+        return None
+    diagnostic = validate_diagnostic(proof["diagnostic"])
+    require(
+        diagnostic["write_may_have_started"] is proof["write_started"],
+        "diagnostic write observation differs from native method",
+    )
+    facts = proof["facts"]
+    if "preparation_object" in facts:
+        require(
+            diagnostic["preparation_object"] == facts["preparation_object"],
+            "diagnostic preparation differs from retained observation",
+        )
+    if diagnostic["stage"] == DiagnosticStage.APPLIED_PREDICATES:
+        predicates = diagnostic["applied_predicates"]
+        require(
+            all(type(value) is bool for value in predicates.values())
+            and type(facts.get("marker_verified")) is bool
+            and all(predicates.values()) is facts["marker_verified"],
+            "diagnostic predicates differ from retained observation",
+        )
+    return diagnostic
+
+
 def _require_ready(value: Any, reason: str, *, check: ReadinessCheck) -> None:
     if not value:
         raise ReadinessFailure(reason, check=check)
@@ -1166,8 +1309,9 @@ def provenance(
     facts: Doc,
     write_started: bool,
     marker_object: str | None = None,
+    diagnostic: Doc | None = None,
 ) -> Doc:
-    return {
+    selected = {
         "schema_version": VERSION,
         "adapter_id": PROFILE,
         "method": method,
@@ -1180,6 +1324,9 @@ def provenance(
         "marker_object": marker_object,
         "facts": facts,
     }
+    if diagnostic is not None:
+        selected["diagnostic"] = diagnostic
+    return selected
 
 
 def validate_provenance(method: str, request: Doc, payload: Doc, value: Any, *, configuration: Doc, policy: Doc) -> Doc:
@@ -1194,9 +1341,11 @@ def validate_provenance(method: str, request: Doc, payload: Doc, value: Any, *, 
         facts=selected.get("facts", {}),
         write_started=selected.get("write_started", False),
         marker_object=selected.get("marker_object"),
+        diagnostic=selected.get("diagnostic"),
     )
     require(selected == expected and method in ("inspect", "invoke", "reconcile"), "merge provenance identity changed")
     require(type(selected["write_started"]) is bool and isinstance(selected["facts"], dict), "invalid merge provenance")
+    _diagnostic_for_provenance(selected)
     if method != "invoke":
         require(selected["write_started"] is False, "read-only delivery method claims mutation")
     marker_object = selected["marker_object"]
@@ -1390,3 +1539,79 @@ def validate_result(method: str, request: Doc, payload: Doc, value: Any, *, conf
                     "an uncertain provider write cannot be called rejected",
                 )
     return result
+
+
+def project_result_diagnostics(method: str, value: Any) -> Doc:
+    """Project safe JSON observations, without I/O or authenticating a native result.
+
+    The trusted same-host caller must first run ``validate_result`` with the retained
+    request, payload, configuration and policy. That separate validation fingerprints
+    installed files; this projection deliberately does not. These method-local flags
+    cannot establish a past write's absence or grant authority for another send.
+    """
+    result = delivery._document(value)
+    expected = (
+        {"ready", "reason", "provenance"} if method == "inspect" else {"outcome", "effect", "reason", "provenance"}
+    )
+    require(method in ("inspect", "invoke", "reconcile") and set(result) == expected, "invalid diagnostic result")
+    require(isinstance(result["reason"], str), "invalid diagnostic result reason")
+    if method == "inspect":
+        require(type(result["ready"]) is bool, "invalid diagnostic readiness")
+    else:
+        require(result["outcome"] in ("applied", "rejected", "uncertain"), "invalid diagnostic outcome")
+        require(result["effect"] is None or isinstance(result["effect"], dict), "invalid diagnostic effect")
+    proof = delivery._document(result["provenance"])
+    fields = {
+        "schema_version",
+        "adapter_id",
+        "method",
+        "request_digest",
+        "payload_digest",
+        "configuration_digest",
+        "operation_profile_digest",
+        "policy_digest",
+        "write_started",
+        "marker_object",
+        "facts",
+    }
+    require(
+        set(proof) in (fields, fields | {"diagnostic"})
+        and proof["schema_version"] == VERSION
+        and proof["adapter_id"] == PROFILE
+        and proof["method"] == method,
+        "invalid diagnostic provenance identity",
+    )
+    for field in (
+        "request_digest",
+        "payload_digest",
+        "configuration_digest",
+        "operation_profile_digest",
+        "policy_digest",
+    ):
+        require(
+            type(proof[field]) is str and re.fullmatch(r"sha256:[0-9a-f]{64}", proof[field]),
+            "invalid diagnostic provenance digest",
+        )
+    require(type(proof["write_started"]) is bool and isinstance(proof["facts"], dict), "invalid diagnostic provenance")
+    require(method == "invoke" or proof["write_started"] is False, "read-only diagnostic claims a mutation")
+    preparation = proof["facts"].get("preparation_object")
+    for sha in (proof["marker_object"], preparation):
+        require(sha is None or (type(sha) is str and re.fullmatch(r"[0-9a-f]{40}", sha)), "invalid diagnostic object")
+    diagnostic = _diagnostic_for_provenance(proof)
+    # Only the locally derived expected marker identity may enter public diagnostics.
+    # Keep an unexpected provider-selected object privately, without exporting its bytes.
+    if preparation != proof["marker_object"]:
+        preparation = None
+    if diagnostic is not None and diagnostic["preparation_object"] != proof["marker_object"]:
+        diagnostic = {**diagnostic, "preparation_object": None}
+    return {
+        "schema_version": VERSION,
+        "profile": DIAGNOSTIC_PROFILE,
+        "method": method,
+        "provenance_digest": delivery.digest(proof),
+        "diagnostic_available": diagnostic is not None,
+        "write_started": proof["write_started"],
+        "marker_object": proof["marker_object"],
+        "preparation_object": preparation,
+        "diagnostic": diagnostic,
+    }

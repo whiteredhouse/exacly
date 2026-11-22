@@ -917,7 +917,10 @@ works offline. Token rotation for uncertain discovery needs a separate read-only
 recovery grant and cannot change the installed operation profile or refill limits.
 REQ-041 remains proposed pending authentic provider acceptance. See the
 [merge guide](../docs/product-delivery-merge.md) for setup, supported boundaries
-and the nonproduction approval packet. A merge is not fresh verification,
+and the nonproduction approval packet. New native provenance retains bounded
+invocation and reconciliation diagnostics; older history remains unchanged.
+The guide describes the pure JSON projection API and its separate validation
+and retention requirements. A merge is not fresh verification,
 publication authority or runtime health.
 
 ## Publish exact prebuilt artifacts through their owner

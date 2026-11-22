@@ -13,7 +13,7 @@ import hashlib
 import json
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from http.client import HTTPException
 from pathlib import Path
@@ -108,6 +108,88 @@ class _InspectionProgress:
         suffix = "" if status is None else f"; http_status={status}"
         stage = self.stage if isinstance(self.stage, _InspectionStage) else _InspectionStage.UNKNOWN
         return f"GitHub merge readiness blocked: stage={stage.value}; code={code}{suffix}."
+
+
+@dataclass
+class _NativeProgress:
+    """Method-local observations only; never retain arbitrary exceptions or provider text."""
+
+    stage: merge.DiagnosticStage = merge.DiagnosticStage.INITIALIZATION
+    code: merge.DiagnosticCode = merge.DiagnosticCode.NONE
+    readiness_check: str | None = None
+    http_status: int | None = None
+    graphql_errors: list[str] | None = None
+    write_may_have_started: bool = False
+    preparation_response_observed: bool | None = None
+    preparation_confirmed: bool | None = None
+    preparation_object: str | None = None
+    atomic_update_acknowledged: bool | None = None
+    applied_predicates: Doc = field(default_factory=lambda: dict.fromkeys(merge.APPLIED_PREDICATES))
+
+    def failed(self, error: Exception) -> None:
+        if type(error) is ProviderUnavailable and type(error.code) is _ProviderFailure:
+            self.code = merge.DiagnosticCode(error.code.value)
+            if type(error.http_status) is int and 100 <= error.http_status <= 599:
+                self.http_status = error.http_status
+        elif type(error) is merge.ReadinessFailure and type(error.check) is merge.ReadinessCheck:
+            self.code = merge.DiagnosticCode.READINESS
+            self.readiness_check = error.check.value
+        elif isinstance(error, store.StoreError):
+            self.code = merge.DiagnosticCode.DEADLINE_OR_STORAGE
+        elif isinstance(error, OSError):
+            self.code = merge.DiagnosticCode.LOCAL_IO
+        elif isinstance(error, (KeyError, TypeError, AttributeError)):
+            self.code = merge.DiagnosticCode.MALFORMED_FACTS
+        elif self.code is merge.DiagnosticCode.NONE:
+            self.code = merge.DiagnosticCode.VALIDATION
+
+    def atomic_response(self, value: Doc) -> None:
+        # GitHub's raw type/message/path/extensions are never retained. Even a plausible
+        # unknown type maps to one fixed category, rather than an open string channel.
+        categories = {
+            "FORBIDDEN": merge.GraphQLErrorCategory.FORBIDDEN,
+            "NOT_FOUND": merge.GraphQLErrorCategory.NOT_FOUND,
+            "UNPROCESSABLE": merge.GraphQLErrorCategory.UNPROCESSABLE,
+            "RATE_LIMITED": merge.GraphQLErrorCategory.RATE_LIMITED,
+            "RESOURCE_LIMITS_EXCEEDED": merge.GraphQLErrorCategory.RESOURCE_LIMIT,
+            "INTERNAL": merge.GraphQLErrorCategory.INTERNAL,
+        }
+        errors = value.get("errors")
+        if not errors:
+            self.graphql_errors = []
+            self.code = merge.DiagnosticCode.ATOMIC_UNACKNOWLEDGED
+        else:
+            values = errors if isinstance(errors, list) else [None]
+            mapped = set()
+            for item in values:
+                kind = item.get("type") if isinstance(item, dict) else None
+                category = (
+                    categories.get(kind, merge.GraphQLErrorCategory.UNKNOWN)
+                    if type(kind) is str
+                    else merge.GraphQLErrorCategory.UNKNOWN
+                )
+                mapped.add(category.value)
+            self.graphql_errors = sorted(mapped)
+            self.code = merge.DiagnosticCode.GRAPHQL
+        self.atomic_update_acknowledged = False
+
+    def document(self) -> Doc:
+        return merge.validate_diagnostic(
+            {
+                "schema_version": merge.VERSION,
+                "stage": self.stage.value,
+                "code": self.code.value,
+                "readiness_check": self.readiness_check,
+                "http_status": self.http_status,
+                "graphql_errors": self.graphql_errors,
+                "write_may_have_started": self.write_may_have_started,
+                "preparation_response_observed": self.preparation_response_observed,
+                "preparation_confirmed": self.preparation_confirmed,
+                "preparation_object": self.preparation_object,
+                "atomic_update_acknowledged": self.atomic_update_acknowledged,
+                "applied_predicates": self.applied_predicates,
+            }
+        )
 
 
 def _credential_now() -> dt.datetime:
@@ -633,7 +715,15 @@ class GitHubMergeAdapter:
         }
 
     def _proof(
-        self, method: str, request: Doc, payload: Doc, facts: Doc, *, started: bool, marker_object: str | None = None
+        self,
+        method: str,
+        request: Doc,
+        payload: Doc,
+        facts: Doc,
+        *,
+        started: bool,
+        marker_object: str | None = None,
+        diagnostic: _NativeProgress | None = None,
     ) -> Doc:
         return merge.provenance(
             method,
@@ -644,11 +734,13 @@ class GitHubMergeAdapter:
             facts=facts,
             write_started=started,
             marker_object=marker_object,
+            diagnostic=None if diagnostic is None else diagnostic.document(),
         )
 
     def inspect(self, request: Doc, payload: Doc, *, deadline: store.Deadline) -> Doc:
         payload = self.validate_payload(request, payload)
         progress = _InspectionProgress()
+        diagnostic = _NativeProgress(stage=merge.DiagnosticStage.PREFLIGHT)
         try:
             facts = self._facts(self._session("inspect", deadline, progress=progress), request, payload)
             progress.stage = _InspectionStage.READY_FACTS
@@ -656,13 +748,16 @@ class GitHubMergeAdapter:
             return {
                 "ready": True,
                 "reason": "Exact protected GitHub merge is currently ready; reads are not atomic.",
-                "provenance": self._proof("inspect", request, payload, facts, started=False),
+                "provenance": self._proof("inspect", request, payload, facts, started=False, diagnostic=diagnostic),
             }
         except (ValueError, store.StoreError, OSError, KeyError, TypeError, AttributeError) as error:
+            diagnostic.failed(error)
             return {
                 "ready": False,
                 "reason": progress.blocked_reason(error),
-                "provenance": self._proof("inspect", request, payload, {"blocked": True}, started=False),
+                "provenance": self._proof(
+                    "inspect", request, payload, {"blocked": True}, started=False, diagnostic=diagnostic
+                ),
             }
 
     def _applied(
@@ -676,13 +771,53 @@ class GitHubMergeAdapter:
         started: bool,
         actor: Doc,
         preflight: Doc | None = None,
+        diagnostic: _NativeProgress | None = None,
     ) -> Doc:
         request, subject = intent["request"], intent["request"]["subject"]
+        observed = diagnostic if diagnostic is not None else _NativeProgress(write_may_have_started=started)
+        observed.stage = merge.DiagnosticStage.OBSERVE_PULL_REQUEST
         pr = self._merge_receipt(session, request)
+        observed.applied_predicates.update(
+            {
+                "pull_request_identity_types": all(
+                    type(pr.get(key)) is int for key in ("number", "repository_id", "head_repository_id")
+                ),
+                "pull_request_merged": pr.get("merged") is True,
+                "merge_revision": pr.get("merge_revision") == payload["merge_revision"],
+                "pull_request_number": pr.get("number") == subject["pull_request"],
+                "repository": pr.get("repository_id") == subject["repository"]["id"],
+                "head_repository": pr.get("head_repository_id") == subject["repository"]["id"],
+                "head_revision": pr.get("head_revision") == subject["head_revision"],
+                "head_ref": pr.get("head_ref") == payload["head_ref"],
+                "base_ref": pr.get("base_ref") == subject["base_ref"],
+            }
+        )
+        observed.stage = merge.DiagnosticStage.OBSERVE_MARKER_REFERENCE
         marker_ref = self._ref(session, signed["ref"])
+        observed.applied_predicates["marker_reference"] = marker_ref == signed["object"]
+        observed.stage = merge.DiagnosticStage.OBSERVE_MARKER_OBJECT
         remote_tag = session.request("GET", self._prefix + "/git/tags/" + signed["object"], optional=True)
-        commit = self._commit(session, payload["merge_revision"])
         target = remote_tag.get("object") if isinstance(remote_tag, dict) else None
+        observed.applied_predicates.update(
+            {
+                "marker_object_type": isinstance(remote_tag, dict),
+                "marker_object_identity": isinstance(remote_tag, dict) and remote_tag.get("sha") == signed["object"],
+                "marker_tag": isinstance(remote_tag, dict) and remote_tag.get("tag") == signed["tag"],
+                "marker_message": isinstance(remote_tag, dict) and remote_tag.get("message") == signed["message"],
+                "marker_target_type": isinstance(target, dict),
+                "marker_target": isinstance(target, dict)
+                and {key: target.get(key) for key in ("sha", "type")}
+                == {"sha": payload["merge_revision"], "type": "commit"},
+            }
+        )
+        observed.stage = merge.DiagnosticStage.OBSERVE_MERGE_COMMIT
+        commit = self._commit(session, payload["merge_revision"])
+        observed.applied_predicates["merge_commit"] = commit == {
+            "sha": payload["merge_revision"],
+            "tree": payload["merge_tree"],
+            "parents": [subject["base_revision"], subject["head_revision"]],
+        }
+        observed.stage = merge.DiagnosticStage.APPLIED_PREDICATES
         matched = (
             all(type(pr.get(key)) is int for key in ("number", "repository_id", "head_repository_id"))
             and marker_ref == signed["object"]
@@ -717,7 +852,10 @@ class GitHubMergeAdapter:
             "marker": {key: value for key, value in signed.items() if key != "message"},
             "actor": actor,
         }
-        proof = self._proof(method, request, payload, facts, started=started, marker_object=signed["object"])
+        observed.code = merge.DiagnosticCode.NONE if matched else merge.DiagnosticCode.APPLIED_UNCONFIRMED
+        proof = self._proof(
+            method, request, payload, facts, started=started, marker_object=signed["object"], diagnostic=observed
+        )
         if not matched:
             return {
                 "outcome": "uncertain",
@@ -761,16 +899,22 @@ class GitHubMergeAdapter:
         )
         started, signed, facts = False, None, {}
         preparation_object = None
+        diagnostic = _NativeProgress()
         try:
             session = self._session("invoke", deadline)
+            diagnostic.stage = merge.DiagnosticStage.PREFLIGHT
             facts = self._facts(session, request, payload)
             merge.validate_ready_facts(request, payload, self.configuration, self.policy, facts)
             self._invoke_capacity(session, facts)
+            diagnostic.stage = merge.DiagnosticStage.MARKER
             signed = merge.marker(request, payload, self.configuration, self.policy, lock_timeout=deadline.remaining())
             # A single logical stage has one bounded object-preparation request and one atomic
             # reference request. The engine retained may_have_started before releasing this call.
+            diagnostic.stage = merge.DiagnosticStage.AUTHORITY
             self._current_authority(intent, authorization)
             started = True
+            diagnostic.write_may_have_started = True
+            diagnostic.stage = merge.DiagnosticStage.TAG_PREPARATION
             tag = _object(
                 session.request(
                     "POST",
@@ -788,9 +932,13 @@ class GitHubMergeAdapter:
                     },
                 )
             )
+            diagnostic.preparation_response_observed = True
             if isinstance(tag.get("sha"), str) and re.fullmatch(r"[0-9a-f]{40}", tag["sha"]):
                 preparation_object = tag["sha"]
+            diagnostic.preparation_object = preparation_object
+            diagnostic.preparation_confirmed = tag.get("sha") == signed["object"]
             merge.require(tag.get("sha") == signed["object"], "prepared marker object differs from approved content")
+            diagnostic.stage = merge.DiagnosticStage.REVALIDATION
             facts = self._facts(session, request, payload)
             merge.validate_ready_facts(request, payload, self.configuration, self.policy, facts)
             self._invoke_capacity(session, facts)
@@ -799,7 +947,9 @@ class GitHubMergeAdapter:
                 self.configuration["key"]["id"],
                 lock_timeout=deadline.remaining(),
             )
+            diagnostic.stage = merge.DiagnosticStage.AUTHORITY
             self._current_authority(intent, authorization)
+            diagnostic.stage = merge.DiagnosticStage.ATOMIC_UPDATE
             result = _object(
                 session.request(
                     "POST",
@@ -816,6 +966,7 @@ class GitHubMergeAdapter:
                     },
                 )
             )
+            diagnostic.atomic_response(result)
             # Error classification is deliberately conservative. An undocumented GraphQL error
             # code is not proof of a server-side rejection or permission for a replacement send.
             merge.require(
@@ -824,6 +975,8 @@ class GitHubMergeAdapter:
                 == request["operation_key"],
                 "atomic merge was not acknowledged",
             )
+            diagnostic.atomic_update_acknowledged = True
+            diagnostic.code = merge.DiagnosticCode.NONE
             return self._applied(
                 session,
                 intent,
@@ -833,8 +986,10 @@ class GitHubMergeAdapter:
                 started=True,
                 preflight=facts,
                 actor={name: facts[name] for name in ("repository", "installation_repository_ids")},
+                diagnostic=diagnostic,
             )
-        except (ValueError, store.StoreError, OSError, KeyError, TypeError, AttributeError):
+        except (ValueError, store.StoreError, OSError, KeyError, TypeError, AttributeError) as error:
+            diagnostic.failed(error)
             return {
                 "outcome": "uncertain" if started else "rejected",
                 "effect": None,
@@ -850,6 +1005,7 @@ class GitHubMergeAdapter:
                     {"preflight": facts, "provider_unconfirmed": True, "preparation_object": preparation_object},
                     started=started,
                     marker_object=None if signed is None else signed["object"],
+                    diagnostic=diagnostic,
                 ),
             }
 
@@ -873,13 +1029,19 @@ class GitHubMergeAdapter:
         request = delivery.validate_request(intent["request"])
         payload = self.validate_payload(request, payload)
         signed = None
+        diagnostic = _NativeProgress()
         try:
             session = self._session("reconcile", deadline)
+            diagnostic.stage = merge.DiagnosticStage.PREFLIGHT
             actor = self._actor(session)
             merge.validate_actor_facts(self.configuration, actor)
+            diagnostic.stage = merge.DiagnosticStage.MARKER
             signed = merge.marker(request, payload, self.configuration, self.policy, lock_timeout=deadline.remaining())
-            return self._applied(session, intent, payload, signed, method="reconcile", started=False, actor=actor)
-        except (ValueError, store.StoreError, OSError, KeyError, TypeError, AttributeError):
+            return self._applied(
+                session, intent, payload, signed, method="reconcile", started=False, actor=actor, diagnostic=diagnostic
+            )
+        except (ValueError, store.StoreError, OSError, KeyError, TypeError, AttributeError) as error:
+            diagnostic.failed(error)
             return {
                 "outcome": "uncertain",
                 "effect": None,
@@ -891,5 +1053,6 @@ class GitHubMergeAdapter:
                     {"provider_unconfirmed": True},
                     started=False,
                     marker_object=None if signed is None else signed["object"],
+                    diagnostic=diagnostic,
                 ),
             }

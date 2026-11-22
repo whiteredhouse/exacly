@@ -161,6 +161,47 @@ authorizes sending another write. Reconciliation only discovers actual provider
 facts. Applied results require the exact resulting commit, authenticated marker
 and actual merged pull-request identity; successful transport is insufficient.
 
+### Invocation and reconciliation diagnostics
+
+New native provenance may include a closed diagnostic for invocation or
+reconciliation. It identifies the stage reached, an owned failure code and an
+HTTP status where available. It also distinguishes preparation observations,
+the atomic update acknowledgement and the individual predicates needed to
+establish an applied merge. An unreached or unavailable observation remains
+unknown; it is not a negative observation or proof that no write occurred.
+Provider exception text, response bodies, headers, credentials, private paths
+and marker messages are excluded. GraphQL errors are mapped to fixed categories
+rather than copied from provider output.
+
+These details supplement the existing result. They cannot establish an applied
+effect, convert uncertainty into rejection, authorize another invocation or
+restore spent capacity. The provider request sequence and native read/write
+limits are unchanged. A preparation object can exist even when no marker ref or
+completed merge is observed.
+
+The Python API `exacly.automatic_merge.project_result_diagnostics(method, result)`
+returns a bounded JSON projection from a native result. The projector checks
+the closed JSON shape and computes its provenance digest without loading configuration,
+refreshing credentials, opening the marker key or accessing a provider. It does
+not authenticate an untrusted result. A trusted collector must separately
+validate the original journal and native result against their retained request,
+payload, configuration and policy before using the projection. That full native
+validation includes the installed runtime fingerprint and requires its original
+host context.
+
+The public projection includes a preparation object identifier only when it
+matches the expected authenticated marker object. An unexpected returned object
+identifier stays in private provenance; the public projection retains the
+failed confirmation without copying that provider-selected value.
+
+Older provenance without diagnostics remains valid and is not rewritten. Its
+projection explicitly reports diagnostics unavailable, preserving the original
+provenance bytes, receipt identity and historical outcome. A collector must
+retain invocation and reconciliation separately: a later unavailable discovery
+must not hide an earlier invocation result. Retention must happen while the
+original private journal and runtime still exist. A public summary cannot
+reconstruct a lost journal or resolve an old uncertain operation.
+
 The transaction leases references, not check conclusions or a policy version.
 GitHub's enforced passing-check semantics include success, neutral and skipped;
 the local preflight conservatively requires literal success. That stronger
